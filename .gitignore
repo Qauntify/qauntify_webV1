@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+signals.db
+signals.json
+.pytest_cache/
