@@ -168,3 +168,25 @@ def test_scan_symbol_never_prints_news_secrets(tmp_path, monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "SECRET-TOKEN-123" not in captured.out
     assert "SECRET-TOKEN-123" not in captured.err
+
+
+def test_scan_symbol_drops_forming_candle(tmp_path, monkeypatch):
+    candles = _flat_candles(n=200)
+    forming = Candle(open_time=999, open=100.0, high=1000.0,
+                     low=99.0, close=999.0, volume=1.0)
+    seen = {}
+
+    def capture_detect(symbol, candles, *series):
+        seen["candles"] = candles
+        return None
+
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit: candles + [forming])
+    monkeypatch.setattr(run_module, "detect_setup", capture_detect)
+    cfg = _config(tmp_path)
+    llm = FakeLLM(reply="{}")
+
+    scan_symbol("BTCUSDT", cfg, llm)
+
+    assert seen["candles"][-1].close == 100.0  # forming 999-close bar excluded
+    assert len(seen["candles"]) == 200

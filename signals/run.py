@@ -45,6 +45,10 @@ def scan_symbol(symbol, cfg, llm):
         print(f"[{symbol}] market data unavailable, skipping: {exc}")
         return None
 
+    # Binance returns the current, still-forming candle last — drop it so
+    # indicators and entry price are computed on closed bars only.
+    candles = candles[:-1]
+
     closes = [c.close for c in candles]
     highs = [c.high for c in candles]
     lows = [c.low for c in candles]

@@ -11,7 +11,7 @@ class Config:
     cryptopanic_api_key: str
     symbols: tuple = ("BTCUSDT", "ETHUSDT")
     timeframe: str = "1h"
-    candle_limit: int = 200
+    candle_limit: int = 201  # one extra: the last fetched candle is still forming and gets dropped
     db_path: str = "signals.db"
     json_path: str = "signals.json"
     sealion_base_url: str = "https://api.sea-lion.ai/v1"
