@@ -144,3 +144,27 @@ def test_scan_symbol_binance_failure_returns_none(tmp_path, monkeypatch):
     llm = FakeLLM(reply="{}")
 
     assert scan_symbol("BTCUSDT", cfg, llm) is None
+
+
+def test_scan_symbol_never_prints_news_secrets(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit: _flat_candles())
+    monkeypatch.setattr(run_module, "detect_setup",
+                        lambda *args, **kwargs: SETUP)
+
+    def leaky_news(symbol, api_key):
+        raise RuntimeError(
+            "401 Client Error for url: https://cryptopanic.com/api/developer/v2/posts/"
+            "?auth_token=SECRET-TOKEN-123&currencies=BTC"
+        )
+
+    monkeypatch.setattr(run_module, "fetch_headlines", leaky_news)
+    monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
+    cfg = _config(tmp_path)
+    llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 70, "rationale": "ok"}')
+
+    scan_symbol("BTCUSDT", cfg, llm)
+
+    captured = capsys.readouterr()
+    assert "SECRET-TOKEN-123" not in captured.out
+    assert "SECRET-TOKEN-123" not in captured.err

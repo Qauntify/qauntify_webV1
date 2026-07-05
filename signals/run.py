@@ -17,8 +17,13 @@ from signals.storage import save_signal
 RETRY_DELAY = 2.0
 
 
-def with_retry(fn, attempts=2, delay=RETRY_DELAY):
-    """Call fn; on failure wait `delay` seconds and try once more per extra attempt."""
+def with_retry(fn, attempts=2, delay=None):
+    """Call fn; on failure wait `delay` seconds and try once more per extra attempt.
+
+    delay=None resolves to the module-level RETRY_DELAY at call time.
+    """
+    if delay is None:
+        delay = RETRY_DELAY
     last_error = None
     for attempt in range(attempts):
         try:
@@ -34,8 +39,7 @@ def scan_symbol(symbol, cfg, llm):
     """Scan one symbol; return the stored Signal or None."""
     try:
         candles = with_retry(
-            lambda: fetch_candles(symbol, cfg.timeframe, cfg.candle_limit),
-            delay=RETRY_DELAY,
+            lambda: fetch_candles(symbol, cfg.timeframe, cfg.candle_limit)
         )
     except Exception as exc:
         print(f"[{symbol}] market data unavailable, skipping: {exc}")
@@ -61,8 +65,7 @@ def scan_symbol(symbol, cfg, llm):
 
     try:
         headlines = with_retry(
-            lambda: fetch_headlines(symbol, cfg.cryptopanic_api_key),
-            delay=RETRY_DELAY,
+            lambda: fetch_headlines(symbol, cfg.cryptopanic_api_key)
         )
     except Exception as exc:
         # Log only the exception type: HTTPError strings embed the request URL,
