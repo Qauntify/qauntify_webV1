@@ -54,7 +54,7 @@ def parse_confirmation(text: str) -> Confirmation:
         return Confirmation("reject", 0, f"Invalid verdict in LLM reply: {verdict!r}")
     try:
         confidence = max(0, min(100, int(data.get("confidence", 0))))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         confidence = 0
     rationale = str(data.get("rationale", ""))
     return Confirmation(verdict, confidence, rationale)
@@ -63,6 +63,6 @@ def parse_confirmation(text: str) -> Confirmation:
 def confirm_setup(setup: CandidateSetup, headlines: list, llm) -> Confirmation:
     try:
         reply = llm.chat(build_messages(setup, headlines))
+        return parse_confirmation(reply)
     except Exception as exc:
         return Confirmation("reject", 0, f"LLM call failed: {exc}")
-    return parse_confirmation(reply)

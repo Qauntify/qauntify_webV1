@@ -74,6 +74,11 @@ def test_parse_confirmation_clamps_confidence():
     assert result.confidence == 100
 
 
+def test_parse_confirmation_infinite_confidence_is_reject_safe():
+    result = parse_confirmation('{"verdict": "confirm", "confidence": Infinity, "rationale": "x"}')
+    assert result.confidence == 0
+
+
 def test_confirm_setup_happy_path():
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 80, "rationale": "ok"}')
     result = confirm_setup(SETUP, HEADLINES, llm)
