@@ -100,6 +100,28 @@ def test_detect_setup_short():
     assert setup.take_profit == 96.0
 
 
+def test_detect_setup_short_blocked_by_oversold_rsi():
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(101.0, n - 1) + [99.0]   # crosses below ema21 on last bar
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(25.0, n)  # <= 30 blocks the short
+    macd_hist = _flat(-0.5, n)
+    atr14 = _flat(2.0, n)
+    assert detect_setup("ETHUSDT", candles, ema9, ema21, rsi14, macd_hist, atr14) is None
+
+
+def test_detect_setup_short_blocked_by_positive_macd():
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(101.0, n - 1) + [99.0]
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(45.0, n)
+    macd_hist = _flat(0.5, n)  # positive momentum blocks the short
+    atr14 = _flat(2.0, n)
+    assert detect_setup("ETHUSDT", candles, ema9, ema21, rsi14, macd_hist, atr14) is None
+
+
 def test_detect_setup_no_cross_returns_none():
     n = 20
     candles = _candles([100.0] * n)
