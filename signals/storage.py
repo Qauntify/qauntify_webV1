@@ -30,32 +30,41 @@ def save_signal(signal: Signal, db_path: str, json_path: str) -> None:
 
 
 def _save_sqlite(signal: Signal, db_path: str) -> None:
-    with sqlite3.connect(db_path) as conn:
-        conn.execute(SCHEMA)
-        conn.execute(
-            "INSERT INTO signals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                signal.id,
-                signal.symbol,
-                signal.timeframe,
-                signal.direction,
-                signal.entry,
-                signal.stop_loss,
-                signal.take_profit,
-                signal.confidence,
-                signal.rationale,
-                json.dumps(signal.indicators),
-                json.dumps(signal.news_headlines),
-                signal.created_at,
-            ),
-        )
+    conn = sqlite3.connect(db_path)
+    try:
+        with conn:
+            conn.execute(SCHEMA)
+            conn.execute(
+                "INSERT INTO signals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    signal.id,
+                    signal.symbol,
+                    signal.timeframe,
+                    signal.direction,
+                    signal.entry,
+                    signal.stop_loss,
+                    signal.take_profit,
+                    signal.confidence,
+                    signal.rationale,
+                    json.dumps(signal.indicators),
+                    json.dumps(signal.news_headlines),
+                    signal.created_at,
+                ),
+            )
+    finally:
+        conn.close()
 
 
 def _append_json(signal: Signal, json_path: str) -> None:
     records = []
     if os.path.exists(json_path):
-        with open(json_path) as f:
-            records = json.load(f)
+        try:
+            with open(json_path) as f:
+                records = json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            records = []  # unreadable mirror file: start fresh, SQLite stays authoritative
+        if not isinstance(records, list):
+            records = []
     records.append(asdict(signal))
     with open(json_path, "w") as f:
         json.dump(records, f, indent=2)

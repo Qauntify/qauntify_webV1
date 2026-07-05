@@ -58,3 +58,27 @@ def test_save_signal_creates_table_if_missing(tmp_path):
     count = conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
     conn.close()
     assert count == 1
+
+
+def test_save_signal_recovers_from_corrupt_json(tmp_path):
+    db = str(tmp_path / "signals.db")
+    js = str(tmp_path / "signals.json")
+    with open(js, "w") as f:
+        f.write("")  # simulate truncated/corrupt mirror file
+    signal = _signal()
+    save_signal(signal, db_path=db, json_path=js)
+    with open(js) as f:
+        data = json.load(f)
+    assert len(data) == 1
+    assert data[0]["id"] == signal.id
+
+
+def test_save_signal_recovers_from_non_list_json(tmp_path):
+    db = str(tmp_path / "signals.db")
+    js = str(tmp_path / "signals.json")
+    with open(js, "w") as f:
+        f.write('{"not": "a list"}')
+    save_signal(_signal(), db_path=db, json_path=js)
+    with open(js) as f:
+        data = json.load(f)
+    assert len(data) == 1
