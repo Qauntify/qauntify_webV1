@@ -68,12 +68,10 @@ def scan_symbol(symbol, cfg, llm):
           f"SL={setup.stop_loss} TP={setup.take_profit}")
 
     try:
-        headlines = with_retry(
-            lambda: fetch_headlines(symbol, cfg.cryptopanic_api_key)
-        )
+        headlines = with_retry(lambda: fetch_headlines(symbol))
     except Exception as exc:
-        # Log only the exception type: HTTPError strings embed the request URL,
-        # which contains the CryptoPanic auth_token.
+        # Log only the exception type, not the message — keeps log lines short
+        # and guards against any future news source embedding secrets in URLs.
         print(f"[{symbol}] news unavailable ({type(exc).__name__}), proceeding without")
         headlines = []
 

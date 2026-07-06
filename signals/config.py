@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 @dataclass(frozen=True)
 class Config:
     sealion_api_key: str
-    cryptopanic_api_key: str
     symbols: tuple = ("BTCUSDT", "ETHUSDT")
     timeframe: str = "1h"
     candle_limit: int = 201  # one extra: the last fetched candle is still forming and gets dropped
@@ -21,9 +20,6 @@ class Config:
 def load_config() -> Config:
     load_dotenv()
     sealion_key = os.environ.get("SEALION_API_KEY", "")
-    cryptopanic_key = os.environ.get("CRYPTOPANIC_API_KEY", "")
     if not sealion_key:
         raise SystemExit("SEALION_API_KEY is not set (copy .env.example to .env)")
-    if not cryptopanic_key:
-        raise SystemExit("CRYPTOPANIC_API_KEY is not set (copy .env.example to .env)")
-    return Config(sealion_api_key=sealion_key, cryptopanic_api_key=cryptopanic_key)
+    return Config(sealion_api_key=sealion_key)

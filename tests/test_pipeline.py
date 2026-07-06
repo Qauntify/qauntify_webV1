@@ -18,7 +18,6 @@ def _flat_candles(n=200, price=100.0):
 def _config(tmp_path):
     return Config(
         sealion_api_key="sk-test",
-        cryptopanic_api_key="cp-test",
         db_path=str(tmp_path / "signals.db"),
         json_path=str(tmp_path / "signals.json"),
     )
@@ -80,7 +79,7 @@ def test_scan_symbol_confirmed_signal_is_stored(tmp_path, monkeypatch):
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     monkeypatch.setattr(run_module, "fetch_headlines",
-                        lambda symbol, api_key: ["BTC rally continues"])
+                        lambda symbol: ["BTC rally continues"])
     cfg = _config(tmp_path)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 82, "rationale": "Aligned."}')
 
@@ -104,7 +103,7 @@ def test_scan_symbol_rejected_signal_not_stored(tmp_path, monkeypatch):
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     monkeypatch.setattr(run_module, "fetch_headlines",
-                        lambda symbol, api_key: [])
+                        lambda symbol: [])
     cfg = _config(tmp_path)
     llm = FakeLLM(reply='{"verdict": "reject", "confidence": 25, "rationale": "Bearish news."}')
 
@@ -120,8 +119,8 @@ def test_scan_symbol_news_failure_proceeds_with_empty_headlines(tmp_path, monkey
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
 
-    def broken_news(symbol, api_key):
-        raise RuntimeError("cryptopanic down")
+    def broken_news(symbol):
+        raise RuntimeError("all RSS feeds unavailable")
 
     monkeypatch.setattr(run_module, "fetch_headlines", broken_news)
     monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
@@ -152,9 +151,11 @@ def test_scan_symbol_never_prints_news_secrets(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
 
-    def leaky_news(symbol, api_key):
+    def leaky_news(symbol):
+        # Guards the invariant that news exception text (which could embed a
+        # URL with credentials, depending on the source) is never printed.
         raise RuntimeError(
-            "401 Client Error for url: https://cryptopanic.com/api/developer/v2/posts/"
+            "401 Client Error for url: https://news.example.com/api"
             "?auth_token=SECRET-TOKEN-123&currencies=BTC"
         )
 
