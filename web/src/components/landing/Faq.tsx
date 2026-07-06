@@ -49,7 +49,7 @@ export function Faq() {
           </div>
         </div>
       </section>
-      <section className="border-b border-line bg-white">
+      <section className="border-b border-line bg-card">
         <div className="mx-auto max-w-6xl px-6 py-16 text-center">
           <h2 className="font-display text-3xl tracking-tight">
             See what the engine sees.

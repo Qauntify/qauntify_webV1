@@ -5,7 +5,7 @@ import type { Signal } from "@/lib/signals";
 
 export function SignalsPreview({ signals }: { signals: Signal[] }) {
   return (
-    <section id="signals" className="border-b border-line bg-white">
+    <section id="signals" className="border-b border-line bg-card">
       <div className="mx-auto max-w-6xl px-6 py-20">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

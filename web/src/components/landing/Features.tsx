@@ -37,7 +37,7 @@ export function Features() {
         </h2>
         <div className="mt-12 grid gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
-            <div key={f.title} className="bg-white p-6">
+            <div key={f.title} className="bg-card p-6">
               <h3 className="font-medium">{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-slate">{f.body}</p>
             </div>

@@ -14,7 +14,7 @@ export function StatsBar({ stats }: { stats: Stats }) {
       {items.map((item) => (
         <div
           key={item.label}
-          className="rounded-xl border border-line bg-white px-5 py-4"
+          className="rounded-xl border border-line bg-card px-5 py-4"
         >
           <p className="text-xs uppercase tracking-wider text-slate">
             {item.label}

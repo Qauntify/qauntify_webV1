@@ -27,7 +27,7 @@ export function Markets() {
               key={m.name}
               className={`rounded-xl border p-4 ${
                 m.live
-                  ? "border-line bg-white"
+                  ? "border-line bg-card"
                   : "border-dashed border-line bg-transparent opacity-60"
               }`}
             >

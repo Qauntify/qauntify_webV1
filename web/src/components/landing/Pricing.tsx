@@ -29,7 +29,7 @@ const TIERS = [
 
 export function Pricing() {
   return (
-    <section id="pricing" className="border-b border-line bg-white">
+    <section id="pricing" className="border-b border-line bg-card">
       <div className="mx-auto max-w-6xl px-6 py-20">
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate">
           Pricing

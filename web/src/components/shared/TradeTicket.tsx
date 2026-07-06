@@ -45,7 +45,7 @@ export function TradeTicket({
   showRationale?: boolean;
 }) {
   return (
-    <article className="rounded-xl border border-line bg-white shadow-[0_1px_3px_rgba(16,24,40,0.06)] transition-shadow hover:shadow-[0_4px_12px_rgba(16,24,40,0.08)]">
+    <article className="rounded-xl border border-line bg-card shadow-[0_1px_3px_rgba(16,24,40,0.06)] transition-shadow hover:shadow-[0_4px_12px_rgba(16,24,40,0.08)]">
       <div className="flex items-center justify-between border-b border-line px-5 py-3">
         <div className="flex items-center gap-3">
           <DirectionBadge direction={signal.direction} />

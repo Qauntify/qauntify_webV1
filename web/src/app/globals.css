@@ -1,7 +1,10 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --paper: #fbfbf9;
+  --card: #ffffff;
   --ink: #101828;
   --slate: #667085;
   --line: #e9eae7;
@@ -11,8 +14,21 @@
   --short-soft: #fbeae9;
 }
 
+.dark {
+  --paper: #12141a;
+  --card: #1a1d25;
+  --ink: #f2f2ef;
+  --slate: #98a2b3;
+  --line: #272b35;
+  --long: #3ccb7f;
+  --long-soft: #10291c;
+  --short: #f97066;
+  --short-soft: #331512;
+}
+
 @theme inline {
   --color-paper: var(--paper);
+  --color-card: var(--card);
   --color-ink: var(--ink);
   --color-slate: var(--slate);
   --color-line: var(--line);

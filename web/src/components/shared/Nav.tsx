@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
+
 const links = [
   { href: "/#features", label: "Features" },
   { href: "/#signals", label: "Signals" },
@@ -22,12 +24,15 @@ export function Nav() {
             </Link>
           ))}
         </nav>
-        <Link
-          href="/dashboard"
-          className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink/85"
-        >
-          Dashboard
-        </Link>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <Link
+            href="/dashboard"
+            className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink/85"
+          >
+            Dashboard
+          </Link>
+        </div>
       </div>
     </header>
   );

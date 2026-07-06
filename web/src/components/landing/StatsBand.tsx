@@ -10,7 +10,7 @@ export function StatsBand({ stats }: { stats: Stats }) {
     { value: 2, label: "markets covered" },
   ];
   return (
-    <section className="border-b border-line bg-white">
+    <section className="border-b border-line bg-card">
       <div className="mx-auto grid max-w-6xl grid-cols-1 divide-y divide-line px-6 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         {items.map((item) => (
           <div key={item.label} className="py-8 text-center">
