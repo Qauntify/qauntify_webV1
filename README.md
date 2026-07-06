@@ -1,11 +1,11 @@
-# ThinkTrade Signals Engine
+# FinhubKH Signals Engine
 
 AI-confirmed crypto trading signals. Scans BTCUSDT/ETHUSDT 1h candles from
 Binance, derives technical setups (EMA 9/21 crossover, RSI 14, MACD, ATR),
 confirms each candidate with SEA-LION using recent CryptoPanic headlines,
 and stores confirmed signals in SQLite + JSON.
 
-Part of the ThinkTrade platform rebuild. Spec:
+Part of the FinhubKH platform rebuild (formerly ThinkTrade). Spec:
 `docs/superpowers/specs/2026-07-05-signals-engine-design.md`
 
 ## Setup

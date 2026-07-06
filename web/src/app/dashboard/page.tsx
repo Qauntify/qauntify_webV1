@@ -7,7 +7,7 @@ import { TradeTicket } from "@/components/shared/TradeTicket";
 import { getSignals, getStats } from "@/lib/signals";
 
 export const metadata: Metadata = {
-  title: "Dashboard — ThinkTrade",
+  title: "Dashboard — FinhubKH",
 };
 
 // Signals change whenever the engine runs — read the DB on every request.

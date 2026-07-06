@@ -21,7 +21,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ThinkTrade — Smarter signals. Calmer trading.",
+  title: "FinhubKH — Smarter signals. Calmer trading.",
   description:
     "Technical setups on BTC and ETH, confirmed by AI, explained in plain language. Signals are for education and analysis — not financial advice.",
 };

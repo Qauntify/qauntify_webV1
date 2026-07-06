@@ -15,7 +15,7 @@ export function Nav() {
     <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-sm">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link href="/" className="font-display text-xl tracking-tight">
-          Think<span className="italic">Trade</span>
+          Finhub<span className="italic">KH</span>
         </Link>
         <nav className="hidden items-center gap-7 text-sm text-slate md:flex">
           {links.map((l) => (

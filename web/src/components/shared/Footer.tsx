@@ -7,7 +7,7 @@ export function Footer() {
         <div className="flex flex-col gap-8 md:flex-row md:justify-between">
           <div>
             <p className="font-display text-xl">
-              Think<span className="italic">Trade</span>
+              Finhub<span className="italic">KH</span>
             </p>
             <p className="mt-2 max-w-sm text-sm text-paper/60">
               Technical setups on BTC and ETH, confirmed by AI, explained in
@@ -38,7 +38,7 @@ export function Footer() {
         <p className="mt-10 border-t border-paper/15 pt-6 text-xs leading-relaxed text-paper/50">
           Signals are for educational and analysis purposes only. This is not
           financial advice. Trading involves risk and you can lose money. ©{" "}
-          {new Date().getFullYear()} ThinkTrade.
+          {new Date().getFullYear()} FinhubKH.
         </p>
       </div>
     </footer>
