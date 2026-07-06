@@ -13,9 +13,9 @@ export const metadata: Metadata = {
 // Signals change whenever the engine runs — read the DB on every request.
 export const dynamic = "force-dynamic";
 
-export default function Dashboard() {
-  const signals = getSignals();
-  const stats = getStats();
+export default async function Dashboard() {
+  const signals = await getSignals();
+  const stats = await getStats();
   return (
     <>
       <Nav />

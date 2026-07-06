@@ -12,9 +12,9 @@ import { getSignals, getStats } from "@/lib/signals";
 // Signals change whenever the engine runs — read the DB on every request.
 export const dynamic = "force-dynamic";
 
-export default function Home() {
-  const signals = getSignals(3);
-  const stats = getStats();
+export default async function Home() {
+  const signals = await getSignals(3);
+  const stats = await getStats();
   return (
     <>
       <Nav />

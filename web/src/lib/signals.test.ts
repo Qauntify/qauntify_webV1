@@ -1,83 +1,56 @@
-import Database from "better-sqlite3";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getSignals, getStats } from "./signals";
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS signals (
-    id TEXT PRIMARY KEY,
-    symbol TEXT NOT NULL,
-    timeframe TEXT NOT NULL,
-    direction TEXT NOT NULL,
-    entry REAL NOT NULL,
-    stop_loss REAL NOT NULL,
-    take_profit REAL NOT NULL,
-    confidence INTEGER NOT NULL,
-    rationale TEXT NOT NULL,
-    indicators TEXT NOT NULL,
-    news_headlines TEXT NOT NULL,
-    created_at TEXT NOT NULL
-)`;
+const ROW = {
+  id: "abc-123",
+  symbol: "BTCUSDT",
+  timeframe: "1h",
+  direction: "long",
+  entry: 108240.0,
+  stop_loss: 106900.0,
+  take_profit: 110920.0,
+  confidence: 82,
+  rationale: "Momentum aligns with news.",
+  indicators: { ema9: 108100, ema21: 107900, rsi: 55.2, macd_hist: 12.4 },
+  news_headlines: ["ETF inflows surge"],
+  created_at: "2026-07-06T09:00:00+00:00",
+};
 
-let dir: string;
-let dbFile: string;
-
-function insertSignal(
-  db: Database.Database,
-  overrides: Partial<Record<string, unknown>> = {},
-) {
-  const row = {
-    id: crypto.randomUUID(),
-    symbol: "BTCUSDT",
-    timeframe: "1h",
-    direction: "long",
-    entry: 108240.0,
-    stop_loss: 106900.0,
-    take_profit: 110920.0,
-    confidence: 82,
-    rationale: "Momentum aligns with news.",
-    indicators: JSON.stringify({ ema9: 108100, ema21: 107900, rsi: 55.2, macd_hist: 12.4 }),
-    news_headlines: JSON.stringify(["ETF inflows surge"]),
-    created_at: "2026-07-06T09:00:00+00:00",
-    ...overrides,
-  };
-  db.prepare(
-    `INSERT INTO signals VALUES (@id, @symbol, @timeframe, @direction, @entry,
-     @stop_loss, @take_profit, @confidence, @rationale, @indicators,
-     @news_headlines, @created_at)`,
-  ).run(row);
-  return row;
+function mockFetch(payload: unknown, ok = true) {
+  const fn = vi.fn().mockResolvedValue({
+    ok,
+    json: () => Promise.resolve(payload),
+  });
+  vi.stubGlobal("fetch", fn);
+  return fn;
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(path.join(tmpdir(), "signals-test-"));
-  dbFile = path.join(dir, "signals.db");
-  process.env.SIGNALS_DB_PATH = dbFile;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://abc.supabase.co";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
 });
 
 afterEach(() => {
-  delete process.env.SIGNALS_DB_PATH;
-  rmSync(dir, { recursive: true, force: true });
+  vi.unstubAllGlobals();
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 });
 
 describe("getSignals", () => {
-  it("returns [] when the database file does not exist", () => {
-    expect(getSignals()).toEqual([]);
+  it("returns [] when Supabase env vars are missing", async () => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const fetchFn = mockFetch([ROW]);
+    expect(await getSignals()).toEqual([]);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it("maps engine rows to camelCase signals with parsed JSON fields", () => {
-    const db = new Database(dbFile);
-    db.exec(SCHEMA);
-    const row = insertSignal(db);
-    db.close();
-
-    const signals = getSignals();
+  it("maps PostgREST rows to camelCase signals", async () => {
+    mockFetch([ROW]);
+    const signals = await getSignals();
     expect(signals).toHaveLength(1);
     const s = signals[0];
-    expect(s.id).toBe(row.id);
+    expect(s.id).toBe("abc-123");
     expect(s.direction).toBe("long");
     expect(s.stopLoss).toBe(106900.0);
     expect(s.takeProfit).toBe(110920.0);
@@ -85,42 +58,56 @@ describe("getSignals", () => {
     expect(s.newsHeadlines).toEqual(["ETF inflows surge"]);
   });
 
-  it("orders newest first and respects the limit", () => {
-    const db = new Database(dbFile);
-    db.exec(SCHEMA);
-    insertSignal(db, { created_at: "2026-07-05T01:00:00+00:00", symbol: "OLD1" });
-    insertSignal(db, { created_at: "2026-07-06T01:00:00+00:00", symbol: "NEW1" });
-    insertSignal(db, { created_at: "2026-07-05T12:00:00+00:00", symbol: "MID1" });
-    db.close();
-
-    const signals = getSignals(2);
-    expect(signals.map((s) => s.symbol)).toEqual(["NEW1", "MID1"]);
+  it("requests newest-first with the limit and anon auth headers", async () => {
+    const fetchFn = mockFetch([]);
+    await getSignals(5);
+    const [url, options] = fetchFn.mock.calls[0];
+    expect(url).toBe(
+      "https://abc.supabase.co/rest/v1/signals?select=*&order=created_at.desc&limit=5",
+    );
+    expect(options.headers.apikey).toBe("anon-key");
+    expect(options.headers.Authorization).toBe("Bearer anon-key");
+    expect(options.cache).toBe("no-store");
   });
 
-  it("skips rows with malformed JSON instead of crashing", () => {
-    const db = new Database(dbFile);
-    db.exec(SCHEMA);
-    insertSignal(db, { indicators: "{not json" });
-    insertSignal(db, { created_at: "2026-07-06T02:00:00+00:00" });
-    db.close();
+  it("skips malformed rows instead of crashing", async () => {
+    mockFetch([{ ...ROW, direction: "sideways" }, ROW]);
+    expect(await getSignals()).toHaveLength(1);
+  });
 
-    expect(getSignals()).toHaveLength(1);
+  it("returns [] on HTTP errors", async () => {
+    mockFetch({ message: "unauthorized" }, false);
+    expect(await getSignals()).toEqual([]);
+  });
+
+  it("returns [] when fetch itself rejects", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+    expect(await getSignals()).toEqual([]);
   });
 });
 
 describe("getStats", () => {
-  it("returns zeros when the database file does not exist", () => {
-    expect(getStats()).toEqual({ total: 0, avgConfidence: 0, longs: 0, shorts: 0 });
+  it("returns zeros when Supabase env vars are missing", async () => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    expect(await getStats()).toEqual({
+      total: 0,
+      avgConfidence: 0,
+      longs: 0,
+      shorts: 0,
+    });
   });
 
-  it("computes totals, rounded average confidence, and direction split", () => {
-    const db = new Database(dbFile);
-    db.exec(SCHEMA);
-    insertSignal(db, { confidence: 80, direction: "long" });
-    insertSignal(db, { confidence: 71, direction: "short" });
-    insertSignal(db, { confidence: 90, direction: "long" });
-    db.close();
-
-    expect(getStats()).toEqual({ total: 3, avgConfidence: 80, longs: 2, shorts: 1 });
+  it("computes totals, rounded average confidence, and direction split", async () => {
+    mockFetch([
+      { confidence: 80, direction: "long" },
+      { confidence: 71, direction: "short" },
+      { confidence: 90, direction: "long" },
+    ]);
+    expect(await getStats()).toEqual({
+      total: 3,
+      avgConfidence: 80,
+      longs: 2,
+      shorts: 1,
+    });
   });
 });

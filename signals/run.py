@@ -81,7 +81,13 @@ def scan_symbol(symbol, cfg, llm):
         return None
 
     signal = make_signal(setup, confirmation, headlines, timeframe=cfg.timeframe)
-    save_signal(signal, db_path=cfg.db_path, json_path=cfg.json_path)
+    try:
+        with_retry(lambda: save_signal(
+            signal, cfg.supabase_url, cfg.supabase_service_key,
+        ))
+    except Exception as exc:
+        print(f"[{symbol}] failed to store signal ({type(exc).__name__}), discarding")
+        return None
     print(f"[{symbol}] CONFIRMED {signal.direction.upper()} "
           f"(confidence {signal.confidence}): {signal.rationale}")
     return signal
@@ -101,7 +107,7 @@ def main():
                 stored += 1
         except Exception as exc:
             print(f"[{symbol}] unexpected error, skipping: {type(exc).__name__}: {exc}")
-    print(f"Done. {stored} signal(s) stored in {cfg.db_path} / {cfg.json_path}")
+    print(f"Done. {stored} signal(s) stored in Supabase.")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,3 @@
-import Database from "better-sqlite3";
-import path from "node:path";
-
 export type Signal = {
   id: string;
   symbol: string;
@@ -33,101 +30,86 @@ type SignalRow = {
   take_profit: number;
   confidence: number;
   rationale: string;
-  indicators: string;
-  news_headlines: string;
+  indicators: { ema9: number; ema21: number; rsi: number; macd_hist: number };
+  news_headlines: unknown;
   created_at: string;
 };
 
-// The engine writes signals.db at the repo root; the web app lives in web/.
-function dbPath(): string {
-  return (
-    process.env.SIGNALS_DB_PATH ?? path.join(process.cwd(), "..", "signals.db")
-  );
+function supabaseConfig(): { url: string; anonKey: string } | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return null;
+  return { url: url.replace(/\/$/, ""), anonKey };
 }
 
-// Read-only handle, or null when the engine hasn't produced a DB yet.
-function openDb(): Database.Database | null {
+async function fetchRows(query: string): Promise<SignalRow[] | null> {
+  const config = supabaseConfig();
+  if (!config) return null;
   try {
-    return new Database(dbPath(), { readonly: true, fileMustExist: true });
+    const response = await fetch(
+      `${config.url}/rest/v1/signals?${query}`,
+      {
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${config.anonKey}`,
+        },
+        cache: "no-store", // signals change whenever the engine runs
+      },
+    );
+    if (!response.ok) return null;
+    const rows = await response.json();
+    return Array.isArray(rows) ? rows : null;
   } catch {
     return null;
   }
 }
 
 function parseRow(row: SignalRow): Signal | null {
-  try {
-    const indicators = JSON.parse(row.indicators);
-    const newsHeadlines = JSON.parse(row.news_headlines);
-    if (!Array.isArray(newsHeadlines)) return null;
-    if (row.direction !== "long" && row.direction !== "short") return null;
-    return {
-      id: row.id,
-      symbol: row.symbol,
-      timeframe: row.timeframe,
-      direction: row.direction,
-      entry: row.entry,
-      stopLoss: row.stop_loss,
-      takeProfit: row.take_profit,
-      confidence: row.confidence,
-      rationale: row.rationale,
-      indicators: {
-        ema9: indicators.ema9,
-        ema21: indicators.ema21,
-        rsi: indicators.rsi,
-        macdHist: indicators.macd_hist,
-      },
-      newsHeadlines,
-      createdAt: row.created_at,
-    };
-  } catch {
-    return null;
-  }
+  if (row.direction !== "long" && row.direction !== "short") return null;
+  if (!Array.isArray(row.news_headlines)) return null;
+  if (typeof row.indicators !== "object" || row.indicators === null) return null;
+  return {
+    id: row.id,
+    symbol: row.symbol,
+    timeframe: row.timeframe,
+    direction: row.direction,
+    entry: row.entry,
+    stopLoss: row.stop_loss,
+    takeProfit: row.take_profit,
+    confidence: row.confidence,
+    rationale: row.rationale,
+    indicators: {
+      ema9: row.indicators.ema9,
+      ema21: row.indicators.ema21,
+      rsi: row.indicators.rsi,
+      macdHist: row.indicators.macd_hist,
+    },
+    newsHeadlines: row.news_headlines as string[],
+    createdAt: row.created_at,
+  };
 }
 
-export function getSignals(limit = 50): Signal[] {
-  const db = openDb();
-  if (!db) return [];
-  try {
-    const rows = db
-      .prepare("SELECT * FROM signals ORDER BY created_at DESC LIMIT ?")
-      .all(limit) as SignalRow[];
-    return rows.map(parseRow).filter((s): s is Signal => s !== null);
-  } catch {
-    return [];
-  } finally {
-    db.close();
-  }
+export async function getSignals(limit = 50): Promise<Signal[]> {
+  const rows = await fetchRows(
+    `select=*&order=created_at.desc&limit=${limit}`,
+  );
+  if (!rows) return [];
+  return rows.map(parseRow).filter((s): s is Signal => s !== null);
 }
 
-export function getStats(): Stats {
-  const db = openDb();
-  const empty: Stats = { total: 0, avgConfidence: 0, longs: 0, shorts: 0 };
-  if (!db) return empty;
-  try {
-    const row = db
-      .prepare(
-        `SELECT
-           COUNT(*) AS total,
-           COALESCE(AVG(confidence), 0) AS avg_confidence,
-           COALESCE(SUM(direction = 'long'), 0) AS longs,
-           COALESCE(SUM(direction = 'short'), 0) AS shorts
-         FROM signals`,
-      )
-      .get() as {
-      total: number;
-      avg_confidence: number;
-      longs: number;
-      shorts: number;
-    };
-    return {
-      total: row.total,
-      avgConfidence: Math.round(row.avg_confidence),
-      longs: row.longs,
-      shorts: row.shorts,
-    };
-  } catch {
-    return empty;
-  } finally {
-    db.close();
+export async function getStats(): Promise<Stats> {
+  // Low volume: fetch the two columns we aggregate and compute here.
+  const rows = await fetchRows("select=confidence,direction");
+  if (!rows || rows.length === 0) {
+    return { total: 0, avgConfidence: 0, longs: 0, shorts: 0 };
   }
+  const total = rows.length;
+  const sum = rows.reduce((acc, r) => acc + r.confidence, 0);
+  const longs = rows.filter((r) => r.direction === "long").length;
+  return {
+    total,
+    avgConfidence: Math.round(sum / total),
+    longs,
+    shorts: total - longs,
+  };
 }

@@ -1,6 +1,3 @@
-import json
-import sqlite3
-
 from signals import run as run_module
 from signals.config import Config
 from signals.models import Candle, CandidateSetup
@@ -15,11 +12,11 @@ def _flat_candles(n=200, price=100.0):
     ]
 
 
-def _config(tmp_path):
+def _config():
     return Config(
         sealion_api_key="sk-test",
-        db_path=str(tmp_path / "signals.db"),
-        json_path=str(tmp_path / "signals.json"),
+        supabase_url="https://abc.supabase.co",
+        supabase_service_key="service-key",
     )
 
 
@@ -36,6 +33,17 @@ class FakeLLM:
 
     def chat(self, messages, temperature=0.2):
         return self._reply
+
+
+def _capture_saves(monkeypatch):
+    """Replace run.save_signal with a recorder; returns the call list."""
+    saved = []
+
+    def fake_save(signal, supabase_url, service_key, session=None):
+        saved.append((signal, supabase_url, service_key))
+
+    monkeypatch.setattr(run_module, "save_signal", fake_save)
+    return saved
 
 
 def test_with_retry_returns_after_transient_failure():
@@ -62,58 +70,54 @@ def test_with_retry_raises_after_exhausting_attempts():
         pass
 
 
-def test_scan_symbol_no_setup_stores_nothing(tmp_path, monkeypatch):
+def test_scan_symbol_no_setup_stores_nothing(monkeypatch):
     # Flat prices produce no crossover → real detector returns None.
     monkeypatch.setattr(run_module, "fetch_candles",
                         lambda symbol, interval, limit: _flat_candles())
-    cfg = _config(tmp_path)
+    saved = _capture_saves(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 90, "rationale": "x"}')
-    result = scan_symbol("BTCUSDT", cfg, llm)
-    assert result is None
-    assert not (tmp_path / "signals.json").exists()
+
+    assert scan_symbol("BTCUSDT", _config(), llm) is None
+    assert saved == []
 
 
-def test_scan_symbol_confirmed_signal_is_stored(tmp_path, monkeypatch):
+def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
                         lambda symbol, interval, limit: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     monkeypatch.setattr(run_module, "fetch_headlines",
                         lambda symbol: ["BTC rally continues"])
-    cfg = _config(tmp_path)
+    saved = _capture_saves(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 82, "rationale": "Aligned."}')
 
-    signal = scan_symbol("BTCUSDT", cfg, llm)
+    signal = scan_symbol("BTCUSDT", _config(), llm)
 
     assert signal is not None
     assert signal.confidence == 82
-    conn = sqlite3.connect(cfg.db_path)
-    count = conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
-    conn.close()
-    assert count == 1
-    with open(cfg.json_path) as f:
-        data = json.load(f)
-    assert data[0]["symbol"] == "BTCUSDT"
-    assert data[0]["news_headlines"] == ["BTC rally continues"]
+    assert len(saved) == 1
+    stored_signal, url, key = saved[0]
+    assert stored_signal is signal
+    assert url == "https://abc.supabase.co"
+    assert key == "service-key"
+    assert stored_signal.news_headlines == ["BTC rally continues"]
 
 
-def test_scan_symbol_rejected_signal_not_stored(tmp_path, monkeypatch):
+def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
                         lambda symbol, interval, limit: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     monkeypatch.setattr(run_module, "fetch_headlines",
                         lambda symbol: [])
-    cfg = _config(tmp_path)
+    saved = _capture_saves(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "reject", "confidence": 25, "rationale": "Bearish news."}')
 
-    result = scan_symbol("BTCUSDT", cfg, llm)
-
-    assert result is None
-    assert not (tmp_path / "signals.json").exists()
+    assert scan_symbol("BTCUSDT", _config(), llm) is None
+    assert saved == []
 
 
-def test_scan_symbol_news_failure_proceeds_with_empty_headlines(tmp_path, monkeypatch):
+def test_scan_symbol_news_failure_proceeds_with_empty_headlines(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
                         lambda symbol, interval, limit: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
@@ -124,28 +128,45 @@ def test_scan_symbol_news_failure_proceeds_with_empty_headlines(tmp_path, monkey
 
     monkeypatch.setattr(run_module, "fetch_headlines", broken_news)
     monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
-    cfg = _config(tmp_path)
+    _capture_saves(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 70, "rationale": "ok"}')
 
-    signal = scan_symbol("BTCUSDT", cfg, llm)
+    signal = scan_symbol("BTCUSDT", _config(), llm)
 
     assert signal is not None
     assert signal.news_headlines == []
 
 
-def test_scan_symbol_binance_failure_returns_none(tmp_path, monkeypatch):
+def test_scan_symbol_binance_failure_returns_none(monkeypatch):
     def broken_candles(symbol, interval, limit):
         raise RuntimeError("binance down")
 
     monkeypatch.setattr(run_module, "fetch_candles", broken_candles)
     monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
-    cfg = _config(tmp_path)
     llm = FakeLLM(reply="{}")
 
-    assert scan_symbol("BTCUSDT", cfg, llm) is None
+    assert scan_symbol("BTCUSDT", _config(), llm) is None
 
 
-def test_scan_symbol_never_prints_news_secrets(tmp_path, monkeypatch, capsys):
+def test_scan_symbol_storage_failure_discards_without_raising(monkeypatch):
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit: _flat_candles())
+    monkeypatch.setattr(run_module, "detect_setup",
+                        lambda *args, **kwargs: SETUP)
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol: [])
+    monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
+
+    def broken_save(signal, supabase_url, service_key, session=None):
+        raise RuntimeError("HTTP 503")
+
+    monkeypatch.setattr(run_module, "save_signal", broken_save)
+    llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 82, "rationale": "ok"}')
+
+    assert scan_symbol("BTCUSDT", _config(), llm) is None
+
+
+def test_scan_symbol_never_prints_news_secrets(monkeypatch, capsys):
     monkeypatch.setattr(run_module, "fetch_candles",
                         lambda symbol, interval, limit: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
@@ -161,17 +182,17 @@ def test_scan_symbol_never_prints_news_secrets(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(run_module, "fetch_headlines", leaky_news)
     monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
-    cfg = _config(tmp_path)
+    _capture_saves(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 70, "rationale": "ok"}')
 
-    scan_symbol("BTCUSDT", cfg, llm)
+    scan_symbol("BTCUSDT", _config(), llm)
 
     captured = capsys.readouterr()
     assert "SECRET-TOKEN-123" not in captured.out
     assert "SECRET-TOKEN-123" not in captured.err
 
 
-def test_scan_symbol_drops_forming_candle(tmp_path, monkeypatch):
+def test_scan_symbol_drops_forming_candle(monkeypatch):
     candles = _flat_candles(n=200)
     forming = Candle(open_time=999, open=100.0, high=1000.0,
                      low=99.0, close=999.0, volume=1.0)
@@ -184,10 +205,9 @@ def test_scan_symbol_drops_forming_candle(tmp_path, monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
                         lambda symbol, interval, limit: candles + [forming])
     monkeypatch.setattr(run_module, "detect_setup", capture_detect)
-    cfg = _config(tmp_path)
     llm = FakeLLM(reply="{}")
 
-    scan_symbol("BTCUSDT", cfg, llm)
+    scan_symbol("BTCUSDT", _config(), llm)
 
     assert seen["candles"][-1].close == 100.0  # forming 999-close bar excluded
     assert len(seen["candles"]) == 200

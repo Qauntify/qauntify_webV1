@@ -1,5 +1,4 @@
-import json
-import sqlite3
+import pytest
 
 from signals.models import CandidateSetup, Confirmation, make_signal
 from signals.storage import save_signal
@@ -15,70 +14,51 @@ def _signal():
     return make_signal(setup, confirmation, ["headline one"])
 
 
-def test_save_signal_writes_sqlite_row(tmp_path):
-    db = str(tmp_path / "signals.db")
-    js = str(tmp_path / "signals.json")
+class FakeResponse:
+    def __init__(self, status=201):
+        self.status_code = status
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+class FakeSession:
+    def __init__(self, status=201):
+        self._status = status
+        self.last_url = None
+        self.last_headers = None
+        self.last_json = None
+
+    def post(self, url, headers=None, json=None, timeout=None):
+        self.last_url = url
+        self.last_headers = headers
+        self.last_json = json
+        return FakeResponse(self._status)
+
+
+def test_save_signal_posts_row_to_supabase():
+    session = FakeSession()
     signal = _signal()
-    save_signal(signal, db_path=db, json_path=js)
 
-    conn = sqlite3.connect(db)
-    conn.row_factory = sqlite3.Row
-    row = conn.execute("SELECT * FROM signals").fetchone()
-    conn.close()
-    assert row["id"] == signal.id
-    assert row["symbol"] == "BTCUSDT"
-    assert row["direction"] == "long"
-    assert row["entry"] == 100.0
-    assert row["confidence"] == 80
-    assert json.loads(row["indicators"])["rsi"] == 55.0
-    assert json.loads(row["news_headlines"]) == ["headline one"]
+    save_signal(signal, "https://abc.supabase.co", "service-key", session=session)
 
-
-def test_save_signal_appends_to_json(tmp_path):
-    db = str(tmp_path / "signals.db")
-    js = str(tmp_path / "signals.json")
-    first = _signal()
-    second = _signal()
-    save_signal(first, db_path=db, json_path=js)
-    save_signal(second, db_path=db, json_path=js)
-
-    with open(js) as f:
-        data = json.load(f)
-    assert len(data) == 2
-    assert data[0]["id"] == first.id
-    assert data[1]["id"] == second.id
-    assert data[0]["news_headlines"] == ["headline one"]
+    assert session.last_url == "https://abc.supabase.co/rest/v1/signals"
+    assert session.last_headers["apikey"] == "service-key"
+    assert session.last_headers["Authorization"] == "Bearer service-key"
+    assert session.last_headers["Prefer"] == "return=minimal"
+    body = session.last_json
+    assert body["id"] == signal.id
+    assert body["symbol"] == "BTCUSDT"
+    assert body["direction"] == "long"
+    assert body["entry"] == 100.0
+    assert body["confidence"] == 80
+    assert body["indicators"]["rsi"] == 55.0  # jsonb: sent as an object, not a string
+    assert body["news_headlines"] == ["headline one"]
+    assert body["created_at"] == signal.created_at
 
 
-def test_save_signal_creates_table_if_missing(tmp_path):
-    db = str(tmp_path / "fresh.db")
-    js = str(tmp_path / "fresh.json")
-    save_signal(_signal(), db_path=db, json_path=js)
-    conn = sqlite3.connect(db)
-    count = conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
-    conn.close()
-    assert count == 1
-
-
-def test_save_signal_recovers_from_corrupt_json(tmp_path):
-    db = str(tmp_path / "signals.db")
-    js = str(tmp_path / "signals.json")
-    with open(js, "w") as f:
-        f.write("")  # simulate truncated/corrupt mirror file
-    signal = _signal()
-    save_signal(signal, db_path=db, json_path=js)
-    with open(js) as f:
-        data = json.load(f)
-    assert len(data) == 1
-    assert data[0]["id"] == signal.id
-
-
-def test_save_signal_recovers_from_non_list_json(tmp_path):
-    db = str(tmp_path / "signals.db")
-    js = str(tmp_path / "signals.json")
-    with open(js, "w") as f:
-        f.write('{"not": "a list"}')
-    save_signal(_signal(), db_path=db, json_path=js)
-    with open(js) as f:
-        data = json.load(f)
-    assert len(data) == 1
+def test_save_signal_raises_on_http_error():
+    session = FakeSession(status=401)
+    with pytest.raises(RuntimeError):
+        save_signal(_signal(), "https://abc.supabase.co", "bad-key", session=session)
