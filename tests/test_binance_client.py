@@ -53,7 +53,7 @@ def test_fetch_candles_parses_klines():
 def test_fetch_candles_sends_correct_params():
     session = FakeSession(KLINE_ROWS)
     fetch_candles("ETHUSDT", interval="1h", limit=200, session=session)
-    assert session.last_url == "https://api.binance.com/api/v3/klines"
+    assert session.last_url == "https://data-api.binance.vision/api/v3/klines"
     assert session.last_params == {"symbol": "ETHUSDT", "interval": "1h", "limit": 200}
 
 

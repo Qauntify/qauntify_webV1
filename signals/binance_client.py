@@ -3,7 +3,9 @@ import requests
 
 from signals.models import Candle
 
-KLINES_URL = "https://api.binance.com/api/v3/klines"
+# Official public market-data host; api.binance.com is DNS-blocked on some
+# networks and this engine only needs public data anyway.
+KLINES_URL = "https://data-api.binance.vision/api/v3/klines"
 
 
 def fetch_candles(symbol, interval="1h", limit=200, session=None):
