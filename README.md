@@ -45,6 +45,22 @@ stores nothing — that is normal; crossovers are infrequent by design.
 .venv/bin/pytest
 ```
 
+## Web app
+
+A Next.js front end lives in `web/`: a marketing landing page (`/`) and a
+signals dashboard (`/dashboard`) that read `signals.db` directly (read-only).
+
+```bash
+cd web
+npm install
+npm run dev        # http://localhost:3000
+npm test           # vitest
+```
+
+Pages render per-request, so refresh after an engine run to see new
+signals. If `signals.db` doesn't exist yet, both pages show friendly empty
+states. To point at a different database, set `SIGNALS_DB_PATH`.
+
 ## Disclaimer
 
 Signals are for educational and analysis purposes only. Not financial

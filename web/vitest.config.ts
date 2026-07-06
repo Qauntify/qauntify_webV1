@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
+    globals: true, // lets @testing-library/react register its afterEach cleanup
     include: ["src/**/*.test.{ts,tsx}"],
   },
   resolve: {

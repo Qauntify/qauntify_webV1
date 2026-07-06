@@ -1,26 +1,46 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #fbfbf9;
+  --ink: #101828;
+  --slate: #667085;
+  --line: #e9eae7;
+  --long: #087443;
+  --long-soft: #eaf5ef;
+  --short: #b42318;
+  --short-soft: #fbeae9;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-slate: var(--slate);
+  --color-line: var(--line);
+  --color-long: var(--long);
+  --color-long-soft: var(--long-soft);
+  --color-short: var(--short);
+  --color-short-soft: var(--short-soft);
+  --font-display: var(--font-newsreader);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

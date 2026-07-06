@@ -5,3 +5,4 @@ __pycache__/
 signals.db
 signals.json
 .pytest_cache/
+.superpowers/
