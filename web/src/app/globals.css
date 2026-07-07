@@ -2,28 +2,43 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* TradeZella-inspired: violet accent, clean cards, green/red P&L */
 :root {
-  --paper: #fbfbf9;
+  --paper: #f7f8fc;
   --card: #ffffff;
-  --ink: #101828;
-  --slate: #667085;
-  --line: #e9eae7;
-  --long: #087443;
-  --long-soft: #eaf5ef;
-  --short: #b42318;
-  --short-soft: #fbeae9;
+  --ink: #111827;
+  --slate: #6b7280;
+  --line: #e5e7eb;
+  --accent: #745ff2;
+  --accent-hover: #6349e8;
+  --accent-soft: #f3f0ff;
+  --accent-glow: rgba(116, 95, 242, 0.12);
+  --sidebar: #ffffff;
+  --long: #16a34a;
+  --long-soft: #ecfdf3;
+  --short: #dc2626;
+  --short-soft: #fef2f2;
+  --shadow-card: 0 1px 3px rgba(17, 24, 39, 0.06);
+  --shadow-card-hover: 0 4px 16px rgba(17, 24, 39, 0.08);
 }
 
 .dark {
-  --paper: #12141a;
-  --card: #1a1d25;
-  --ink: #f2f2ef;
-  --slate: #98a2b3;
-  --line: #272b35;
-  --long: #3ccb7f;
-  --long-soft: #10291c;
-  --short: #f97066;
-  --short-soft: #331512;
+  --paper: #0d0f14;
+  --card: #161922;
+  --ink: #f3f4f6;
+  --slate: #9ca3af;
+  --line: #252a36;
+  --accent: #8b7cf8;
+  --accent-hover: #9d8efa;
+  --accent-soft: #1e1a2e;
+  --accent-glow: rgba(139, 124, 248, 0.15);
+  --sidebar: #111318;
+  --long: #4ade80;
+  --long-soft: #14291d;
+  --short: #f87171;
+  --short-soft: #2a1515;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 @theme inline {
@@ -32,24 +47,27 @@
   --color-ink: var(--ink);
   --color-slate: var(--slate);
   --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-sidebar: var(--sidebar);
   --color-long: var(--long);
   --color-long-soft: var(--long-soft);
   --color-short: var(--short);
   --color-short-soft: var(--short-soft);
-  --font-display: var(--font-newsreader);
-  --font-sans: var(--font-plex-sans);
-  --font-mono: var(--font-plex-mono);
+  --font-display: var(--font-jakarta);
+  --font-sans: var(--font-jakarta);
+  --font-mono: var(--font-jetbrains);
 }
 
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-plex-sans), system-ui, sans-serif;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
 }
 
 ::selection {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--accent);
+  color: #fff;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -61,8 +79,168 @@ body {
   }
 }
 
-/* Consistent keyboard focus everywhere; inputs keep their border style. */
 :focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.page-container {
+  margin-inline: auto;
+  max-width: 72rem;
+  padding-inline: 1.5rem;
+}
+
+.section-block {
+  border-bottom: 1px solid var(--line);
+}
+
+.section-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.card-surface {
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.2s ease;
+}
+
+.card-surface:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  padding: 0.625rem 1.125rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  transition: background 0.15s ease;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  border: 1px solid var(--line);
+  background: var(--card);
+  padding: 0.625rem 1.125rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.btn-ghost {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--slate);
+  transition: color 0.15s ease;
+}
+
+.btn-ghost:hover {
+  color: var(--ink);
+}
+
+.link-arrow {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.link-arrow:hover {
+  color: var(--accent-hover);
+}
+
+.input-field {
+  border-radius: 0.5rem;
+  border: 1px solid var(--line);
+  background: var(--card);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--ink);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input-field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  outline: none;
+}
+
+.input-field::placeholder {
+  color: var(--slate);
+}
+
+.hero-mesh {
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(ellipse 60% 50% at 20% 0%, var(--accent-glow), transparent 60%),
+    radial-gradient(ellipse 40% 30% at 80% 20%, color-mix(in srgb, var(--long) 6%, transparent), transparent 50%);
+}
+
+/* TradeZella-style widget stat */
+.stat-tile {
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--card);
+  padding: 1.125rem 1.25rem;
+}
+
+.stat-tile-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--slate);
+}
+
+.stat-tile-value {
+  margin-top: 0.25rem;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* Sidebar nav item (TradeZella pattern) */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--slate);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-item:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.nav-item-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
 }

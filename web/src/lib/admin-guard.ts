@@ -10,6 +10,6 @@ export async function requireAdminPage(): Promise<string> {
   const { data } = await supabase.auth.getUser();
   const email = data.user?.email;
   if (!email) redirect("/login");
-  if (!isAdminEmail(email)) redirect("/dashboard");
+  if (!isAdminEmail(email)) redirect("/dashboard?admin=denied");
   return email;
 }

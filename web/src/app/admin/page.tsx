@@ -50,31 +50,22 @@ export default async function AdminOverview() {
 
   return (
     <>
-      <h1 className="font-display text-3xl tracking-tight">Overview</h1>
-      <p className="mt-2 text-sm text-slate">
-        Everything the engine and your members have been up to.
+      <h1 className="text-2xl font-bold">Overview</h1>
+      <p className="mt-1 text-sm text-slate">
+        Engine health, member stats, and latest signals.
       </p>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {tiles.map((tile) => (
-          <div
-            key={tile.label}
-            className="rounded-xl border border-line bg-card px-5 py-4"
-          >
-            <p className="text-xs uppercase tracking-wider text-slate">
-              {tile.label}
-            </p>
-            <p className="mt-1 font-mono text-2xl font-semibold">
-              {tile.value}
-            </p>
+          <div key={tile.label} className="stat-tile">
+            <p className="stat-tile-label">{tile.label}</p>
+            <p className="stat-tile-value">{tile.value}</p>
             {"sub" in tile && tile.sub ? (
               <p className="mt-2 text-xs text-slate">{tile.sub}</p>
             ) : null}
           </div>
         ))}
       </div>
-      <h2 className="mt-12 font-display text-2xl tracking-tight">
-        Latest signals
-      </h2>
+      <h2 className="mt-12 text-xl font-bold">Latest signals</h2>
       {signals.length > 0 ? (
         <div className="mt-4 flex max-w-3xl flex-col gap-5">
           {signals.map((s) => (

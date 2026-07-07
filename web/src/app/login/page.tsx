@@ -25,12 +25,10 @@ export default async function LoginPage({
   return (
     <AuthShell
       headline="Welcome back."
-      sub="The market kept moving while you were away — your full signal history is waiting on the dashboard."
+      sub="Your full signal history and outcome tracking are waiting on the dashboard."
     >
-      <h1 className="font-display text-3xl tracking-tight">Sign in</h1>
-      <p className="mt-2 text-sm text-slate">
-        Sign in to open your dashboard.
-      </p>
+      <h1 className="text-2xl font-bold">Sign in</h1>
+      <p className="mt-1 text-sm text-slate">Open your trading dashboard.</p>
       {error ? (
         <Notice tone="error" className="mt-6">
           {error}
@@ -45,7 +43,7 @@ export default async function LoginPage({
             required
             autoComplete="email"
             placeholder="you@example.com"
-            className="rounded-lg border border-line bg-card px-3 py-2 text-sm font-normal outline-none focus:border-slate"
+            className="input-field"
           />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -55,23 +53,17 @@ export default async function LoginPage({
             name="password"
             required
             autoComplete="current-password"
-            placeholder="••••••••"
-            className="rounded-lg border border-line bg-card px-3 py-2 text-sm font-normal outline-none focus:border-slate"
+            placeholder="Your password"
+            className="input-field"
           />
         </label>
-        <button
-          formAction={login}
-          className="mt-2 rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-paper hover:bg-ink/85"
-        >
+        <button formAction={login} className="btn-primary mt-2">
           Sign in
         </button>
       </form>
       <p className="mt-6 text-sm text-slate">
-        No account yet?{" "}
-        <Link
-          href="/signup"
-          className="font-medium text-ink underline underline-offset-4"
-        >
+        No account?{" "}
+        <Link href="/signup" className="font-semibold text-accent hover:underline">
           Create one free
         </Link>
       </p>

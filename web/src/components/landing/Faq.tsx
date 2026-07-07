@@ -1,45 +1,42 @@
 import Link from "next/link";
 
+import { SectionHeader } from "@/components/shared/SectionHeader";
+
 const FAQS = [
   {
     q: "What exactly is a signal?",
-    a: "A trade setup the engine found and the AI confirmed: symbol, direction, entry price, stop loss, take profit, a 0–100 confidence score, and a short written rationale.",
+    a: "A trade setup the engine found and the AI confirmed: symbol, direction, entry, stop loss, take profit, confidence score, and rationale.",
   },
   {
     q: "How does the AI confirmation work?",
-    a: "Technical rules propose a setup first. The candidate — with its indicator readings and recent news headlines — is then reviewed by the SEA-LION model, which confirms or rejects it. Rejected setups are never published.",
+    a: "Technical rules propose a setup first. SEA-LION reviews the candidate with indicator readings and news headlines, then confirms or rejects.",
   },
   {
-    q: "Which markets are covered?",
-    a: "Bitcoin (BTCUSDT) and Ethereum (ETHUSDT) on 1-hour candles today. More markets are added only after the engine handles them well.",
+    q: "Does it track TP and SL hits?",
+    a: "Yes. Open signals are checked every engine run. When price hits take profit or stop loss, the status updates and you get a Telegram alert.",
   },
   {
     q: "Why are there sometimes no new signals?",
-    a: "Crossovers with aligned momentum are infrequent by design. A quiet dashboard means the rules found nothing worth your attention — not that the engine is down.",
+    a: "Crossovers with aligned momentum are infrequent by design. A quiet dashboard means nothing worth your attention was found.",
   },
   {
     q: "Is this financial advice?",
-    a: "No. Signals are for education and analysis only. Trading involves risk and you can lose money. Always do your own research.",
+    a: "No. Signals are for education and analysis only. Trading involves risk and you can lose money.",
   },
 ];
 
 export function Faq() {
   return (
     <>
-      <section id="faq" className="border-b border-line">
-        <div className="mx-auto max-w-6xl px-6 py-20">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate">
-            FAQ
-          </p>
-          <h2 className="mt-3 font-display text-4xl tracking-tight">
-            Fair questions.
-          </h2>
+      <section id="faq" className="section-block">
+        <div className="page-container py-16 md:py-20">
+          <SectionHeader eyebrow="FAQ" title="Fair questions." />
           <div className="mt-10 max-w-2xl divide-y divide-line">
             {FAQS.map((item) => (
               <details key={item.q} className="group py-4">
-                <summary className="flex cursor-pointer list-none items-center justify-between font-medium">
+                <summary className="flex cursor-pointer list-none items-center justify-between font-semibold">
                   {item.q}
-                  <span className="text-slate transition-transform group-open:rotate-45">
+                  <span className="ml-4 text-accent transition-transform group-open:rotate-45">
                     +
                   </span>
                 </summary>
@@ -49,14 +46,17 @@ export function Faq() {
           </div>
         </div>
       </section>
-      <section className="border-b border-line bg-card">
-        <div className="mx-auto max-w-6xl px-6 py-16 text-center">
-          <h2 className="font-display text-4xl tracking-tight">
+      <section className="section-block bg-accent">
+        <div className="page-container py-14 text-center">
+          <h2 className="text-3xl font-bold text-white">
             See what the engine sees.
           </h2>
+          <p className="mx-auto mt-3 max-w-md text-sm text-white/80">
+            Free account. Full signal history. Outcome tracking included.
+          </p>
           <Link
             href="/signup"
-            className="mt-6 inline-block rounded-lg bg-ink px-5 py-3 text-sm font-medium text-paper hover:bg-ink/85"
+            className="mt-6 inline-block rounded-lg bg-white px-6 py-3 text-sm font-semibold text-accent hover:bg-white/90"
           >
             Create free account
           </Link>

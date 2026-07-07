@@ -56,7 +56,7 @@ create policy "member full access"
 -- service-role key (engine + admin page) can read or write it.
 create table if not exists public.bot_settings (
     id integer primary key check (id = 1),
-    symbols jsonb not null default '["BTCUSDT", "ETHUSDT"]',
+    symbols jsonb not null default '["BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT"]',
     min_alert_confidence integer not null
         default 0 check (min_alert_confidence between 0 and 100),
     updated_at timestamptz not null default now()
@@ -66,6 +66,13 @@ alter table public.bot_settings enable row level security;
 
 insert into public.bot_settings (id) values (1)
     on conflict (id) do nothing;
+
+-- Keep existing installs aligned with the four live markets.
+update public.bot_settings
+set
+    symbols = '["BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT"]'::jsonb,
+    updated_at = now()
+where id = 1;
 
 -- AI event log: stores all SEA-LION responses (confirm/reject/no-setup explanations)
 -- for audit + admin dashboard visibility. RLS enabled with no policies so only

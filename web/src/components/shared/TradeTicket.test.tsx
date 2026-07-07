@@ -24,19 +24,19 @@ describe("TradeTicket", () => {
   it("renders symbol, direction, prices, confidence, and rationale", () => {
     render(<TradeTicket signal={SIGNAL} />);
     expect(screen.getByText("BTCUSDT")).toBeDefined();
-    expect(screen.getByText("▲ Long")).toBeDefined();
+    expect(screen.getByText("Long")).toBeDefined();
     expect(screen.getByText("108,240")).toBeDefined();
     expect(screen.getByText("106,900")).toBeDefined();
     expect(screen.getByText("110,920")).toBeDefined();
-    expect(screen.getByText("82")).toBeDefined();
-    expect(screen.getByText("“Momentum aligns.”")).toBeDefined();
+    expect(screen.getByText("82%")).toBeDefined();
+    expect(screen.getByText("Momentum aligns.")).toBeDefined();
     expect(screen.getByText("1 headline reviewed")).toBeDefined();
   });
 
   it("marks sample signals and can hide the rationale", () => {
     render(<TradeTicket signal={SIGNAL} sample showRationale={false} />);
     expect(screen.getByText("example signal")).toBeDefined();
-    expect(screen.queryByText("“Momentum aligns.”")).toBeNull();
+    expect(screen.queryByText("Momentum aligns.")).toBeNull();
   });
 
   it("shows a status badge only for closed signals", () => {
@@ -51,6 +51,6 @@ describe("TradeTicket", () => {
 
   it("renders short direction with the short badge", () => {
     render(<TradeTicket signal={{ ...SIGNAL, direction: "short" }} />);
-    expect(screen.getByText("▼ Short")).toBeDefined();
+    expect(screen.getByText("Short")).toBeDefined();
   });
 });

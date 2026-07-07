@@ -1,44 +1,43 @@
 import Link from "next/link";
 
+import { Logo } from "@/components/shared/Logo";
+
 export function Footer() {
   return (
-    <footer className="border-t border-line bg-ink text-paper">
-      <div className="mx-auto max-w-6xl px-6 py-12">
+    <footer className="border-t border-line bg-card">
+      <div className="page-container py-12">
         <div className="flex flex-col gap-8 md:flex-row md:justify-between">
           <div>
-            <p className="font-display text-xl">
-              Finhub<span className="italic">KH</span>
-            </p>
-            <p className="mt-2 max-w-sm text-sm text-paper/60">
-              Technical setups on crypto, gold, and forex — confirmed by AI,
-              explained in plain language.
+            <Logo />
+            <p className="mt-3 max-w-sm text-sm text-slate">
+              AI-confirmed trading signals with entry, stop loss, take profit,
+              and outcome tracking.
             </p>
           </div>
           <nav className="flex gap-12 text-sm">
             <div className="flex flex-col gap-2">
-              <p className="font-medium text-paper/80">Product</p>
-              <Link href="/#features" className="text-paper/60 hover:text-paper">
+              <p className="font-semibold text-ink">Product</p>
+              <Link href="/#features" className="text-slate hover:text-accent">
                 Features
               </Link>
-              <Link href="/#pricing" className="text-paper/60 hover:text-paper">
+              <Link href="/#pricing" className="text-slate hover:text-accent">
                 Pricing
               </Link>
-              <Link href="/dashboard" className="text-paper/60 hover:text-paper">
+              <Link href="/dashboard" className="text-slate hover:text-accent">
                 Dashboard
               </Link>
             </div>
             <div className="flex flex-col gap-2">
-              <p className="font-medium text-paper/80">Company</p>
-              <Link href="/#faq" className="text-paper/60 hover:text-paper">
+              <p className="font-semibold text-ink">Support</p>
+              <Link href="/#faq" className="text-slate hover:text-accent">
                 FAQ
               </Link>
             </div>
           </nav>
         </div>
-        <p className="mt-10 border-t border-paper/15 pt-6 text-xs leading-relaxed text-paper/50">
-          Signals are for educational and analysis purposes only. This is not
-          financial advice. Trading involves risk and you can lose money. ©{" "}
-          {new Date().getFullYear()} FinhubKH.
+        <p className="mt-10 border-t border-line pt-6 text-xs leading-relaxed text-slate">
+          Signals are for educational and analysis purposes only. Not financial
+          advice. Trading involves risk. © {new Date().getFullYear()} FinhubKH.
         </p>
       </div>
     </footer>

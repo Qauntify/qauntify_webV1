@@ -2,11 +2,17 @@ name: Signals engine
 
 on:
   schedule:
-    # Every 10 minutes. Candles are 1h, so most runs see the same closed bar —
-    # the dedup check in signals/run.py keeps repeated setups from being
-    # stored (or alerted) twice.
-    - cron: "*/10 * * * *"
+    # Backup schedule only — GitHub cron is best-effort and often drifts hours.
+    # Primary trigger: external cron hits /api/cron/trigger-engine every 10 min.
+    # Odd minutes avoid peak queue times at :00 and :30 UTC.
+    - cron: "3,13,23,33,43,53 * * * *"
   workflow_dispatch: {}
+  repository_dispatch:
+    types: [run-engine]
+
+concurrency:
+  group: signals-engine
+  cancel-in-progress: false
 
 jobs:
   scan:

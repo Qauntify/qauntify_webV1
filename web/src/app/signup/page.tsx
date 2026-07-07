@@ -24,13 +24,11 @@ export default async function SignupPage({
 
   return (
     <AuthShell
-      headline="Start your journal."
-      sub="AI-confirmed setups on crypto, gold, and forex — every entry logged, explained in plain language, and alerted when it matters."
+      headline="Start tracking signals."
+      sub="AI-confirmed setups with entry, stop loss, take profit, and outcome tracking."
     >
-      <h1 className="font-display text-3xl tracking-tight">Create account</h1>
-      <p className="mt-2 text-sm text-slate">
-        Free forever. Unlock the full signal history.
-      </p>
+      <h1 className="text-2xl font-bold">Create account</h1>
+      <p className="mt-1 text-sm text-slate">Free forever. Full signal history.</p>
       {error ? (
         <Notice tone="error" className="mt-6">
           {error}
@@ -38,8 +36,7 @@ export default async function SignupPage({
       ) : null}
       {sent ? (
         <Notice tone="success" className="mt-6">
-          Check your email — we sent you a confirmation link. Click it to
-          finish creating your account.
+          Check your email — we sent a confirmation link.
         </Notice>
       ) : (
         <>
@@ -52,7 +49,7 @@ export default async function SignupPage({
                 required
                 autoComplete="email"
                 placeholder="you@example.com"
-                className="rounded-lg border border-line bg-card px-3 py-2 text-sm font-normal outline-none focus:border-slate"
+                className="input-field"
               />
             </label>
             <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -64,22 +61,16 @@ export default async function SignupPage({
                 minLength={6}
                 autoComplete="new-password"
                 placeholder="At least 6 characters"
-                className="rounded-lg border border-line bg-card px-3 py-2 text-sm font-normal outline-none focus:border-slate"
+                className="input-field"
               />
             </label>
-            <button
-              formAction={signup}
-              className="mt-2 rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-paper hover:bg-ink/85"
-            >
+            <button formAction={signup} className="btn-primary mt-2">
               Create account
             </button>
           </form>
           <p className="mt-6 text-sm text-slate">
             Already have an account?{" "}
-            <Link
-              href="/login"
-              className="font-medium text-ink underline underline-offset-4"
-            >
+            <Link href="/login" className="font-semibold text-accent hover:underline">
               Sign in
             </Link>
           </p>

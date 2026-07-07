@@ -24,7 +24,7 @@ export default async function AdminBot({
 
   return (
     <>
-      <h1 className="font-display text-3xl tracking-tight">Bot settings</h1>
+      <h1 className="text-2xl font-bold">Bot settings</h1>
       <p className="mt-2 text-sm text-slate">
         Applied from the next engine run (every 10 minutes). Alerts go to
         your Telegram chat.

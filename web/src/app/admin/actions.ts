@@ -15,7 +15,7 @@ const SYMBOL_PATTERN = /^[A-Z0-9]{3,20}$/;
 async function requireAdmin(): Promise<void> {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
-  if (!isAdminEmail(data.user?.email)) redirect("/dashboard");
+  if (!isAdminEmail(data.user?.email)) redirect("/dashboard?admin=denied");
 }
 
 export async function saveBotSettings(formData: FormData) {

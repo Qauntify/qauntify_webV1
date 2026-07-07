@@ -43,7 +43,7 @@ class Config:
     # Optional: alerts are skipped when either is empty.
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
-    symbols: tuple = ("BTCUSDT", "ETHUSDT")
+    symbols: tuple = ("BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT")
     timeframe: str = "1h"
     candle_limit: int = 201  # one extra: the last fetched candle is still forming and gets dropped
     sealion_base_url: str = "https://api.sea-lion.ai/v1"

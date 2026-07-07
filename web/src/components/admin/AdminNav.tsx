@@ -12,7 +12,7 @@ const links = [
 export function AdminNav() {
   const pathname = usePathname();
   return (
-    <nav className="flex gap-1 overflow-x-auto lg:flex-col">
+    <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:pb-0">
       {links.map((l) => {
         const active =
           l.href === "/admin" ? pathname === "/admin" : pathname.startsWith(l.href);
@@ -20,11 +20,7 @@ export function AdminNav() {
           <Link
             key={l.href}
             href={l.href}
-            className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm ${
-              active
-                ? "bg-line/60 font-medium text-ink"
-                : "text-slate hover:text-ink"
-            }`}
+            className={`nav-item whitespace-nowrap ${active ? "nav-item-active" : ""}`}
           >
             {l.label}
           </Link>

@@ -5,11 +5,11 @@ function DirectionBadge({ direction }: { direction: Signal["direction"] }) {
   const isLong = direction === "long";
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wide ${
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide ${
         isLong ? "bg-long-soft text-long" : "bg-short-soft text-short"
       }`}
     >
-      {isLong ? "▲ Long" : "▼ Short"}
+      {isLong ? "Long" : "Short"}
     </span>
   );
 }
@@ -19,7 +19,7 @@ function StatusBadge({ status }: { status: Signal["status"] }) {
   const isWin = status === "tp_hit";
   return (
     <span
-      className={`inline-flex items-center rounded px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wide ${
+      className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide ${
         isWin ? "bg-long-soft text-long" : "bg-short-soft text-short"
       }`}
     >
@@ -31,20 +31,34 @@ function StatusBadge({ status }: { status: Signal["status"] }) {
 function ConfidenceGauge({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-2" title={`Confidence ${value}/100`}>
-      <div className="h-1 w-16 overflow-hidden rounded-full bg-line">
-        <div className="h-full rounded-full bg-ink" style={{ width: `${value}%` }} />
+      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-line">
+        <div
+          className="h-full rounded-full bg-accent transition-all"
+          style={{ width: `${value}%` }}
+        />
       </div>
-      <span className="font-mono text-xs text-slate">{value}</span>
+      <span className="font-mono text-xs font-medium text-slate">{value}%</span>
     </div>
   );
 }
 
-function PriceCell({ label, value, tone }: { label: string; value: number; tone?: "long" | "short" }) {
-  const toneClass = tone === "long" ? "text-long" : tone === "short" ? "text-short" : "text-ink";
+function PriceCell({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone?: "long" | "short";
+}) {
+  const toneClass =
+    tone === "long" ? "text-long" : tone === "short" ? "text-short" : "text-ink";
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[11px] uppercase tracking-wider text-slate">{label}</span>
-      <span className={`font-mono text-sm font-medium ${toneClass}`}>{formatPrice(value)}</span>
+    <div className="flex flex-col gap-1">
+      <span className="stat-tile-label">{label}</span>
+      <span className={`font-mono text-sm font-semibold ${toneClass}`}>
+        {formatPrice(value)}
+      </span>
     </div>
   );
 }
@@ -58,27 +72,34 @@ export function TradeTicket({
   sample?: boolean;
   showRationale?: boolean;
 }) {
+  const isLong = signal.direction === "long";
   return (
-    <article className="rounded-xl border border-line bg-card shadow-[0_1px_3px_rgba(16,24,40,0.06)] transition-shadow hover:shadow-[0_4px_12px_rgba(16,24,40,0.08)]">
-      <div className="flex items-center justify-between border-b border-line px-5 py-3">
-        <div className="flex items-center gap-3">
+    <article
+      className={`card-surface overflow-hidden border-l-[3px] ${
+        isLong ? "border-l-long" : "border-l-short"
+      }`}
+    >
+      <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <DirectionBadge direction={signal.direction} />
-          <span className="font-mono text-sm font-semibold">{signal.symbol}</span>
-          <span className="font-mono text-xs text-slate">{signal.timeframe}</span>
+          <span className="font-mono text-sm font-bold">{signal.symbol}</span>
+          <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase text-accent">
+            {signal.timeframe}
+          </span>
           <StatusBadge status={signal.status} />
         </div>
         <ConfidenceGauge value={signal.confidence} />
       </div>
 
-      <div className="grid grid-cols-3 gap-4 px-5 py-4">
+      <div className="grid grid-cols-3 gap-4 px-5 py-5">
         <PriceCell label="Entry" value={signal.entry} />
         <PriceCell label="Stop loss" value={signal.stopLoss} tone="short" />
         <PriceCell label="Take profit" value={signal.takeProfit} tone="long" />
       </div>
 
       {showRationale && signal.rationale && (
-        <p className="border-t border-line px-5 py-3 font-display text-[15px] italic leading-snug text-slate">
-          “{signal.rationale}”
+        <p className="border-t border-line bg-accent-soft/30 px-5 py-3.5 text-sm leading-relaxed text-slate">
+          {signal.rationale}
         </p>
       )}
 
