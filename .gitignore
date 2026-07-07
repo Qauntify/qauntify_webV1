@@ -6,3 +6,4 @@ signals.db
 signals.json
 .pytest_cache/
 .superpowers/
+.vercel

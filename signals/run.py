@@ -3,6 +3,7 @@
 Usage: python -m signals.run
 """
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from signals.binance_client import fetch_candles
@@ -13,7 +14,7 @@ from signals.llm_client import SeaLionClient
 from signals.models import NoSignalReport, ScanResult, make_signal
 from signals.news_client import fetch_headlines
 from signals.setup_detector import detect_setup
-from signals.storage import fetch_bot_settings, latest_signal, save_signal
+from signals.storage import fetch_bot_settings, latest_signal, save_ai_event, save_signal
 from signals.telegram_client import send_alert, send_no_signal_alert
 
 RETRY_DELAY = 2.0
@@ -78,6 +79,34 @@ def _fetch_headlines_safe(symbol):
         return []
 
 
+def _log_ai_event(kind: str, symbol: str, cfg, *, timeframe: str,
+                  rationale: str, indicators: dict, headlines: list,
+                  direction=None, entry=None, stop_loss=None, take_profit=None,
+                  confidence=None) -> None:
+    """Best-effort insert into ai_events; never raises."""
+    event = {
+        "id": str(uuid.uuid4()),
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "kind": kind,
+        "direction": direction,
+        "entry": entry,
+        "stop_loss": stop_loss,
+        "take_profit": take_profit,
+        "confidence": confidence,
+        "rationale": rationale,
+        "indicators": indicators,
+        "news_headlines": list(headlines),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        with_retry(lambda: save_ai_event(
+            event, cfg.supabase_url, cfg.supabase_service_key,
+        ))
+    except Exception as exc:
+        print(f"[{symbol}] failed to store ai_events ({type(exc).__name__}), continuing")
+
+
 def scan_symbol(symbol, cfg, llm):
     """Scan one symbol; return a ScanResult with a stored signal or a no-signal report."""
     try:
@@ -113,6 +142,15 @@ def scan_symbol(symbol, cfg, llm):
         rationale = explain_no_setup(
             symbol, cfg.timeframe, indicators, headlines, llm,
         )
+        _log_ai_event(
+            "no_setup",
+            symbol,
+            cfg,
+            timeframe=cfg.timeframe,
+            rationale=rationale,
+            indicators=indicators,
+            headlines=headlines,
+        )
         print(f"[{symbol}] no-signal analysis: {rationale}")
         return ScanResult(no_signal=NoSignalReport(
             symbol=symbol,
@@ -132,6 +170,20 @@ def scan_symbol(symbol, cfg, llm):
     headlines = _fetch_headlines_safe(symbol)
     confirmation = confirm_setup(setup, headlines, llm)
     if confirmation.verdict != "confirm":
+        _log_ai_event(
+            "reject",
+            symbol,
+            cfg,
+            timeframe=cfg.timeframe,
+            rationale=confirmation.rationale,
+            indicators=setup.indicators,
+            headlines=headlines,
+            direction=setup.direction,
+            entry=setup.entry,
+            stop_loss=setup.stop_loss,
+            take_profit=setup.take_profit,
+            confidence=confirmation.confidence,
+        )
         print(f"[{symbol}] rejected by LLM: {confirmation.rationale}")
         return ScanResult(no_signal=NoSignalReport(
             symbol=symbol,
@@ -154,6 +206,20 @@ def scan_symbol(symbol, cfg, llm):
     except Exception as exc:
         print(f"[{symbol}] failed to store signal ({type(exc).__name__}), discarding")
         return ScanResult()
+    _log_ai_event(
+        "confirm",
+        symbol,
+        cfg,
+        timeframe=cfg.timeframe,
+        rationale=signal.rationale,
+        indicators=signal.indicators,
+        headlines=signal.news_headlines,
+        direction=signal.direction,
+        entry=signal.entry,
+        stop_loss=signal.stop_loss,
+        take_profit=signal.take_profit,
+        confidence=signal.confidence,
+    )
     print(f"[{symbol}] CONFIRMED {signal.direction.upper()} "
           f"(confidence {signal.confidence}): {signal.rationale}")
     return ScanResult(signal=signal)

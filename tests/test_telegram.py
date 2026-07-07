@@ -44,12 +44,12 @@ def test_format_alert_contains_trade_details():
     assert "Entry 108240 | SL 106900 | TP 110920" in text
     assert "Confidence 80%" in text
     assert "Looks good." in text
-    assert text.startswith("\U0001F7E2")
+    assert text.startswith("<b>")
 
 
 def test_format_alert_short_uses_red_and_escapes_html():
     text = format_alert(_signal(direction="short", rationale="a<b>&c"))
-    assert text.startswith("\U0001F534")
+    assert text.startswith("<b>")
     assert "<b>SHORT BTCUSDT</b>" in text
     assert "a&lt;b&gt;&amp;c" in text
 

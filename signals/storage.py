@@ -1,4 +1,4 @@
-"""Persists confirmed signals to Supabase (PostgREST insert)."""
+"""Persists signals + AI scan events to Supabase (PostgREST insert)."""
 from dataclasses import asdict
 
 import requests
@@ -19,6 +19,24 @@ def save_signal(signal: Signal, supabase_url: str, service_key: str,
             "Prefer": "return=minimal",
         },
         json=asdict(signal),
+        timeout=15,
+    )
+    response.raise_for_status()
+
+
+def save_ai_event(event: dict, supabase_url: str, service_key: str,
+                  session=None) -> None:
+    """Insert one ai_events row; raises on any failure so the caller can retry."""
+    session = session or requests.Session()
+    response = session.post(
+        f"{supabase_url}/rest/v1/ai_events",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+        json=event,
         timeout=15,
     )
     response.raise_for_status()

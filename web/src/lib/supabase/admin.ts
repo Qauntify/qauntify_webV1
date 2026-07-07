@@ -14,6 +14,22 @@ export type BotSettings = {
   minAlertConfidence: number;
 };
 
+export type AiEvent = {
+  id: string;
+  symbol: string;
+  timeframe: string;
+  kind: "confirm" | "reject" | "no_setup";
+  direction: "long" | "short" | null;
+  entry: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  confidence: number | null;
+  rationale: string;
+  indicators: unknown;
+  newsHeadlines: unknown;
+  createdAt: string;
+};
+
 function config(): { url: string; serviceKey: string } | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -142,5 +158,37 @@ export async function updateBotSettings(
     return response.ok;
   } catch {
     return false;
+  }
+}
+
+export async function listAiEvents(limit = 50): Promise<AiEvent[] | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/ai_events?select=*` +
+        `&order=created_at.desc&limit=${encodeURIComponent(String(limit))}`,
+      { headers: headers(cfg.serviceKey), cache: "no-store" },
+    );
+    if (!response.ok) return null;
+    const rows = await response.json();
+    if (!Array.isArray(rows)) return null;
+    return rows.map((r: any) => ({
+      id: String(r.id),
+      symbol: String(r.symbol),
+      timeframe: String(r.timeframe),
+      kind: r.kind,
+      direction: r.direction ?? null,
+      entry: typeof r.entry === "number" ? r.entry : null,
+      stopLoss: typeof r.stop_loss === "number" ? r.stop_loss : null,
+      takeProfit: typeof r.take_profit === "number" ? r.take_profit : null,
+      confidence: typeof r.confidence === "number" ? r.confidence : null,
+      rationale: String(r.rationale ?? ""),
+      indicators: r.indicators,
+      newsHeadlines: r.news_headlines,
+      createdAt: String(r.created_at),
+    }));
+  } catch {
+    return null;
   }
 }

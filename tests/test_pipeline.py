@@ -46,6 +46,17 @@ def _capture_saves(monkeypatch):
     return saved
 
 
+def _capture_ai_events(monkeypatch):
+    """Replace run.save_ai_event with a recorder; returns the call list."""
+    events = []
+
+    def fake_save(event, supabase_url, service_key, session=None):
+        events.append((event, supabase_url, service_key))
+
+    monkeypatch.setattr(run_module, "save_ai_event", fake_save)
+    return events
+
+
 def test_with_retry_returns_after_transient_failure():
     calls = []
 
@@ -77,6 +88,7 @@ def test_scan_symbol_no_setup_stores_nothing(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_headlines",
                         lambda symbol: [])
     saved = _capture_saves(monkeypatch)
+    events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"rationale": "Indicators flat."}')
 
     result = scan_symbol("BTCUSDT", _config(), llm)
@@ -85,6 +97,8 @@ def test_scan_symbol_no_setup_stores_nothing(monkeypatch):
     assert result.no_signal is not None
     assert result.no_signal.kind == "no_setup"
     assert saved == []
+    assert len(events) == 1
+    assert events[0][0]["kind"] == "no_setup"
 
 
 def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
@@ -93,6 +107,7 @@ def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_headlines",
                         lambda symbol: ["Bitcoin steady"])
     saved = _capture_saves(monkeypatch)
+    events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"rationale": "No EMA crossover yet."}')
 
     result = scan_symbol("BTCUSDT", _config(), llm)
@@ -102,6 +117,7 @@ def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
     assert result.no_signal.kind == "no_setup"
     assert result.no_signal.rationale == "No EMA crossover yet."
     assert saved == []
+    assert len(events) == 1
 
 
 def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
@@ -112,6 +128,7 @@ def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_headlines",
                         lambda symbol: ["BTC rally continues"])
     saved = _capture_saves(monkeypatch)
+    events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 82, "rationale": "Aligned."}')
 
     result = scan_symbol("BTCUSDT", _config(), llm)
@@ -125,6 +142,8 @@ def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
     assert url == "https://abc.supabase.co"
     assert key == "service-key"
     assert stored_signal.news_headlines == ["BTC rally continues"]
+    assert len(events) == 1
+    assert events[0][0]["kind"] == "confirm"
 
 
 def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
@@ -135,6 +154,7 @@ def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_headlines",
                         lambda symbol: [])
     saved = _capture_saves(monkeypatch)
+    events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "reject", "confidence": 25, "rationale": "Bearish news."}')
 
     result = scan_symbol("BTCUSDT", _config(), llm)
@@ -144,6 +164,8 @@ def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
     assert result.no_signal.kind == "rejected"
     assert result.no_signal.rationale == "Bearish news."
     assert saved == []
+    assert len(events) == 1
+    assert events[0][0]["kind"] == "reject"
 
 
 def test_scan_symbol_news_failure_proceeds_with_empty_headlines(monkeypatch):

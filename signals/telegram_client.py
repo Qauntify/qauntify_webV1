@@ -8,9 +8,8 @@ from signals.models import NoSignalReport, Signal
 
 def format_alert(signal: Signal) -> str:
     """Telegram HTML-mode message for one confirmed signal."""
-    emoji = "\U0001F7E2" if signal.direction == "long" else "\U0001F534"
     return (
-        f"{emoji} <b>{signal.direction.upper()} {html.escape(signal.symbol)}</b>"
+        f"<b>{signal.direction.upper()} {html.escape(signal.symbol)}</b>"
         f" ({html.escape(signal.timeframe)})\n"
         f"Entry {signal.entry:g} | SL {signal.stop_loss:g}"
         f" | TP {signal.take_profit:g}\n"
@@ -28,7 +27,7 @@ def format_no_signal_alert(report: NoSignalReport) -> str:
     )
     if report.kind == "rejected":
         header = (
-            f"\U0001F6AB <b>REJECTED {html.escape(report.symbol)}</b>"
+            f"<b>REJECTED {html.escape(report.symbol)}</b>"
             f" ({html.escape(report.timeframe)})"
         )
         trade_line = (
@@ -40,7 +39,7 @@ def format_no_signal_alert(report: NoSignalReport) -> str:
         body = f"{header}\n{trade_line}\n{indicator_line}\n{html.escape(report.rationale)}"
     else:
         header = (
-            f"\u26AA <b>NO SIGNAL {html.escape(report.symbol)}</b>"
+            f"<b>NO SIGNAL {html.escape(report.symbol)}</b>"
             f" ({html.escape(report.timeframe)})"
         )
         body = f"{header}\n{indicator_line}\n{html.escape(report.rationale)}"
