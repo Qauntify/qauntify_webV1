@@ -1,5 +1,12 @@
 """Tests for the LLM confirmation composer."""
-from signals.composer import build_messages, confirm_setup, parse_confirmation
+from signals.composer import (
+    build_messages,
+    build_no_setup_messages,
+    confirm_setup,
+    explain_no_setup,
+    parse_confirmation,
+    parse_rationale,
+)
 from signals.models import CandidateSetup
 
 SETUP = CandidateSetup(
@@ -92,3 +99,32 @@ def test_confirm_setup_llm_error_is_reject():
     assert result.verdict == "reject"
     assert result.confidence == 0
     assert "HTTP 429" in result.rationale
+
+
+def test_build_no_setup_messages_includes_indicators_and_news():
+    indicators = {"ema9": 101.0, "ema21": 100.0, "rsi": 55.0, "macd_hist": 0.5}
+    messages = build_no_setup_messages("BTCUSDT", "1h", indicators, HEADLINES)
+    user_content = messages[1]["content"]
+    assert "BTCUSDT" in user_content
+    assert "EMA9=101.00" in user_content
+    assert "Bitcoin breaks resistance" in user_content
+
+
+def test_parse_rationale_extracts_json_field():
+    text = '{"rationale": "No crossover on recent bars."}'
+    assert parse_rationale(text) == "No crossover on recent bars."
+
+
+def test_explain_no_setup_happy_path():
+    indicators = {"ema9": 101.0, "ema21": 100.0, "rsi": 55.0, "macd_hist": 0.5}
+    llm = FakeLLM(reply='{"rationale": "Trend is sideways."}')
+    result = explain_no_setup("BTCUSDT", "1h", indicators, HEADLINES, llm)
+    assert result == "Trend is sideways."
+    assert llm.last_messages is not None
+
+
+def test_explain_no_setup_llm_error_returns_message():
+    indicators = {"ema9": 101.0, "ema21": 100.0, "rsi": 55.0, "macd_hist": 0.5}
+    llm = FakeLLM(error=RuntimeError("HTTP 503"))
+    result = explain_no_setup("BTCUSDT", "1h", indicators, [], llm)
+    assert "HTTP 503" in result

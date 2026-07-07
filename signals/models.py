@@ -32,6 +32,21 @@ class Confirmation:
 
 
 @dataclass(frozen=True)
+class NoSignalReport:
+    """AI explanation for a scan that produced no stored signal."""
+    symbol: str
+    timeframe: str
+    kind: str  # "no_setup" | "rejected"
+    rationale: str
+    indicators: dict
+    direction: str | None = None
+    entry: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    confidence: int | None = None
+
+
+@dataclass(frozen=True)
 class BotSettings:
     """Engine behavior controlled from the /admin page (bot_settings table)."""
     symbols: tuple = ("BTCUSDT", "ETHUSDT")
@@ -52,6 +67,12 @@ class Signal:
     indicators: dict
     news_headlines: list
     created_at: str
+
+
+@dataclass(frozen=True)
+class ScanResult:
+    signal: Signal | None = None
+    no_signal: NoSignalReport | None = None
 
 
 def make_signal(setup: CandidateSetup, confirmation: Confirmation,

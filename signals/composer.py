@@ -66,3 +66,57 @@ def confirm_setup(setup: CandidateSetup, headlines: list, llm) -> Confirmation:
         return parse_confirmation(reply)
     except Exception as exc:
         return Confirmation("reject", 0, f"LLM call failed: {exc}")
+
+
+NO_SETUP_SYSTEM_PROMPT = (
+    "You are a disciplined trading analyst. You receive the current technical "
+    "indicator readings for a crypto pair and recent news headlines. The rules "
+    "engine found no valid trade setup (no EMA 9/21 crossover with aligned RSI "
+    "and MACD filters on the last few hourly bars). Explain briefly why "
+    "conditions do not support a long or short entry right now.\n"
+    "Respond with ONLY a JSON object, no other text:\n"
+    '{"rationale": "<one short paragraph>"}'
+)
+
+
+def build_no_setup_messages(symbol, timeframe, indicators, headlines) -> list:
+    if headlines:
+        news_block = "\n".join(f"- {h}" for h in headlines)
+    else:
+        news_block = "No recent headlines available."
+    user_content = (
+        f"Market snapshot:\n"
+        f"- Symbol: {symbol}\n"
+        f"- Timeframe: {timeframe}\n"
+        f"- EMA9={indicators['ema9']:.2f}, EMA21={indicators['ema21']:.2f}, "
+        f"RSI={indicators['rsi']:.1f}, MACD hist={indicators['macd_hist']:.4f}\n\n"
+        f"Recent news headlines:\n{news_block}"
+    )
+    return [
+        {"role": "system", "content": NO_SETUP_SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
+
+
+def parse_rationale(text: str) -> str:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end > start:
+        try:
+            data = json.loads(text[start:end + 1])
+            rationale = data.get("rationale")
+            if rationale:
+                return str(rationale)
+        except json.JSONDecodeError:
+            pass
+    return text.strip() or "No analysis available."
+
+
+def explain_no_setup(symbol, timeframe, indicators, headlines, llm) -> str:
+    try:
+        reply = llm.chat(build_no_setup_messages(
+            symbol, timeframe, indicators, headlines,
+        ))
+        return parse_rationale(reply)
+    except Exception as exc:
+        return f"LLM call failed: {exc}"

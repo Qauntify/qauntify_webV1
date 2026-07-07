@@ -1,9 +1,9 @@
 import pytest
 
 from signals.config import Config
-from signals.models import BotSettings, CandidateSetup, Confirmation, make_signal
-from signals.run import maybe_send_alert
-from signals.telegram_client import format_alert, send_alert
+from signals.models import BotSettings, CandidateSetup, Confirmation, NoSignalReport, make_signal
+from signals.run import maybe_send_alert, maybe_send_no_signal_alert
+from signals.telegram_client import format_alert, format_no_signal_alert, send_alert, send_no_signal_alert
 
 
 def _signal(direction="long", confidence=80, rationale="Looks good."):
@@ -154,3 +154,63 @@ def test_already_signaled_false_when_no_history_or_error(monkeypatch):
         raise RuntimeError("db down")
     monkeypatch.setattr("signals.run.latest_signal", boom)
     assert already_signaled(_setup(), _cfg()) is False
+
+
+def _no_signal_report(kind="no_setup", rationale="No crossover yet."):
+    return NoSignalReport(
+        symbol="BTCUSDT",
+        timeframe="1h",
+        kind=kind,
+        rationale=rationale,
+        indicators={"ema9": 101.0, "ema21": 100.0, "rsi": 55.0, "macd_hist": 0.5},
+        direction="long" if kind == "rejected" else None,
+        entry=100.0 if kind == "rejected" else None,
+        stop_loss=98.0 if kind == "rejected" else None,
+        take_profit=104.0 if kind == "rejected" else None,
+        confidence=25 if kind == "rejected" else None,
+    )
+
+
+def test_format_no_signal_alert_for_no_setup():
+    text = format_no_signal_alert(_no_signal_report())
+    assert "<b>NO SIGNAL BTCUSDT</b>" in text
+    assert "EMA9 101.00" in text
+    assert "No crossover yet." in text
+
+
+def test_format_no_signal_alert_for_rejected():
+    text = format_no_signal_alert(_no_signal_report(kind="rejected"))
+    assert "<b>REJECTED BTCUSDT</b>" in text
+    assert "LONG candidate @ 100" in text
+    assert "Confidence 25%" in text
+
+
+def test_send_no_signal_alert_posts_to_bot_api():
+    session = FakeSession()
+    send_no_signal_alert(_no_signal_report(), "bot-token", "chat-42", session=session)
+    assert session.last_url == "https://api.telegram.org/botbot-token/sendMessage"
+    assert "NO SIGNAL BTCUSDT" in session.last_json["text"]
+
+
+def test_maybe_send_no_signal_alert_skips_without_telegram_config(monkeypatch):
+    calls = []
+    monkeypatch.setattr("signals.run.send_no_signal_alert",
+                        lambda *a, **k: calls.append(a))
+    maybe_send_no_signal_alert(_no_signal_report(), _cfg(token=""))
+    assert calls == []
+
+
+def test_maybe_send_no_signal_alert_sends_when_configured(monkeypatch):
+    calls = []
+    monkeypatch.setattr("signals.run.send_no_signal_alert",
+                        lambda *a, **k: calls.append(a))
+    maybe_send_no_signal_alert(_no_signal_report(), _cfg())
+    assert len(calls) == 1
+
+
+def test_maybe_send_no_signal_alert_swallows_send_failure(monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("telegram down")
+    monkeypatch.setattr("signals.run.send_no_signal_alert", boom)
+    monkeypatch.setattr("signals.run.RETRY_DELAY", 0)
+    maybe_send_no_signal_alert(_no_signal_report(), _cfg())  # must not raise

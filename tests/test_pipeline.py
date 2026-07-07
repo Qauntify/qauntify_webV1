@@ -74,10 +74,33 @@ def test_scan_symbol_no_setup_stores_nothing(monkeypatch):
     # Flat prices produce no crossover → real detector returns None.
     monkeypatch.setattr(run_module, "fetch_candles",
                         lambda symbol, interval, limit: _flat_candles())
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol: [])
     saved = _capture_saves(monkeypatch)
-    llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 90, "rationale": "x"}')
+    llm = FakeLLM(reply='{"rationale": "Indicators flat."}')
 
-    assert scan_symbol("BTCUSDT", _config(), llm) is None
+    result = scan_symbol("BTCUSDT", _config(), llm)
+
+    assert result.signal is None
+    assert result.no_signal is not None
+    assert result.no_signal.kind == "no_setup"
+    assert saved == []
+
+
+def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit: _flat_candles())
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol: ["Bitcoin steady"])
+    saved = _capture_saves(monkeypatch)
+    llm = FakeLLM(reply='{"rationale": "No EMA crossover yet."}')
+
+    result = scan_symbol("BTCUSDT", _config(), llm)
+
+    assert result.signal is None
+    assert result.no_signal is not None
+    assert result.no_signal.kind == "no_setup"
+    assert result.no_signal.rationale == "No EMA crossover yet."
     assert saved == []
 
 
@@ -91,8 +114,9 @@ def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
     saved = _capture_saves(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 82, "rationale": "Aligned."}')
 
-    signal = scan_symbol("BTCUSDT", _config(), llm)
+    result = scan_symbol("BTCUSDT", _config(), llm)
 
+    signal = result.signal
     assert signal is not None
     assert signal.confidence == 82
     assert len(saved) == 1
@@ -113,7 +137,12 @@ def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
     saved = _capture_saves(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "reject", "confidence": 25, "rationale": "Bearish news."}')
 
-    assert scan_symbol("BTCUSDT", _config(), llm) is None
+    result = scan_symbol("BTCUSDT", _config(), llm)
+
+    assert result.signal is None
+    assert result.no_signal is not None
+    assert result.no_signal.kind == "rejected"
+    assert result.no_signal.rationale == "Bearish news."
     assert saved == []
 
 
@@ -131,8 +160,9 @@ def test_scan_symbol_news_failure_proceeds_with_empty_headlines(monkeypatch):
     _capture_saves(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 70, "rationale": "ok"}')
 
-    signal = scan_symbol("BTCUSDT", _config(), llm)
+    result = scan_symbol("BTCUSDT", _config(), llm)
 
+    signal = result.signal
     assert signal is not None
     assert signal.news_headlines == []
 
@@ -145,7 +175,7 @@ def test_scan_symbol_binance_failure_returns_none(monkeypatch):
     monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
     llm = FakeLLM(reply="{}")
 
-    assert scan_symbol("BTCUSDT", _config(), llm) is None
+    assert scan_symbol("BTCUSDT", _config(), llm) == run_module.ScanResult()
 
 
 def test_scan_symbol_storage_failure_discards_without_raising(monkeypatch):
@@ -163,7 +193,7 @@ def test_scan_symbol_storage_failure_discards_without_raising(monkeypatch):
     monkeypatch.setattr(run_module, "save_signal", broken_save)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 82, "rationale": "ok"}')
 
-    assert scan_symbol("BTCUSDT", _config(), llm) is None
+    assert scan_symbol("BTCUSDT", _config(), llm) == run_module.ScanResult()
 
 
 def test_scan_symbol_never_prints_news_secrets(monkeypatch, capsys):
