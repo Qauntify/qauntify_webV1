@@ -24,6 +24,26 @@ def save_signal(signal: Signal, supabase_url: str, service_key: str,
     response.raise_for_status()
 
 
+def latest_signal(symbol: str, supabase_url: str, service_key: str,
+                  session=None):
+    """Newest stored signal for `symbol` as {"direction", "created_at"},
+    or None when the symbol has no signals. Raises on any failure."""
+    session = session or requests.Session()
+    response = session.get(
+        f"{supabase_url}/rest/v1/signals"
+        f"?symbol=eq.{symbol}&select=direction,created_at"
+        "&order=created_at.desc&limit=1",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    rows = response.json()
+    return rows[0] if rows else None
+
+
 def fetch_bot_settings(supabase_url: str, service_key: str,
                        session=None) -> BotSettings:
     """Read the single bot_settings row; fall back to defaults on any failure.

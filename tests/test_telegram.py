@@ -108,3 +108,49 @@ def test_maybe_send_alert_swallows_send_failure(monkeypatch):
     monkeypatch.setattr("signals.run.send_alert", boom)
     monkeypatch.setattr("signals.run.RETRY_DELAY", 0)
     maybe_send_alert(_signal(), BotSettings(), _cfg())  # must not raise
+
+
+def _setup(direction="long"):
+    return CandidateSetup(
+        symbol="BTCUSDT", direction=direction, entry=100.0,
+        stop_loss=98.0, take_profit=104.0,
+        indicators={"ema9": 1.0, "ema21": 1.0, "rsi": 50.0, "macd_hist": 0.1},
+    )
+
+
+def _stored_row(direction="long", minutes_ago=30):
+    from datetime import datetime, timedelta, timezone
+    ts = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+    return {"direction": direction, "created_at": ts.isoformat()}
+
+
+def test_already_signaled_true_for_fresh_same_direction(monkeypatch):
+    from signals.run import already_signaled
+    monkeypatch.setattr("signals.run.latest_signal",
+                        lambda *a, **k: _stored_row("long", minutes_ago=30))
+    assert already_signaled(_setup("long"), _cfg()) is True
+
+
+def test_already_signaled_false_for_other_direction(monkeypatch):
+    from signals.run import already_signaled
+    monkeypatch.setattr("signals.run.latest_signal",
+                        lambda *a, **k: _stored_row("short", minutes_ago=30))
+    assert already_signaled(_setup("long"), _cfg()) is False
+
+
+def test_already_signaled_false_outside_window(monkeypatch):
+    from signals.run import already_signaled
+    monkeypatch.setattr("signals.run.latest_signal",
+                        lambda *a, **k: _stored_row("long", minutes_ago=200))
+    assert already_signaled(_setup("long"), _cfg()) is False
+
+
+def test_already_signaled_false_when_no_history_or_error(monkeypatch):
+    from signals.run import already_signaled
+    monkeypatch.setattr("signals.run.latest_signal", lambda *a, **k: None)
+    assert already_signaled(_setup(), _cfg()) is False
+
+    def boom(*a, **k):
+        raise RuntimeError("db down")
+    monkeypatch.setattr("signals.run.latest_signal", boom)
+    assert already_signaled(_setup(), _cfg()) is False

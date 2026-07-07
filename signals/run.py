@@ -3,6 +3,7 @@
 Usage: python -m signals.run
 """
 import time
+from datetime import datetime, timedelta, timezone
 
 from signals.binance_client import fetch_candles
 from signals.composer import confirm_setup
@@ -12,10 +13,15 @@ from signals.llm_client import SeaLionClient
 from signals.models import make_signal
 from signals.news_client import fetch_headlines
 from signals.setup_detector import detect_setup
-from signals.storage import fetch_bot_settings, save_signal
+from signals.storage import fetch_bot_settings, latest_signal, save_signal
 from signals.telegram_client import send_alert
 
 RETRY_DELAY = 2.0
+
+# The detector flags a crossover on any of the last CROSS_LOOKBACK (3) hourly
+# bars, so runs closer together than that would re-store the same setup.
+# Skip a candidate when the same symbol+direction was stored this recently.
+DEDUP_WINDOW = timedelta(hours=3)
 
 
 def with_retry(fn, attempts=2, delay=None):
@@ -34,6 +40,23 @@ def with_retry(fn, attempts=2, delay=None):
             if attempt < attempts - 1:
                 time.sleep(delay)
     raise last_error
+
+
+def already_signaled(setup, cfg):
+    """True when the newest stored signal for this symbol duplicates the
+    candidate (same direction, within DEDUP_WINDOW). On any lookup failure
+    return False — better a duplicate than a missed signal."""
+    try:
+        row = latest_signal(setup.symbol, cfg.supabase_url,
+                            cfg.supabase_service_key)
+    except Exception as exc:
+        print(f"[{setup.symbol}] dedup check failed "
+              f"({type(exc).__name__}), proceeding")
+        return False
+    if row is None or row["direction"] != setup.direction:
+        return False
+    stored_at = datetime.fromisoformat(row["created_at"])
+    return datetime.now(timezone.utc) - stored_at < DEDUP_WINDOW
 
 
 def scan_symbol(symbol, cfg, llm):
@@ -67,6 +90,10 @@ def scan_symbol(symbol, cfg, llm):
         return None
     print(f"[{symbol}] candidate {setup.direction}: entry={setup.entry} "
           f"SL={setup.stop_loss} TP={setup.take_profit}")
+
+    if already_signaled(setup, cfg):
+        print(f"[{symbol}] same setup already stored recently, skipping")
+        return None
 
     try:
         headlines = with_retry(lambda: fetch_headlines(symbol))
