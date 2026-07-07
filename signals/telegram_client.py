@@ -73,3 +73,34 @@ def send_no_signal_alert(report: NoSignalReport, bot_token: str, chat_id: str,
     """Send one no-signal explanation alert."""
     send_message(format_no_signal_alert(report), bot_token, chat_id,
                   session=session)
+
+
+def format_run_summary(run_id: str, timeframe: str, outcomes: list[dict]) -> str:
+    """Telegram HTML-mode summary that is sent every run."""
+    lines = [f"<b>ENGINE RUN</b> ({html.escape(timeframe)})", f"Run id: {html.escape(run_id)}"]
+    if not outcomes:
+        lines.append("No symbols scanned.")
+        return "\n".join(lines)
+
+    # One compact line per symbol to avoid spammy multi-paragraph messages.
+    for o in outcomes:
+        symbol = html.escape(str(o.get("symbol", "")))
+        status = html.escape(str(o.get("status", "")))
+        extra = str(o.get("extra", "") or "")
+        extra = html.escape(extra)
+        if extra:
+            lines.append(f"{symbol}: {status} — {extra}")
+        else:
+            lines.append(f"{symbol}: {status}")
+    return "\n".join(lines)
+
+
+def send_run_summary(run_id: str, timeframe: str, outcomes: list[dict],
+                     bot_token: str, chat_id: str, session=None) -> None:
+    """Send the per-run summary (always)."""
+    send_message(
+        format_run_summary(run_id, timeframe, outcomes),
+        bot_token,
+        chat_id,
+        session=session,
+    )

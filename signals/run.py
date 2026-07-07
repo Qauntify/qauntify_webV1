@@ -15,7 +15,7 @@ from signals.models import NoSignalReport, ScanResult, make_signal
 from signals.news_client import fetch_headlines
 from signals.setup_detector import detect_setup
 from signals.storage import fetch_bot_settings, latest_signal, save_ai_event, save_signal
-from signals.telegram_client import send_alert, send_no_signal_alert
+from signals.telegram_client import send_alert, send_no_signal_alert, send_run_summary
 
 RETRY_DELAY = 2.0
 
@@ -258,6 +258,23 @@ def maybe_send_no_signal_alert(report, cfg):
               f"({type(exc).__name__}), continuing")
 
 
+def maybe_send_run_summary(run_id: str, timeframe: str, outcomes: list[dict], cfg) -> None:
+    """Telegram per-run summary; never raises."""
+    if not cfg.telegram_bot_token or not cfg.telegram_chat_id:
+        return
+    try:
+        with_retry(lambda: send_run_summary(
+            run_id,
+            timeframe,
+            outcomes,
+            cfg.telegram_bot_token,
+            cfg.telegram_chat_id,
+        ))
+        print("Telegram run summary sent")
+    except Exception as exc:
+        print(f"Telegram run summary failed ({type(exc).__name__}), continuing")
+
+
 def main():
     cfg = load_config()
     settings = fetch_bot_settings(cfg.supabase_url, cfg.supabase_service_key)
@@ -267,16 +284,47 @@ def main():
         base_url=cfg.sealion_base_url,
     )
     stored = 0
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    outcomes: list[dict] = []
     for symbol in settings.symbols:
         try:
             result = scan_symbol(symbol, cfg, llm)
             if result.signal is not None:
                 stored += 1
                 maybe_send_alert(result.signal, settings, cfg)
+                outcomes.append({
+                    "symbol": symbol,
+                    "status": "CONFIRMED",
+                    "extra": f"{result.signal.direction.upper()} {result.signal.confidence}%",
+                })
             elif result.no_signal is not None:
                 maybe_send_no_signal_alert(result.no_signal, cfg)
+                if result.no_signal.kind == "rejected":
+                    outcomes.append({
+                        "symbol": symbol,
+                        "status": "REJECTED",
+                        "extra": (result.no_signal.rationale or "")[:140],
+                    })
+                else:
+                    outcomes.append({
+                        "symbol": symbol,
+                        "status": "NO SIGNAL",
+                        "extra": (result.no_signal.rationale or "")[:140],
+                    })
+            else:
+                outcomes.append({
+                    "symbol": symbol,
+                    "status": "SKIPPED",
+                    "extra": "No change (dedup) or missing indicators/data",
+                })
         except Exception as exc:
             print(f"[{symbol}] unexpected error, skipping: {type(exc).__name__}: {exc}")
+            outcomes.append({
+                "symbol": symbol,
+                "status": "ERROR",
+                "extra": f"{type(exc).__name__}",
+            })
+    maybe_send_run_summary(run_id, cfg.timeframe, outcomes, cfg)
     print(f"Done. {stored} signal(s) stored in Supabase.")
 
 

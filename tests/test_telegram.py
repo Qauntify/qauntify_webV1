@@ -2,8 +2,15 @@ import pytest
 
 from signals.config import Config
 from signals.models import BotSettings, CandidateSetup, Confirmation, NoSignalReport, make_signal
-from signals.run import maybe_send_alert, maybe_send_no_signal_alert
-from signals.telegram_client import format_alert, format_no_signal_alert, send_alert, send_no_signal_alert
+from signals.run import maybe_send_alert, maybe_send_no_signal_alert, maybe_send_run_summary
+from signals.telegram_client import (
+    format_alert,
+    format_no_signal_alert,
+    format_run_summary,
+    send_alert,
+    send_no_signal_alert,
+    send_run_summary,
+)
 
 
 def _signal(direction="long", confidence=80, rationale="Looks good."):
@@ -192,6 +199,35 @@ def test_send_no_signal_alert_posts_to_bot_api():
     assert "NO SIGNAL BTCUSDT" in session.last_json["text"]
 
 
+def test_format_run_summary_contains_outcomes():
+    text = format_run_summary(
+        "run-1",
+        "1h",
+        [
+            {"symbol": "BTCUSDT", "status": "NO SIGNAL", "extra": "sideways"},
+            {"symbol": "ETHUSDT", "status": "CONFIRMED", "extra": "LONG 82%"},
+        ],
+    )
+    assert "<b>ENGINE RUN</b> (1h)" in text
+    assert "Run id: run-1" in text
+    assert "BTCUSDT: NO SIGNAL" in text
+    assert "ETHUSDT: CONFIRMED" in text
+
+
+def test_send_run_summary_posts_to_bot_api():
+    session = FakeSession()
+    send_run_summary(
+        "run-1",
+        "1h",
+        [{"symbol": "BTCUSDT", "status": "NO SIGNAL"}],
+        "bot-token",
+        "chat-42",
+        session=session,
+    )
+    assert session.last_url == "https://api.telegram.org/botbot-token/sendMessage"
+    assert "ENGINE RUN" in session.last_json["text"]
+
+
 def test_maybe_send_no_signal_alert_skips_without_telegram_config(monkeypatch):
     calls = []
     monkeypatch.setattr("signals.run.send_no_signal_alert",
@@ -214,3 +250,19 @@ def test_maybe_send_no_signal_alert_swallows_send_failure(monkeypatch):
     monkeypatch.setattr("signals.run.send_no_signal_alert", boom)
     monkeypatch.setattr("signals.run.RETRY_DELAY", 0)
     maybe_send_no_signal_alert(_no_signal_report(), _cfg())  # must not raise
+
+
+def test_maybe_send_run_summary_skips_without_telegram_config(monkeypatch):
+    calls = []
+    monkeypatch.setattr("signals.run.send_run_summary",
+                        lambda *a, **k: calls.append(a))
+    maybe_send_run_summary("run-1", "1h", [], _cfg(token=""))
+    assert calls == []
+
+
+def test_maybe_send_run_summary_sends_when_configured(monkeypatch):
+    calls = []
+    monkeypatch.setattr("signals.run.send_run_summary",
+                        lambda *a, **k: calls.append(a))
+    maybe_send_run_summary("run-1", "1h", [{"symbol": "BTCUSDT", "status": "NO SIGNAL"}], _cfg())
+    assert len(calls) == 1
