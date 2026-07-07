@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { TradeTicket } from "@/components/shared/TradeTicket";
 import { requireAdminPage } from "@/lib/admin-guard";
 import { getSignals, getStats } from "@/lib/signals";
-import { listUsers, serviceRoleToken } from "@/lib/supabase/admin";
+import { getEngineStatus, listUsers, serviceRoleToken } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
   title: "Admin · Overview — FinhubKH",
@@ -15,11 +15,19 @@ export default async function AdminOverview() {
   await requireAdminPage();
 
   const token = serviceRoleToken();
-  const [users, stats, signals] = await Promise.all([
+  const [users, stats, signals, engineStatus] = await Promise.all([
     listUsers(),
     getStats(token),
     getSignals(5, token),
+    getEngineStatus(),
   ]);
+
+  const engine = engineStatus
+    ? {
+        label: engineStatus.isHealthy ? "Healthy" : "Stale",
+        detail: `Last run ${engineStatus.ageMinutes} min ago.`,
+      }
+    : { label: "Unknown", detail: "No heartbeat yet." };
 
   const tiles = [
     { label: "Users", value: users ? String(users.length) : "—" },
@@ -29,6 +37,7 @@ export default async function AdminOverview() {
       value: stats.total > 0 ? String(stats.avgConfidence) : "—",
     },
     { label: "Long / short", value: `${stats.longs}L / ${stats.shorts}S` },
+    { label: "Engine", value: engine.label, sub: engine.detail },
   ];
 
   return (
@@ -49,6 +58,9 @@ export default async function AdminOverview() {
             <p className="mt-1 font-mono text-2xl font-semibold">
               {tile.value}
             </p>
+            {"sub" in tile && tile.sub ? (
+              <p className="mt-2 text-xs text-slate">{tile.sub}</p>
+            ) : null}
           </div>
         ))}
       </div>

@@ -42,6 +42,24 @@ def save_ai_event(event: dict, supabase_url: str, service_key: str,
     response.raise_for_status()
 
 
+def save_engine_run(run: dict, supabase_url: str, service_key: str,
+                    session=None) -> None:
+    """Insert one engine_runs row; raises on any failure so the caller can retry."""
+    session = session or requests.Session()
+    response = session.post(
+        f"{supabase_url}/rest/v1/engine_runs",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+        json=run,
+        timeout=15,
+    )
+    response.raise_for_status()
+
+
 def latest_signal(symbol: str, supabase_url: str, service_key: str,
                   session=None):
     """Newest stored signal for `symbol` as {"direction", "created_at"},

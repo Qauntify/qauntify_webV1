@@ -81,3 +81,33 @@ create index if not exists ai_events_symbol_created_at_idx
     on public.ai_events (symbol, created_at desc);
 
 alter table public.ai_events enable row level security;
+
+-- Engine run heartbeat: one row per run, written at the end of each scan.
+-- Used by /admin to show if the engine is alive.
+create table if not exists public.engine_runs (
+    id uuid primary key,
+    run_id text not null,
+    timeframe text not null,
+    stored_count integer not null default 0 check (stored_count >= 0),
+    outcomes jsonb not null default '[]'::jsonb,
+    finished_at timestamptz not null
+);
+
+create index if not exists engine_runs_finished_at_idx
+    on public.engine_runs (finished_at desc);
+
+alter table public.engine_runs enable row level security;
+
+-- Derived engine status (computed using DB time, so the UI stays pure).
+create or replace view public.engine_status as
+select
+    r.id,
+    r.run_id,
+    r.timeframe,
+    r.stored_count,
+    r.finished_at,
+    (r.finished_at > now() - interval '15 minutes') as is_healthy,
+    floor(extract(epoch from (now() - r.finished_at)) / 60)::int as age_minutes
+from public.engine_runs r
+order by r.finished_at desc
+limit 1;

@@ -5,6 +5,18 @@ from typing import Any
 import requests
 
 
+def _load_dotenv_if_available() -> None:
+    try:
+        from dotenv import load_dotenv  # type: ignore
+    except Exception:
+        return
+    # Load repo-root .env if present. Do not override explicitly-exported env vars.
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_path = os.path.join(repo_root, ".env")
+    if os.path.exists(env_path):
+        load_dotenv(env_path, override=False)
+
+
 def _env(name: str) -> str:
     value = os.getenv(name, "").strip()
     if not value:
@@ -81,6 +93,8 @@ def main() -> int:
     if len(sys.argv) != 2:
         print("Usage: python scripts/seed_admin.py <email>")
         return 2
+
+    _load_dotenv_if_available()
 
     email = sys.argv[1].strip().lower()
     if "@" not in email:

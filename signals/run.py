@@ -14,7 +14,7 @@ from signals.llm_client import SeaLionClient
 from signals.models import NoSignalReport, ScanResult, make_signal
 from signals.news_client import fetch_headlines
 from signals.setup_detector import detect_setup
-from signals.storage import fetch_bot_settings, latest_signal, save_ai_event, save_signal
+from signals.storage import fetch_bot_settings, latest_signal, save_ai_event, save_engine_run, save_signal
 from signals.telegram_client import send_alert, send_no_signal_alert, send_run_summary
 
 RETRY_DELAY = 2.0
@@ -324,6 +324,21 @@ def main():
                 "status": "ERROR",
                 "extra": f"{type(exc).__name__}",
             })
+    try:
+        with_retry(lambda: save_engine_run(
+            {
+                "id": str(uuid.uuid4()),
+                "run_id": run_id,
+                "timeframe": cfg.timeframe,
+                "stored_count": stored,
+                "outcomes": outcomes,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            },
+            cfg.supabase_url,
+            cfg.supabase_service_key,
+        ))
+    except Exception as exc:
+        print(f"Failed to store engine run heartbeat ({type(exc).__name__}), continuing")
     maybe_send_run_summary(run_id, cfg.timeframe, outcomes, cfg)
     print(f"Done. {stored} signal(s) stored in Supabase.")
 

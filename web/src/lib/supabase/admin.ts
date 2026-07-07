@@ -224,3 +224,90 @@ export async function listAiEvents(limit = 50): Promise<AiEvent[] | null> {
     return null;
   }
 }
+
+export type EngineRun = {
+  id: string;
+  runId: string;
+  timeframe: string;
+  storedCount: number;
+  outcomes: unknown;
+  finishedAt: string;
+};
+
+type EngineRunRow = {
+  id: string;
+  run_id: string;
+  timeframe: string;
+  stored_count: number;
+  outcomes: unknown;
+  finished_at: string;
+};
+
+export async function latestEngineRun(): Promise<EngineRun | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/engine_runs?select=*` +
+        `&order=finished_at.desc&limit=1`,
+      { headers: headers(cfg.serviceKey), cache: "no-store" },
+    );
+    if (!response.ok) return null;
+    const rows = (await response.json()) as EngineRunRow[];
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row) return null;
+    return {
+      id: String(row.id),
+      runId: String(row.run_id),
+      timeframe: String(row.timeframe),
+      storedCount: Number(row.stored_count ?? 0),
+      outcomes: row.outcomes,
+      finishedAt: String(row.finished_at),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export type EngineStatus = {
+  runId: string;
+  timeframe: string;
+  storedCount: number;
+  finishedAt: string;
+  isHealthy: boolean;
+  ageMinutes: number;
+};
+
+type EngineStatusRow = {
+  run_id: string;
+  timeframe: string;
+  stored_count: number;
+  finished_at: string;
+  is_healthy: boolean;
+  age_minutes: number;
+};
+
+export async function getEngineStatus(): Promise<EngineStatus | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  try {
+    const response = await fetch(`${cfg.url}/rest/v1/engine_status?select=*`, {
+      headers: headers(cfg.serviceKey),
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const rows = (await response.json()) as EngineStatusRow[];
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row) return null;
+    return {
+      runId: String(row.run_id),
+      timeframe: String(row.timeframe),
+      storedCount: Number(row.stored_count ?? 0),
+      finishedAt: String(row.finished_at),
+      isHealthy: Boolean(row.is_healthy),
+      ageMinutes: Number(row.age_minutes ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
