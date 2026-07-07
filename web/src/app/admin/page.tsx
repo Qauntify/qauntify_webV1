@@ -37,6 +37,14 @@ export default async function AdminOverview() {
       value: stats.total > 0 ? String(stats.avgConfidence) : "—",
     },
     { label: "Long / short", value: `${stats.longs}L / ${stats.shorts}S` },
+    {
+      label: "Win rate",
+      value: stats.winRate !== null ? `${stats.winRate}%` : "—",
+      sub:
+        stats.winRate !== null
+          ? `${stats.tpHits} TP hit / ${stats.slHits} SL hit`
+          : "No closed signals yet.",
+    },
     { label: "Engine", value: engine.label, sub: engine.detail },
   ];
 

@@ -19,6 +19,18 @@ create table if not exists public.signals (
 create index if not exists signals_created_at_idx
     on public.signals (created_at desc);
 
+-- Outcome tracking: signals stay in the table forever; the engine flips
+-- status to tp_hit/sl_hit when price reaches the target or the stop.
+alter table public.signals
+    add column if not exists status text not null default 'open'
+        check (status in ('open', 'tp_hit', 'sl_hit'));
+alter table public.signals
+    add column if not exists closed_at timestamptz;
+
+create index if not exists signals_status_idx
+    on public.signals (status)
+    where status = 'open';
+
 -- Freemium gate, enforced at the database:
 --   anon (logged out)        → only signals from the last 24 hours (preview)
 --   authenticated (signed in) → full history

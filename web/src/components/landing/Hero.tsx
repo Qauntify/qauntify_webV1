@@ -17,6 +17,7 @@ const SAMPLE_SIGNAL: Signal = {
   indicators: { ema9: 108100, ema21: 107900, rsi: 55.2, macdHist: 12.4 },
   newsHeadlines: ["ETF inflows surge", "Bitcoin breaks resistance"],
   createdAt: new Date().toISOString(),
+  status: "open",
 };
 
 export function Hero({ latestSignal }: { latestSignal: Signal | null }) {

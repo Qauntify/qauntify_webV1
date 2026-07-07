@@ -1,3 +1,5 @@
+export type SignalStatus = "open" | "tp_hit" | "sl_hit";
+
 export type Signal = {
   id: string;
   symbol: string;
@@ -11,6 +13,7 @@ export type Signal = {
   indicators: { ema9: number; ema21: number; rsi: number; macdHist: number };
   newsHeadlines: string[];
   createdAt: string;
+  status: SignalStatus;
 };
 
 export type Stats = {
@@ -18,6 +21,10 @@ export type Stats = {
   avgConfidence: number;
   longs: number;
   shorts: number;
+  tpHits: number;
+  slHits: number;
+  // Percent of closed signals that hit TP; null until something closes.
+  winRate: number | null;
 };
 
 type SignalRow = {
@@ -33,7 +40,14 @@ type SignalRow = {
   indicators: { ema9: number; ema21: number; rsi: number; macd_hist: number };
   news_headlines: unknown;
   created_at: string;
+  // Absent until supabase/schema.sql adds the column; treated as "open".
+  status?: string;
 };
+
+function parseStatus(value: string | undefined): SignalStatus {
+  if (value === "tp_hit" || value === "sl_hit") return value;
+  return "open";
+}
 
 function supabaseConfig(): { url: string; anonKey: string } | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -91,6 +105,7 @@ function parseRow(row: SignalRow): Signal | null {
     },
     newsHeadlines: row.news_headlines as string[],
     createdAt: row.created_at,
+    status: parseStatus(row.status),
   };
 }
 
@@ -107,18 +122,28 @@ export async function getSignals(
 }
 
 export async function getStats(accessToken?: string): Promise<Stats> {
-  // Low volume: fetch the two columns we aggregate and compute here.
-  const rows = await fetchRows("select=confidence,direction", accessToken);
+  // Low volume: fetch all columns (select=* tolerates the status column
+  // not existing yet) and aggregate here.
+  const rows = await fetchRows("select=*", accessToken);
   if (!rows || rows.length === 0) {
-    return { total: 0, avgConfidence: 0, longs: 0, shorts: 0 };
+    return {
+      total: 0, avgConfidence: 0, longs: 0, shorts: 0,
+      tpHits: 0, slHits: 0, winRate: null,
+    };
   }
   const total = rows.length;
   const sum = rows.reduce((acc, r) => acc + r.confidence, 0);
   const longs = rows.filter((r) => r.direction === "long").length;
+  const tpHits = rows.filter((r) => parseStatus(r.status) === "tp_hit").length;
+  const slHits = rows.filter((r) => parseStatus(r.status) === "sl_hit").length;
+  const closed = tpHits + slHits;
   return {
     total,
     avgConfidence: Math.round(sum / total),
     longs,
     shorts: total - longs,
+    tpHits,
+    slHits,
+    winRate: closed > 0 ? Math.round((tpHits / closed) * 100) : null,
   };
 }

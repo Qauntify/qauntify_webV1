@@ -14,6 +14,20 @@ function DirectionBadge({ direction }: { direction: Signal["direction"] }) {
   );
 }
 
+function StatusBadge({ status }: { status: Signal["status"] }) {
+  if (status === "open") return null;
+  const isWin = status === "tp_hit";
+  return (
+    <span
+      className={`inline-flex items-center rounded px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wide ${
+        isWin ? "bg-long-soft text-long" : "bg-short-soft text-short"
+      }`}
+    >
+      {isWin ? "TP hit" : "SL hit"}
+    </span>
+  );
+}
+
 function ConfidenceGauge({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-2" title={`Confidence ${value}/100`}>
@@ -51,6 +65,7 @@ export function TradeTicket({
           <DirectionBadge direction={signal.direction} />
           <span className="font-mono text-sm font-semibold">{signal.symbol}</span>
           <span className="font-mono text-xs text-slate">{signal.timeframe}</span>
+          <StatusBadge status={signal.status} />
         </div>
         <ConfidenceGauge value={signal.confidence} />
       </div>

@@ -94,13 +94,16 @@ describe("getStats", () => {
       avgConfidence: 0,
       longs: 0,
       shorts: 0,
+      tpHits: 0,
+      slHits: 0,
+      winRate: null,
     });
   });
 
   it("computes totals, rounded average confidence, and direction split", async () => {
     mockFetch([
-      { confidence: 80, direction: "long" },
-      { confidence: 71, direction: "short" },
+      { confidence: 80, direction: "long", status: "tp_hit" },
+      { confidence: 71, direction: "short", status: "sl_hit" },
       { confidence: 90, direction: "long" },
     ]);
     expect(await getStats()).toEqual({
@@ -108,6 +111,9 @@ describe("getStats", () => {
       avgConfidence: 80,
       longs: 2,
       shorts: 1,
+      tpHits: 1,
+      slHits: 1,
+      winRate: 50,
     });
   });
 });

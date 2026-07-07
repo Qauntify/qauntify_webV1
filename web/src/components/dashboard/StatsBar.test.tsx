@@ -4,15 +4,30 @@ import { describe, expect, it } from "vitest";
 import { StatsBar } from "./StatsBar";
 
 describe("StatsBar", () => {
-  it("renders totals and the long/short split", () => {
-    render(<StatsBar stats={{ total: 12, avgConfidence: 76, longs: 8, shorts: 4 }} />);
+  it("renders totals, the long/short split, and the win rate", () => {
+    render(
+      <StatsBar
+        stats={{
+          total: 12, avgConfidence: 76, longs: 8, shorts: 4,
+          tpHits: 3, slHits: 1, winRate: 75,
+        }}
+      />,
+    );
     expect(screen.getByText("12")).toBeDefined();
     expect(screen.getByText("76")).toBeDefined();
     expect(screen.getByText("8L / 4S")).toBeDefined();
+    expect(screen.getByText("75% (3W/1L)")).toBeDefined();
   });
 
-  it("shows a dash for average confidence when there are no signals", () => {
-    render(<StatsBar stats={{ total: 0, avgConfidence: 0, longs: 0, shorts: 0 }} />);
-    expect(screen.getByText("—")).toBeDefined();
+  it("shows dashes when there are no signals or closed outcomes", () => {
+    render(
+      <StatsBar
+        stats={{
+          total: 0, avgConfidence: 0, longs: 0, shorts: 0,
+          tpHits: 0, slHits: 0, winRate: null,
+        }}
+      />,
+    );
+    expect(screen.getAllByText("—").length).toBe(2);
   });
 });

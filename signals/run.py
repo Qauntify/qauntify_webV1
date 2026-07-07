@@ -13,6 +13,7 @@ from signals.indicators import atr, ema, macd_histogram, rsi
 from signals.llm_client import SeaLionClient
 from signals.models import NoSignalReport, ScanResult, make_signal
 from signals.news_client import fetch_headlines
+from signals.outcome_tracker import track_open_signals
 from signals.setup_detector import detect_setup
 from signals.storage import fetch_bot_settings, latest_signal, save_ai_event, save_engine_run, save_signal
 from signals.telegram_client import send_alert, send_no_signal_alert, send_run_summary
@@ -333,6 +334,13 @@ def main():
                 "status": "ERROR",
                 "extra": f"{type(exc).__name__}",
             })
+    # After scanning, settle any open signals whose TP or SL has been hit.
+    for row, outcome in track_open_signals(cfg):
+        outcomes.append({
+            "symbol": row["symbol"],
+            "status": "TP HIT" if outcome == "tp_hit" else "SL HIT",
+            "extra": f"{row['direction'].upper()} closed",
+        })
     try:
         with_retry(lambda: save_engine_run(
             {

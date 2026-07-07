@@ -60,6 +60,43 @@ def save_engine_run(run: dict, supabase_url: str, service_key: str,
     response.raise_for_status()
 
 
+def list_open_signals(supabase_url: str, service_key: str, session=None):
+    """All signals with status 'open' (oldest first) as raw dicts.
+    Raises on any failure — including the status column not existing yet."""
+    session = session or requests.Session()
+    response = session.get(
+        f"{supabase_url}/rest/v1/signals"
+        "?status=eq.open"
+        "&select=id,symbol,direction,entry,stop_loss,take_profit,created_at"
+        "&order=created_at.asc",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def close_signal(signal_id: str, status: str, closed_at: str,
+                 supabase_url: str, service_key: str, session=None) -> None:
+    """Mark one signal tp_hit/sl_hit; raises on failure so callers can retry."""
+    session = session or requests.Session()
+    response = session.patch(
+        f"{supabase_url}/rest/v1/signals?id=eq.{signal_id}",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+        json={"status": status, "closed_at": closed_at},
+        timeout=15,
+    )
+    response.raise_for_status()
+
+
 def latest_signal(symbol: str, supabase_url: str, service_key: str,
                   session=None):
     """Newest stored signal for `symbol` as {"direction", "created_at"},

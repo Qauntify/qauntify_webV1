@@ -17,6 +17,7 @@ const SIGNAL: Signal = {
   indicators: { ema9: 1, ema21: 1, rsi: 55, macdHist: 0.5 },
   newsHeadlines: ["ETF inflows surge"],
   createdAt: new Date().toISOString(),
+  status: "open",
 };
 
 describe("TradeTicket", () => {
@@ -36,6 +37,16 @@ describe("TradeTicket", () => {
     render(<TradeTicket signal={SIGNAL} sample showRationale={false} />);
     expect(screen.getByText("example signal")).toBeDefined();
     expect(screen.queryByText("“Momentum aligns.”")).toBeNull();
+  });
+
+  it("shows a status badge only for closed signals", () => {
+    const { rerender } = render(<TradeTicket signal={SIGNAL} />);
+    expect(screen.queryByText("TP hit")).toBeNull();
+    expect(screen.queryByText("SL hit")).toBeNull();
+    rerender(<TradeTicket signal={{ ...SIGNAL, status: "tp_hit" }} />);
+    expect(screen.getByText("TP hit")).toBeDefined();
+    rerender(<TradeTicket signal={{ ...SIGNAL, status: "sl_hit" }} />);
+    expect(screen.getByText("SL hit")).toBeDefined();
   });
 
   it("renders short direction with the short badge", () => {

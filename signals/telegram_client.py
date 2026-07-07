@@ -75,6 +75,29 @@ def send_no_signal_alert(report: NoSignalReport, bot_token: str, chat_id: str,
                   session=session)
 
 
+def format_outcome_alert(signal_row: dict, outcome: str) -> str:
+    """Telegram HTML-mode message for a signal that hit its TP or SL."""
+    entry = signal_row["entry"]
+    is_tp = outcome == "tp_hit"
+    exit_price = signal_row["take_profit"] if is_tp else signal_row["stop_loss"]
+    move = (exit_price - entry) / entry * 100
+    if signal_row["direction"] == "short":
+        move = -move
+    header = "\U0001F3AF TP HIT" if is_tp else "\U0001F6D1 SL HIT"
+    return (
+        f"<b>{header} {html.escape(signal_row['symbol'])}</b>"
+        f" — {html.escape(signal_row['direction'].upper())} {move:+.2f}%\n"
+        f"Entry {entry:g} → {exit_price:g}"
+    )
+
+
+def send_outcome_alert(signal_row: dict, outcome: str, bot_token: str,
+                       chat_id: str, session=None) -> None:
+    """Send one TP/SL-hit alert."""
+    send_message(format_outcome_alert(signal_row, outcome), bot_token,
+                 chat_id, session=session)
+
+
 def format_run_summary(run_id: str, timeframe: str, outcomes: list[dict]) -> str:
     """Telegram HTML-mode summary that is sent every run."""
     lines = [f"<b>ENGINE RUN</b> ({html.escape(timeframe)})", f"Run id: {html.escape(run_id)}"]
