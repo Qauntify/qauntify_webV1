@@ -278,15 +278,24 @@ def maybe_send_run_summary(run_id: str, timeframe: str, outcomes: list[dict], cf
 def main():
     cfg = load_config()
     settings = fetch_bot_settings(cfg.supabase_url, cfg.supabase_service_key)
-    llm = SeaLionClient(
-        api_key=cfg.sealion_api_key,
-        model=cfg.sealion_model,
-        base_url=cfg.sealion_base_url,
-    )
+    # One client per API key; symbols round-robin across them so a full
+    # scan never concentrates its LLM calls on a single key's rate limit.
+    keys = cfg.sealion_api_keys or (cfg.sealion_api_key,)
+    llms = [
+        SeaLionClient(
+            api_key=key,
+            model=cfg.sealion_model,
+            base_url=cfg.sealion_base_url,
+        )
+        for key in keys
+    ]
+    print(f"Using {len(llms)} SEA-LION API key(s) across "
+          f"{len(settings.symbols)} symbol(s).")
     stored = 0
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     outcomes: list[dict] = []
-    for symbol in settings.symbols:
+    for index, symbol in enumerate(settings.symbols):
+        llm = llms[index % len(llms)]
         try:
             result = scan_symbol(symbol, cfg, llm)
             if result.signal is not None:

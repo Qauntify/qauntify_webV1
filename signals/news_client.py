@@ -13,6 +13,11 @@ FEED_URLS = (
 SYMBOL_KEYWORDS = {
     "BTCUSDT": ("bitcoin", "btc"),
     "ETHUSDT": ("ethereum", "ether", "eth"),
+    # PAXG is tokenized gold; GBPUSDT tracks GBP/USD. The feeds are
+    # crypto-focused, so matches will be sparse — the engine proceeds
+    # without headlines when nothing matches.
+    "PAXGUSDT": ("gold", "paxg"),
+    "GBPUSDT": ("gbp", "sterling", "pound sterling", "bank of england"),
 }
 
 

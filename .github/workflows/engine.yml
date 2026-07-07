@@ -23,6 +23,10 @@ jobs:
         run: python -m signals.run
         env:
           SEALION_API_KEY: ${{ secrets.SEALION_API_KEY }}
+          SEALION_API_KEY1: ${{ secrets.SEALION_API_KEY1 }}
+          SEALION_API_KEY2: ${{ secrets.SEALION_API_KEY2 }}
+          SEALION_API_KEY3: ${{ secrets.SEALION_API_KEY3 }}
+          SEALION_API_KEY4: ${{ secrets.SEALION_API_KEY4 }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

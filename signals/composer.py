@@ -70,7 +70,8 @@ def confirm_setup(setup: CandidateSetup, headlines: list, llm) -> Confirmation:
 
 NO_SETUP_SYSTEM_PROMPT = (
     "You are a disciplined trading analyst. You receive the current technical "
-    "indicator readings for a crypto pair and recent news headlines. The rules "
+    "indicator readings for a market pair (crypto, gold, or forex) and recent "
+    "news headlines. The rules "
     "engine found no valid trade setup (no EMA 9/21 crossover with aligned RSI "
     "and MACD filters on the last few hourly bars). Explain briefly why "
     "conditions do not support a long or short entry right now.\n"
