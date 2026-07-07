@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 
 import { removeUser } from "@/app/admin/actions";
+import { Notice } from "@/components/shared/Notice";
 import { requireAdminPage } from "@/lib/admin-guard";
+import { formatDateTime } from "@/lib/format";
 import { isAdminEmail, listUsers } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
@@ -9,17 +11,6 @@ export const metadata: Metadata = {
 };
 
 export const dynamic = "force-dynamic";
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "never";
-  return new Date(iso).toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export default async function AdminUsers({
   searchParams,
@@ -41,14 +32,14 @@ export default async function AdminUsers({
       </p>
 
       {error ? (
-        <p className="mt-6 max-w-3xl rounded-lg bg-short-soft px-4 py-3 text-sm text-short">
+        <Notice tone="error" className="mt-6 max-w-3xl">
           {error}
-        </p>
+        </Notice>
       ) : null}
       {deleted ? (
-        <p className="mt-6 max-w-3xl rounded-lg bg-long-soft px-4 py-3 text-sm text-long">
+        <Notice tone="success" className="mt-6 max-w-3xl">
           User deleted.
-        </p>
+        </Notice>
       ) : null}
 
       {users && users.length > 0 ? (
@@ -67,10 +58,10 @@ export default async function AdminUsers({
                 <tr key={u.id}>
                   <td className="px-4 py-3">{u.email}</td>
                   <td className="px-4 py-3 text-slate">
-                    {formatDate(u.createdAt)}
+                    {formatDateTime(u.createdAt)}
                   </td>
                   <td className="px-4 py-3 text-slate">
-                    {formatDate(u.lastSignInAt)}
+                    {formatDateTime(u.lastSignInAt)}
                   </td>
                   <td className="px-4 py-3 text-right">
                     {isAdminEmail(u.email) ? (

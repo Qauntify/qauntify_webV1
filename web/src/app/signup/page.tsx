@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { signup } from "@/app/auth/actions";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { Notice } from "@/components/shared/Notice";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -24,22 +25,22 @@ export default async function SignupPage({
   return (
     <AuthShell
       headline="Start your journal."
-      sub="Hourly AI-confirmed setups on BTC and ETH — every entry logged, explained in plain language, and alerted when it matters."
+      sub="AI-confirmed setups on crypto, gold, and forex — every entry logged, explained in plain language, and alerted when it matters."
     >
-      <h1 className="font-display text-4xl tracking-tight">Create account</h1>
+      <h1 className="font-display text-3xl tracking-tight">Create account</h1>
       <p className="mt-2 text-sm text-slate">
         Free forever. Unlock the full signal history.
       </p>
       {error ? (
-        <p className="mt-6 rounded-lg bg-short-soft px-4 py-3 text-sm text-short">
+        <Notice tone="error" className="mt-6">
           {error}
-        </p>
+        </Notice>
       ) : null}
       {sent ? (
-        <div className="mt-6 rounded-lg bg-long-soft px-4 py-3 text-sm text-long">
+        <Notice tone="success" className="mt-6">
           Check your email — we sent you a confirmation link. Click it to
           finish creating your account.
-        </div>
+        </Notice>
       ) : (
         <>
           <form className="mt-8 flex flex-col gap-4">

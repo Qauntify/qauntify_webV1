@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { login } from "@/app/auth/actions";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { Notice } from "@/components/shared/Notice";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -26,14 +27,14 @@ export default async function LoginPage({
       headline="Welcome back."
       sub="The market kept moving while you were away — your full signal history is waiting on the dashboard."
     >
-      <h1 className="font-display text-4xl tracking-tight">Sign in</h1>
+      <h1 className="font-display text-3xl tracking-tight">Sign in</h1>
       <p className="mt-2 text-sm text-slate">
         Sign in to open your dashboard.
       </p>
       {error ? (
-        <p className="mt-6 rounded-lg bg-short-soft px-4 py-3 text-sm text-short">
+        <Notice tone="error" className="mt-6">
           {error}
-        </p>
+        </Notice>
       ) : null}
       <form className="mt-8 flex flex-col gap-4">
         <label className="flex flex-col gap-1.5 text-sm font-medium">

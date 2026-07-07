@@ -75,7 +75,8 @@ export default async function AdminOverview() {
         </div>
       ) : (
         <p className="mt-4 text-sm text-slate">
-          Nothing stored yet — the engine scans hourly at :05.
+          Nothing stored yet — the engine scans every 10 minutes, and
+          confirmed setups land here.
         </p>
       )}
     </>

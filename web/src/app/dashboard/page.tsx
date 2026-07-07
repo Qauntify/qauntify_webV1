@@ -28,7 +28,7 @@ export default async function Dashboard() {
       <Nav />
       <main className="flex-1">
         <div className="mx-auto max-w-3xl px-6 py-12">
-          <h1 className="font-display text-4xl tracking-tight">Signals</h1>
+          <h1 className="font-display text-3xl tracking-tight">Signals</h1>
           <p className="mt-2 text-sm text-slate">
             Every AI-confirmed setup, newest first. Refresh after an engine run
             to see new entries.
@@ -46,12 +46,9 @@ export default async function Dashboard() {
             <div className="mt-8 rounded-xl border border-dashed border-line p-12 text-center">
               <p className="font-display text-xl">No signals yet</p>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-slate">
-                Run the engine to scan the markets:{" "}
-                <code className="rounded bg-line px-1.5 py-0.5 font-mono text-xs">
-                  python -m signals.run
-                </code>{" "}
-                — confirmed setups appear here. A quiet dashboard is normal;
-                crossovers are infrequent by design.
+                The engine scans the markets every 10 minutes and only stores
+                setups the AI confirms. A quiet dashboard is normal — good
+                setups are rare by design.
               </p>
             </div>
           )}

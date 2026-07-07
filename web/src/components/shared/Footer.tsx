@@ -10,8 +10,8 @@ export function Footer() {
               Finhub<span className="italic">KH</span>
             </p>
             <p className="mt-2 max-w-sm text-sm text-paper/60">
-              Technical setups on BTC and ETH, confirmed by AI, explained in
-              plain language.
+              Technical setups on crypto, gold, and forex — confirmed by AI,
+              explained in plain language.
             </p>
           </div>
           <nav className="flex gap-12 text-sm">

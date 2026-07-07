@@ -1,8 +1,8 @@
 const MARKETS = [
   { name: "Bitcoin", symbol: "BTCUSDT", live: true },
   { name: "Ethereum", symbol: "ETHUSDT", live: true },
-  { name: "Gold", symbol: "XAUUSD", live: false },
-  { name: "Forex", symbol: "EURUSD +", live: false },
+  { name: "Gold", symbol: "PAXGUSDT", live: true },
+  { name: "GBP", symbol: "GBPUSDT", live: true },
   { name: "Stocks", symbol: "AAPL +", live: false },
   { name: "Indices", symbol: "NAS100 +", live: false },
 ];
@@ -15,11 +15,12 @@ export function Markets() {
           Markets
         </p>
         <h2 className="mt-3 font-display text-4xl tracking-tight">
-          Two markets live. More when they earn it.
+          Four markets live. More when they earn it.
         </h2>
         <p className="mt-4 max-w-lg text-sm leading-relaxed text-slate">
-          We only list a market once the engine actually trades it well. BTC
-          and ETH are live today; the rest are on the bench.
+          We only list a market once the engine actually trades it well.
+          Bitcoin, Ethereum, gold, and GBP are live today; the rest are on
+          the bench.
         </p>
         <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           {MARKETS.map((m) => (

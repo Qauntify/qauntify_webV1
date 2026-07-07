@@ -23,7 +23,7 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "FinhubKH — Smarter signals. Calmer trading.",
   description:
-    "Technical setups on BTC and ETH, confirmed by AI, explained in plain language. Signals are for education and analysis — not financial advice.",
+    "Technical setups on crypto, gold, and forex — confirmed by AI, explained in plain language. Signals are for education and analysis — not financial advice.",
 };
 
 export default function RootLayout({

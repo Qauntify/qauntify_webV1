@@ -31,9 +31,9 @@ export function Hero({ latestSignal }: { latestSignal: Signal | null }) {
             <span className="italic">Calmer</span> trading.
           </h1>
           <p className="mt-6 max-w-md text-lg leading-relaxed text-slate">
-            Technical setups on BTC and ETH, confirmed by AI, explained in
-            plain language — every signal ships with entry, stop loss, take
-            profit, and its reasoning.
+            Technical setups on crypto, gold, and forex — confirmed by AI,
+            explained in plain language. Every signal ships with entry, stop
+            loss, take profit, and its reasoning.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Link

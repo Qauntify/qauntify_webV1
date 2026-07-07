@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const TIERS = [
   {
     name: "Free",
@@ -8,8 +10,8 @@ const TIERS = [
       "Signal history with rationale",
       "Engine stats, updated live",
     ],
-    cta: "Open the dashboard",
-    href: "/dashboard",
+    cta: "Create free account",
+    href: "/signup",
     disabled: false,
   },
   {
@@ -54,12 +56,12 @@ export function Pricing() {
                 ))}
               </ul>
               {tier.href ? (
-                <a
+                <Link
                   href={tier.href}
                   className="mt-7 rounded-lg bg-ink px-4 py-2.5 text-center text-sm font-medium text-paper hover:bg-ink/85"
                 >
                   {tier.cta}
-                </a>
+                </Link>
               ) : (
                 <span className="mt-7 cursor-not-allowed rounded-lg border border-line px-4 py-2.5 text-center text-sm font-medium text-slate">
                   {tier.cta}

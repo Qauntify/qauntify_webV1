@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 
 import { saveBotSettings } from "@/app/admin/actions";
+import { Notice } from "@/components/shared/Notice";
 import { requireAdminPage } from "@/lib/admin-guard";
+import { formatDateTime } from "@/lib/format";
 import { getBotSettings, listAiEvents } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
@@ -24,19 +26,19 @@ export default async function AdminBot({
     <>
       <h1 className="font-display text-3xl tracking-tight">Bot settings</h1>
       <p className="mt-2 text-sm text-slate">
-        Applied from the next engine run (hourly at :05). Alerts go to your
-        Telegram chat.
+        Applied from the next engine run (every 10 minutes). Alerts go to
+        your Telegram chat.
       </p>
 
       {error ? (
-        <p className="mt-6 max-w-xl rounded-lg bg-short-soft px-4 py-3 text-sm text-short">
+        <Notice tone="error" className="mt-6 max-w-xl">
           {error}
-        </p>
+        </Notice>
       ) : null}
       {saved ? (
-        <p className="mt-6 max-w-xl rounded-lg bg-long-soft px-4 py-3 text-sm text-long">
+        <Notice tone="success" className="mt-6 max-w-xl">
           Bot settings saved.
-        </p>
+        </Notice>
       ) : null}
 
       {settings ? (
@@ -73,11 +75,11 @@ export default async function AdminBot({
           </button>
         </form>
       ) : (
-        <p className="mt-8 max-w-xl rounded-lg bg-short-soft px-4 py-3 text-sm text-short">
+        <Notice tone="error" className="mt-8 max-w-xl">
           Could not load bot settings — run{" "}
           <code className="font-mono text-xs">supabase/schema.sql</code> in the
           Supabase SQL Editor to create the bot_settings table.
-        </p>
+        </Notice>
       )}
 
       <h2 className="mt-12 font-display text-2xl tracking-tight">
@@ -96,7 +98,7 @@ export default async function AdminBot({
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <span className="font-mono text-xs text-slate">
-                  {new Date(e.createdAt).toLocaleString()}
+                  {formatDateTime(e.createdAt)}
                 </span>
                 <span className="font-display text-base">
                   {e.kind === "confirm"

@@ -60,3 +60,9 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Consistent keyboard focus everywhere; inputs keep their border style. */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}

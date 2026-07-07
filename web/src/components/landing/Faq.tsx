@@ -51,14 +51,14 @@ export function Faq() {
       </section>
       <section className="border-b border-line bg-card">
         <div className="mx-auto max-w-6xl px-6 py-16 text-center">
-          <h2 className="font-display text-3xl tracking-tight">
+          <h2 className="font-display text-4xl tracking-tight">
             See what the engine sees.
           </h2>
           <Link
-            href="/dashboard"
-            className="mt-6 inline-block rounded-lg bg-ink px-6 py-3 text-sm font-medium text-paper hover:bg-ink/85"
+            href="/signup"
+            className="mt-6 inline-block rounded-lg bg-ink px-5 py-3 text-sm font-medium text-paper hover:bg-ink/85"
           >
-            Open the dashboard
+            Create free account
           </Link>
         </div>
       </section>

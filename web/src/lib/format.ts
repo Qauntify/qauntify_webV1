@@ -7,6 +7,18 @@ export function formatPrice(value: number): string {
   });
 }
 
+// "07 Jul 2026, 12:30" style absolute timestamp; "never" for null.
+export function formatDateTime(iso: string | null): string {
+  if (!iso) return "never";
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 // "3h ago" style relative time from an ISO timestamp.
 export function formatRelativeTime(iso: string, now: Date = new Date()): string {
   const then = new Date(iso);
