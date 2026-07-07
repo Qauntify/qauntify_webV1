@@ -19,12 +19,22 @@ create table if not exists public.signals (
 create index if not exists signals_created_at_idx
     on public.signals (created_at desc);
 
--- Public dashboard reads with the anon key; writes only via the
--- service-role key (which bypasses RLS).
+-- Freemium gate, enforced at the database:
+--   anon (logged out)        → only signals from the last 24 hours (preview)
+--   authenticated (signed in) → full history
+-- Writes only via the service-role key (which bypasses RLS).
 alter table public.signals enable row level security;
 
 drop policy if exists "public read access" on public.signals;
-create policy "public read access"
+
+drop policy if exists "anon preview access" on public.signals;
+create policy "anon preview access"
     on public.signals for select
     to anon
+    using (created_at > now() - interval '24 hours');
+
+drop policy if exists "member full access" on public.signals;
+create policy "member full access"
+    on public.signals for select
+    to authenticated
     using (true);

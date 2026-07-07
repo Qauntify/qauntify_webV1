@@ -42,7 +42,10 @@ function supabaseConfig(): { url: string; anonKey: string } | null {
   return { url: url.replace(/\/$/, ""), anonKey };
 }
 
-async function fetchRows(query: string): Promise<SignalRow[] | null> {
+async function fetchRows(
+  query: string,
+  accessToken?: string,
+): Promise<SignalRow[] | null> {
   const config = supabaseConfig();
   if (!config) return null;
   try {
@@ -51,7 +54,9 @@ async function fetchRows(query: string): Promise<SignalRow[] | null> {
       {
         headers: {
           apikey: config.anonKey,
-          Authorization: `Bearer ${config.anonKey}`,
+          // A signed-in user's JWT makes RLS grant full history;
+          // the anon key alone only sees the 24-hour preview.
+          Authorization: `Bearer ${accessToken ?? config.anonKey}`,
         },
         cache: "no-store", // signals change whenever the engine runs
       },
@@ -89,17 +94,21 @@ function parseRow(row: SignalRow): Signal | null {
   };
 }
 
-export async function getSignals(limit = 50): Promise<Signal[]> {
+export async function getSignals(
+  limit = 50,
+  accessToken?: string,
+): Promise<Signal[]> {
   const rows = await fetchRows(
     `select=*&order=created_at.desc&limit=${limit}`,
+    accessToken,
   );
   if (!rows) return [];
   return rows.map(parseRow).filter((s): s is Signal => s !== null);
 }
 
-export async function getStats(): Promise<Stats> {
+export async function getStats(accessToken?: string): Promise<Stats> {
   // Low volume: fetch the two columns we aggregate and compute here.
-  const rows = await fetchRows("select=confidence,direction");
+  const rows = await fetchRows("select=confidence,direction", accessToken);
   if (!rows || rows.length === 0) {
     return { total: 0, avgConfidence: 0, longs: 0, shorts: 0 };
   }
