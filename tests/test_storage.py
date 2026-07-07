@@ -1,7 +1,7 @@
 import pytest
 
-from signals.models import CandidateSetup, Confirmation, make_signal
-from signals.storage import save_signal
+from signals.models import BotSettings, CandidateSetup, Confirmation, make_signal
+from signals.storage import fetch_bot_settings, save_signal
 
 
 def _signal():
@@ -62,3 +62,47 @@ def test_save_signal_raises_on_http_error():
     session = FakeSession(status=401)
     with pytest.raises(RuntimeError):
         save_signal(_signal(), "https://abc.supabase.co", "bad-key", session=session)
+
+
+class FakeGetSession:
+    def __init__(self, payload=None, status=200):
+        self._payload = payload
+        self._status = status
+        self.last_url = None
+        self.last_headers = None
+
+    def get(self, url, headers=None, timeout=None):
+        self.last_url = url
+        self.last_headers = headers
+        response = FakeResponse(self._status)
+        response.json = lambda: self._payload
+        return response
+
+
+def test_fetch_bot_settings_reads_row():
+    session = FakeGetSession(
+        payload=[{"symbols": ["btcusdt", "SOLUSDT"], "min_alert_confidence": 75}],
+    )
+    settings = fetch_bot_settings(
+        "https://abc.supabase.co", "service-key", session=session,
+    )
+    assert settings.symbols == ("BTCUSDT", "SOLUSDT")
+    assert settings.min_alert_confidence == 75
+    assert "bot_settings" in session.last_url
+    assert session.last_headers["apikey"] == "service-key"
+
+
+def test_fetch_bot_settings_defaults_on_http_error():
+    session = FakeGetSession(status=404)
+    settings = fetch_bot_settings(
+        "https://abc.supabase.co", "service-key", session=session,
+    )
+    assert settings == BotSettings()
+
+
+def test_fetch_bot_settings_defaults_on_malformed_row():
+    session = FakeGetSession(payload=[{"symbols": [], "min_alert_confidence": 50}])
+    settings = fetch_bot_settings(
+        "https://abc.supabase.co", "service-key", session=session,
+    )
+    assert settings == BotSettings()

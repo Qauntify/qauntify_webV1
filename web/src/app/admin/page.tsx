@@ -1,0 +1,71 @@
+import type { Metadata } from "next";
+
+import { TradeTicket } from "@/components/shared/TradeTicket";
+import { requireAdminPage } from "@/lib/admin-guard";
+import { getSignals, getStats } from "@/lib/signals";
+import { listUsers, serviceRoleToken } from "@/lib/supabase/admin";
+
+export const metadata: Metadata = {
+  title: "Admin · Overview — FinhubKH",
+};
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminOverview() {
+  await requireAdminPage();
+
+  const token = serviceRoleToken();
+  const [users, stats, signals] = await Promise.all([
+    listUsers(),
+    getStats(token),
+    getSignals(5, token),
+  ]);
+
+  const tiles = [
+    { label: "Users", value: users ? String(users.length) : "—" },
+    { label: "Signals", value: String(stats.total) },
+    {
+      label: "Avg confidence",
+      value: stats.total > 0 ? String(stats.avgConfidence) : "—",
+    },
+    { label: "Long / short", value: `${stats.longs}L / ${stats.shorts}S` },
+  ];
+
+  return (
+    <>
+      <h1 className="font-display text-3xl tracking-tight">Overview</h1>
+      <p className="mt-2 text-sm text-slate">
+        Everything the engine and your members have been up to.
+      </p>
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {tiles.map((tile) => (
+          <div
+            key={tile.label}
+            className="rounded-xl border border-line bg-card px-5 py-4"
+          >
+            <p className="text-xs uppercase tracking-wider text-slate">
+              {tile.label}
+            </p>
+            <p className="mt-1 font-mono text-2xl font-semibold">
+              {tile.value}
+            </p>
+          </div>
+        ))}
+      </div>
+      <h2 className="mt-12 font-display text-2xl tracking-tight">
+        Latest signals
+      </h2>
+      {signals.length > 0 ? (
+        <div className="mt-4 flex max-w-3xl flex-col gap-5">
+          {signals.map((s) => (
+            <TradeTicket key={s.id} signal={s} />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-slate">
+          Nothing stored yet — the engine scans hourly at :05.
+        </p>
+      )}
+    </>
+  );
+}

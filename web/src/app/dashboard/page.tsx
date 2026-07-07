@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { StatsBar } from "@/components/dashboard/StatsBar";
 import { Footer } from "@/components/shared/Footer";
@@ -18,7 +18,8 @@ export const dynamic = "force-dynamic";
 export default async function Dashboard() {
   const supabase = await createClient();
   const { data } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
+  if (!data.session) redirect("/login");
+  const accessToken = data.session.access_token;
 
   const signals = await getSignals(50, accessToken);
   const stats = await getStats(accessToken);
@@ -32,29 +33,6 @@ export default async function Dashboard() {
             Every AI-confirmed setup, newest first. Refresh after an engine run
             to see new entries.
           </p>
-          {!accessToken ? (
-            <div className="mt-6 flex flex-col gap-3 rounded-xl border border-line bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-slate">
-                <span className="font-medium text-ink">Preview mode.</span>{" "}
-                You&apos;re seeing the last 24 hours only — create a free
-                account to unlock the full signal history.
-              </p>
-              <div className="flex shrink-0 items-center gap-3">
-                <Link
-                  href="/login"
-                  className="text-sm text-slate hover:text-ink"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/signup"
-                  className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink/85"
-                >
-                  Sign up free
-                </Link>
-              </div>
-            </div>
-          ) : null}
           <div className="mt-8">
             <StatsBar stats={stats} />
           </div>

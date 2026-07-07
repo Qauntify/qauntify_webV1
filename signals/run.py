@@ -12,7 +12,8 @@ from signals.llm_client import SeaLionClient
 from signals.models import make_signal
 from signals.news_client import fetch_headlines
 from signals.setup_detector import detect_setup
-from signals.storage import save_signal
+from signals.storage import fetch_bot_settings, save_signal
+from signals.telegram_client import send_alert
 
 RETRY_DELAY = 2.0
 
@@ -93,18 +94,40 @@ def scan_symbol(symbol, cfg, llm):
     return signal
 
 
+def maybe_send_alert(signal, settings, cfg):
+    """Telegram alert for a stored signal; never raises — a failed or
+    skipped alert must not affect the rest of the run."""
+    if not cfg.telegram_bot_token or not cfg.telegram_chat_id:
+        return
+    if signal.confidence < settings.min_alert_confidence:
+        print(f"[{signal.symbol}] confidence {signal.confidence} below alert "
+              f"threshold {settings.min_alert_confidence}, no alert")
+        return
+    try:
+        with_retry(lambda: send_alert(
+            signal, cfg.telegram_bot_token, cfg.telegram_chat_id,
+        ))
+        print(f"[{signal.symbol}] Telegram alert sent")
+    except Exception as exc:
+        print(f"[{signal.symbol}] Telegram alert failed "
+              f"({type(exc).__name__}), continuing")
+
+
 def main():
     cfg = load_config()
+    settings = fetch_bot_settings(cfg.supabase_url, cfg.supabase_service_key)
     llm = SeaLionClient(
         api_key=cfg.sealion_api_key,
         model=cfg.sealion_model,
         base_url=cfg.sealion_base_url,
     )
     stored = 0
-    for symbol in cfg.symbols:
+    for symbol in settings.symbols:
         try:
-            if scan_symbol(symbol, cfg, llm) is not None:
+            signal = scan_symbol(symbol, cfg, llm)
+            if signal is not None:
                 stored += 1
+                maybe_send_alert(signal, settings, cfg)
         except Exception as exc:
             print(f"[{symbol}] unexpected error, skipping: {type(exc).__name__}: {exc}")
     print(f"Done. {stored} signal(s) stored in Supabase.")

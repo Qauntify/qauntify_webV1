@@ -32,6 +32,13 @@ class Confirmation:
 
 
 @dataclass(frozen=True)
+class BotSettings:
+    """Engine behavior controlled from the /admin page (bot_settings table)."""
+    symbols: tuple = ("BTCUSDT", "ETHUSDT")
+    min_alert_confidence: int = 0  # gates Telegram alerts only, not storage
+
+
+@dataclass(frozen=True)
 class Signal:
     id: str
     symbol: str

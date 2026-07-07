@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { signout } from "@/app/auth/actions";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import { isAdminEmail } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const links = [
@@ -34,6 +35,11 @@ export async function Nav() {
           <ThemeToggle />
           {email ? (
             <>
+              {isAdminEmail(email) ? (
+                <Link href="/admin" className="text-sm text-slate hover:text-ink">
+                  Admin
+                </Link>
+              ) : null}
               <span className="hidden max-w-40 truncate text-sm text-slate sm:block">
                 {email}
               </span>
