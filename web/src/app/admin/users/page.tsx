@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/format";
 import { isAdminEmail, listUsers } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
-  title: "Admin · Users — FinhubKH",
+  title: "Admin · Users — Qauntify",
 };
 
 export const dynamic = "force-dynamic";

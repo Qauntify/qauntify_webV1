@@ -8,7 +8,7 @@ import { Notice } from "@/components/shared/Notice";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Create account — FinhubKH",
+  title: "Create account — Qauntify",
 };
 
 export default async function SignupPage({

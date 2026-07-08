@@ -8,7 +8,7 @@ import { getSignals, getStats } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = {
-  title: "Dashboard — FinhubKH",
+  title: "Dashboard — Qauntify",
 };
 
 export const dynamic = "force-dynamic";

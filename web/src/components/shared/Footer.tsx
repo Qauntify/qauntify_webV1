@@ -37,7 +37,7 @@ export function Footer() {
         </div>
         <p className="mt-10 border-t border-line pt-6 text-xs leading-relaxed text-slate">
           Signals are for educational and analysis purposes only. Not financial
-          advice. Trading involves risk. © {new Date().getFullYear()} FinhubKH.
+          advice. Trading involves risk. © {new Date().getFullYear()} Qauntify.
         </p>
       </div>
     </footer>

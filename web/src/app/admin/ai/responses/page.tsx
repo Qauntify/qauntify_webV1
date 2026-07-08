@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/format";
 import { listAiEventsPage } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
-  title: "Admin · AI responses — FinhubKH",
+  title: "Admin · AI responses — Qauntify",
 };
 
 export const dynamic = "force-dynamic";

@@ -6,7 +6,7 @@ import { getSignals, getStats } from "@/lib/signals";
 import { getEngineStatus, listUsers, serviceRoleToken } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
-  title: "Admin · Overview — FinhubKH",
+  title: "Admin · Overview — Qauntify",
 };
 
 export const dynamic = "force-dynamic";

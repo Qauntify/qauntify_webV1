@@ -1,4 +1,4 @@
--- FinhubKH signals table.
+-- Qauntify signals table.
 -- Run this once in the Supabase SQL Editor (Dashboard → SQL Editor → New query).
 
 create table if not exists public.signals (

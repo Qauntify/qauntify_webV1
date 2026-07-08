@@ -14,7 +14,7 @@ export function AuthShell({
       <div className="flex w-full max-w-4xl overflow-hidden rounded-xl border border-line bg-card shadow-lg">
         <aside className="hidden w-5/12 flex-col justify-between bg-accent p-10 text-white lg:flex">
           <Link href="/" className="text-lg font-bold">
-            Finhub<span className="opacity-80">KH</span>
+            Qaunt<span className="opacity-80">ify</span>
           </Link>
           <div>
             <div className="rounded-lg border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
@@ -38,7 +38,7 @@ export function AuthShell({
         <main className="flex flex-1 items-center justify-center px-6 py-12 lg:px-12">
           <div className="w-full max-w-sm">
             <Link href="/" className="text-lg font-bold lg:hidden">
-              Finhub<span className="text-accent">KH</span>
+              Qaunt<span className="text-accent">ify</span>
             </Link>
             <div className="mt-8 lg:mt-0">{children}</div>
           </div>

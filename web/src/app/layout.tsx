@@ -16,7 +16,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FinhubKH — Smarter signals. Calmer trading.",
+  title: "Qauntify — Smarter signals. Calmer trading.",
   description:
     "Technical setups on crypto, gold, and forex — confirmed by AI, explained in plain language. Signals are for education and analysis — not financial advice.",
 };

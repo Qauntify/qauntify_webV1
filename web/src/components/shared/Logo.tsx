@@ -16,10 +16,10 @@ export function Logo({
         className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white"
         aria-hidden
       >
-        F
+        Q
       </span>
       <span className="text-ink">
-        Finhub<span className="text-accent">KH</span>
+        Qaunt<span className="text-accent">ify</span>
         {suffix ? (
           <span className="ml-1.5 text-xs font-medium text-slate">{suffix}</span>
         ) : null}
