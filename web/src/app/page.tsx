@@ -20,12 +20,12 @@ export default async function Home() {
       <Nav />
       <main className="flex-1">
         <Hero latestSignal={signals[0] ?? null} />
-        <StatsBand stats={stats} />
-        <Features />
-        <SignalsPreview signals={signals} />
-        <Markets />
-        <Pricing />
-        <Faq />
+        <div className="scroll-reveal"><StatsBand stats={stats} /></div>
+        <div className="scroll-reveal"><Features /></div>
+        <div className="scroll-reveal"><SignalsPreview signals={signals} /></div>
+        <div className="scroll-reveal"><Markets /></div>
+        <div className="scroll-reveal"><Pricing /></div>
+        <div className="scroll-reveal"><Faq /></div>
       </main>
       <Footer />
     </>

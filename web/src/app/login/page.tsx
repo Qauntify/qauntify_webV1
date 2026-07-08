@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { login } from "@/app/auth/actions";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Notice } from "@/components/shared/Notice";
+import { isAdminEmail } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -20,7 +21,13 @@ export default async function LoginPage({
 
   const supabase = await createClient();
   const { data } = await supabase.auth.getSession();
-  if (data.session) redirect("/dashboard");
+  if (data.session) {
+    if (data.session.user.email && isAdminEmail(data.session.user.email)) {
+      redirect("/admin");
+    } else {
+      redirect("/dashboard");
+    }
+  }
 
   return (
     <AuthShell

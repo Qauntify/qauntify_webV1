@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/supabase/admin";
 
 function credentials(formData: FormData): { email: string; password: string } {
   return {
@@ -26,7 +27,11 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  if (data.user?.email && isAdminEmail(data.user.email)) {
+    redirect("/admin");
+  } else {
+    redirect("/dashboard");
+  }
 }
 
 export async function signup(formData: FormData) {
@@ -53,7 +58,11 @@ export async function signup(formData: FormData) {
   // session — the user is already logged in.
   if (data.session) {
     revalidatePath("/", "layout");
-    redirect("/dashboard");
+    if (data.session.user?.email && isAdminEmail(data.session.user.email)) {
+      redirect("/admin");
+    } else {
+      redirect("/dashboard");
+    }
   }
 
   redirect("/signup?sent=1");

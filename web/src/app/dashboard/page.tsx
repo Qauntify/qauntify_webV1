@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
@@ -79,20 +80,22 @@ async function SessionSection({
 export default async function Dashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ admin?: string }>;
+  searchParams: Promise<{ admin?: string; tab?: string }>;
 }) {
   const supabase = await createClient();
   const { data } = await supabase.auth.getSession();
   if (!data.session) redirect("/login");
   const accessToken = data.session.access_token;
-  const { admin } = await searchParams;
+  const { admin, tab } = await searchParams;
+  
+  const currentTab = tab === "swing" ? "swing" : tab === "scalping" ? "scalping" : "all";
 
   return (
     <DashboardShell
       title="Signals"
       subtitle="AI-confirmed setups — refreshed every engine run"
     >
-      <div className="w-full space-y-8">
+      <div className="w-full space-y-6">
         {admin === "denied" ? (
           <Notice tone="error">
             Admin access is not enabled for {data.session.user.email}. Ask the
@@ -107,9 +110,37 @@ export default async function Dashboard({
           </p>
         </div>
 
-        {SESSIONS.map((s) => (
-          <SessionSection key={s.timeframe} accessToken={accessToken} {...s} />
-        ))}
+        <nav className="flex gap-2 border-b border-line pb-4 overflow-x-auto">
+          <Link
+            href="/dashboard?tab=all"
+            className={`nav-item ${currentTab === "all" ? "nav-item-active" : ""}`}
+          >
+            All
+          </Link>
+          <Link
+            href="/dashboard?tab=scalping"
+            className={`nav-item ${currentTab === "scalping" ? "nav-item-active" : ""}`}
+          >
+            Scalping (15m)
+          </Link>
+          <Link
+            href="/dashboard?tab=swing"
+            className={`nav-item ${currentTab === "swing" ? "nav-item-active" : ""}`}
+          >
+            Swing (1h)
+          </Link>
+        </nav>
+
+        {currentTab === "all" ? (
+          SESSIONS.map((s) => (
+            <SessionSection key={s.timeframe} accessToken={accessToken} {...s} />
+          ))
+        ) : (
+          <SessionSection 
+            accessToken={accessToken} 
+            {...SESSIONS.find((s) => s.title.toLowerCase() === currentTab)!} 
+          />
+        )}
       </div>
     </DashboardShell>
   );
