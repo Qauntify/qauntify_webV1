@@ -67,7 +67,7 @@ export default async function AdminOverview() {
       </div>
       <h2 className="mt-12 text-xl font-bold">Latest signals</h2>
       {signals.length > 0 ? (
-        <div className="mt-4 flex max-w-3xl flex-col gap-5">
+        <div className="mt-4 flex flex-col gap-5">
           {signals.map((s) => (
             <TradeTicket key={s.id} signal={s} />
           ))}

@@ -1,5 +1,5 @@
 from signals.models import Candle
-from signals.setup_detector import (
+from signals.strategies.ema_cross import (
     crossed_above_within,
     crossed_below_within,
     detect_setup,

@@ -11,10 +11,10 @@ from signals.composer import confirm_setup, explain_no_setup
 from signals.config import load_config
 from signals.indicators import atr, ema, macd_histogram, rsi
 from signals.llm_client import SeaLionClient
-from signals.models import NoSignalReport, ScanResult, make_signal
+from signals.models import DEFAULT_SIGNAL_STRATEGY, NoSignalReport, ScanResult, make_signal
 from signals.news_client import fetch_headlines
 from signals.outcome_tracker import track_open_signals
-from signals.setup_detector import detect_setup
+from signals.strategies import detect_setup
 from signals.storage import fetch_bot_settings, latest_signal, save_ai_event, save_engine_run, save_signal
 from signals.telegram_client import send_alert, send_no_signal_alert, send_run_summary
 
@@ -108,7 +108,7 @@ def _log_ai_event(kind: str, symbol: str, cfg, *, timeframe: str,
         print(f"[{symbol}] failed to store ai_events ({type(exc).__name__}), continuing")
 
 
-def scan_symbol(symbol, cfg, llm):
+def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY):
     """Scan one symbol; return a ScanResult with a stored signal or a no-signal report."""
     try:
         candles = with_retry(
@@ -130,18 +130,28 @@ def scan_symbol(symbol, cfg, llm):
     rsi14 = rsi(closes, 14)
     macd_hist = macd_histogram(closes)
     atr14 = atr(highs, lows, closes, 14)
-    indicators = _latest_indicators(ema9, ema21, rsi14, macd_hist)
 
     setup = detect_setup(
-        symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
+        strategy, symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
     )
     if setup is None:
-        print(f"[{symbol}] no setup found")
-        if indicators is None:
+        print(f"[{symbol}] no setup found ({strategy})")
+        indicators = _latest_indicators(ema9, ema21, rsi14, macd_hist)
+        if strategy == "ict_smc":
+            if atr14[-1] is None:
+                return ScanResult()
+            indicators = indicators or {}
+            indicators = {
+                **indicators,
+                "strategy": "ict_smc",
+                "atr": atr14[-1],
+            }
+        elif indicators is None:
             return ScanResult()
         headlines = _fetch_headlines_safe(symbol)
         rationale = explain_no_setup(
             symbol, cfg.timeframe, indicators, headlines, llm,
+            strategy=strategy,
         )
         _log_ai_event(
             "no_setup",
@@ -169,7 +179,7 @@ def scan_symbol(symbol, cfg, llm):
         return ScanResult()
 
     headlines = _fetch_headlines_safe(symbol)
-    confirmation = confirm_setup(setup, headlines, llm)
+    confirmation = confirm_setup(setup, headlines, llm, strategy=strategy)
     if confirmation.verdict != "confirm":
         _log_ai_event(
             "reject",
@@ -291,14 +301,17 @@ def main():
         for key in keys
     ]
     print(f"Using {len(llms)} SEA-LION API key(s) across "
-          f"{len(settings.symbols)} symbol(s).")
+          f"{len(settings.symbols)} symbol(s), "
+          f"strategy={settings.signal_strategy}.")
     stored = 0
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     outcomes: list[dict] = []
     for index, symbol in enumerate(settings.symbols):
         llm = llms[index % len(llms)]
         try:
-            result = scan_symbol(symbol, cfg, llm)
+            result = scan_symbol(
+                symbol, cfg, llm, strategy=settings.signal_strategy,
+            )
             if result.signal is not None:
                 stored += 1
                 maybe_send_alert(result.signal, settings, cfg)

@@ -1,4 +1,4 @@
-"""Derives a candidate trade setup from candles + precomputed indicators."""
+"""EMA 9/21 crossover with RSI and MACD filters."""
 from signals.models import CandidateSetup
 
 CROSS_LOOKBACK = 3

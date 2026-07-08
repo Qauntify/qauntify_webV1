@@ -250,7 +250,7 @@ def test_scan_symbol_drops_forming_candle(monkeypatch):
                      low=99.0, close=999.0, volume=1.0)
     seen = {}
 
-    def capture_detect(symbol, candles, *series):
+    def capture_detect(strategy, symbol, candles, *series):
         seen["candles"] = candles
         return None
 

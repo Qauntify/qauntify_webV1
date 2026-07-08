@@ -6,6 +6,7 @@ import {
   deleteUser,
   getUserEmail,
   isAdminEmail,
+  SIGNAL_STRATEGIES,
   updateBotSettings,
 } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -26,30 +27,37 @@ export async function saveBotSettings(formData: FormData) {
     .map((s) => s.trim().toUpperCase())
     .filter(Boolean);
   const confidence = Number(formData.get("minAlertConfidence"));
+  const signalStrategy = String(formData.get("signalStrategy") ?? "ema_cross");
 
   if (symbols.length === 0 || symbols.some((s) => !SYMBOL_PATTERN.test(s))) {
     redirect(
-      `/admin/bot?error=${encodeURIComponent(
+      `/admin/ai/settings?error=${encodeURIComponent(
         "Symbols must be comma-separated Binance pairs like BTCUSDT, SOLUSDT.",
       )}`,
     );
   }
   if (!Number.isInteger(confidence) || confidence < 0 || confidence > 100) {
     redirect(
-      `/admin/bot?error=${encodeURIComponent(
+      `/admin/ai/settings?error=${encodeURIComponent(
         "Min alert confidence must be a whole number from 0 to 100.",
       )}`,
+    );
+  }
+  if (!SIGNAL_STRATEGIES.some((s) => s.id === signalStrategy)) {
+    redirect(
+      `/admin/ai/settings?error=${encodeURIComponent("Pick a valid signal strategy.")}`,
     );
   }
 
   const ok = await updateBotSettings({
     symbols,
     minAlertConfidence: confidence,
+    signalStrategy,
   });
   redirect(
     ok
-      ? "/admin/bot?saved=1"
-      : `/admin/bot?error=${encodeURIComponent(
+      ? "/admin/ai/settings?saved=1"
+      : `/admin/ai/settings?error=${encodeURIComponent(
           "Could not save settings — is the bot_settings table created (run supabase/schema.sql)?",
         )}`,
   );

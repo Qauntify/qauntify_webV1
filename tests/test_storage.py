@@ -81,15 +81,34 @@ class FakeGetSession:
 
 def test_fetch_bot_settings_reads_row():
     session = FakeGetSession(
-        payload=[{"symbols": ["btcusdt", "SOLUSDT"], "min_alert_confidence": 75}],
+        payload=[{
+            "symbols": ["btcusdt", "SOLUSDT"],
+            "min_alert_confidence": 75,
+            "signal_strategy": "ict_smc",
+        }],
     )
     settings = fetch_bot_settings(
         "https://abc.supabase.co", "service-key", session=session,
     )
     assert settings.symbols == ("BTCUSDT", "SOLUSDT")
     assert settings.min_alert_confidence == 75
+    assert settings.signal_strategy == "ict_smc"
     assert "bot_settings" in session.last_url
     assert session.last_headers["apikey"] == "service-key"
+
+
+def test_fetch_bot_settings_defaults_unknown_strategy():
+    session = FakeGetSession(
+        payload=[{
+            "symbols": ["BTCUSDT"],
+            "min_alert_confidence": 50,
+            "signal_strategy": "unknown",
+        }],
+    )
+    settings = fetch_bot_settings(
+        "https://abc.supabase.co", "service-key", session=session,
+    )
+    assert settings.signal_strategy == "ema_cross"
 
 
 def test_fetch_bot_settings_defaults_on_http_error():

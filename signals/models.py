@@ -46,11 +46,16 @@ class NoSignalReport:
     confidence: int | None = None
 
 
+SIGNAL_STRATEGIES = ("ema_cross", "ict_smc")
+DEFAULT_SIGNAL_STRATEGY = "ema_cross"
+
+
 @dataclass(frozen=True)
 class BotSettings:
     """Engine behavior controlled from the /admin page (bot_settings table)."""
     symbols: tuple = ("BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT")
     min_alert_confidence: int = 0  # gates Telegram alerts only, not storage
+    signal_strategy: str = DEFAULT_SIGNAL_STRATEGY
 
 
 @dataclass(frozen=True)

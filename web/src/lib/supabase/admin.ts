@@ -12,7 +12,22 @@ export type AdminUser = {
 export type BotSettings = {
   symbols: string[];
   minAlertConfidence: number;
+  signalStrategy: string;
 };
+
+export const SIGNAL_STRATEGIES = [
+  {
+    id: "ema_cross",
+    label: "EMA crossover (RSI + MACD filters)",
+    description: "Current default — EMA 9/21 cross with RSI and MACD confirmation.",
+  },
+  {
+    id: "ict_smc",
+    label: "ICT / SMC (liquidity sweep + CHoCH)",
+    description:
+      "Smart-money style — sweep beyond a swing level, then a structure shift.",
+  },
+] as const;
 
 export type AiEvent = {
   id: string;
@@ -152,7 +167,7 @@ export async function getBotSettings(): Promise<BotSettings | null> {
   if (!cfg) return null;
   try {
     const response = await fetch(
-      `${cfg.url}/rest/v1/bot_settings?id=eq.1&select=symbols,min_alert_confidence`,
+      `${cfg.url}/rest/v1/bot_settings?id=eq.1&select=symbols,min_alert_confidence,signal_strategy`,
       { headers: headers(cfg.serviceKey), cache: "no-store" },
     );
     if (!response.ok) return null;
@@ -162,6 +177,7 @@ export async function getBotSettings(): Promise<BotSettings | null> {
     return {
       symbols: row.symbols,
       minAlertConfidence: row.min_alert_confidence,
+      signalStrategy: row.signal_strategy ?? "ema_cross",
     };
   } catch {
     return null;
@@ -180,6 +196,7 @@ export async function updateBotSettings(
       body: JSON.stringify({
         symbols: settings.symbols,
         min_alert_confidence: settings.minAlertConfidence,
+        signal_strategy: settings.signalStrategy,
         updated_at: new Date().toISOString(),
       }),
     });
@@ -189,40 +206,90 @@ export async function updateBotSettings(
   }
 }
 
-export async function listAiEvents(limit = 50): Promise<AiEvent[] | null> {
+function mapAiEventRows(rows: AiEventRow[]): AiEvent[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((r) => {
+    const kind = parseAiEventKind(r.kind);
+    if (!kind) return [];
+    return [{
+      id: String(r.id),
+      symbol: String(r.symbol),
+      timeframe: String(r.timeframe),
+      kind,
+      direction: parseAiEventDirection(r.direction),
+      entry: typeof r.entry === "number" ? r.entry : null,
+      stopLoss: typeof r.stop_loss === "number" ? r.stop_loss : null,
+      takeProfit: typeof r.take_profit === "number" ? r.take_profit : null,
+      confidence: typeof r.confidence === "number" ? r.confidence : null,
+      rationale: String(r.rationale ?? ""),
+      indicators: r.indicators,
+      newsHeadlines: r.news_headlines,
+      createdAt: String(r.created_at),
+    }];
+  });
+}
+
+function parseContentRangeTotal(header: string | null): number | null {
+  if (!header) return null;
+  const match = header.match(/\d+-\d+\/(\d+|\*)/);
+  if (!match || match[1] === "*") return null;
+  const total = Number(match[1]);
+  return Number.isFinite(total) ? total : null;
+}
+
+export const AI_EVENTS_PAGE_SIZE = 20;
+
+export type AiEventsPage = {
+  events: AiEvent[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export async function listAiEventsPage(
+  page = 1,
+  pageSize = AI_EVENTS_PAGE_SIZE,
+): Promise<AiEventsPage | null> {
   const cfg = config();
   if (!cfg) return null;
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const offset = (safePage - 1) * pageSize;
+  const rangeEnd = offset + pageSize - 1;
   try {
     const response = await fetch(
-      `${cfg.url}/rest/v1/ai_events?select=*` +
-        `&order=created_at.desc&limit=${encodeURIComponent(String(limit))}`,
-      { headers: headers(cfg.serviceKey), cache: "no-store" },
+      `${cfg.url}/rest/v1/ai_events?select=*&order=created_at.desc`,
+      {
+        headers: {
+          ...headers(cfg.serviceKey),
+          Range: `${offset}-${rangeEnd}`,
+          Prefer: "count=exact",
+        },
+        cache: "no-store",
+      },
     );
     if (!response.ok) return null;
     const rows = (await response.json()) as AiEventRow[];
-    if (!Array.isArray(rows)) return null;
-    return rows.flatMap((r) => {
-      const kind = parseAiEventKind(r.kind);
-      if (!kind) return [];
-      return [{
-        id: String(r.id),
-        symbol: String(r.symbol),
-        timeframe: String(r.timeframe),
-        kind,
-        direction: parseAiEventDirection(r.direction),
-        entry: typeof r.entry === "number" ? r.entry : null,
-        stopLoss: typeof r.stop_loss === "number" ? r.stop_loss : null,
-        takeProfit: typeof r.take_profit === "number" ? r.take_profit : null,
-        confidence: typeof r.confidence === "number" ? r.confidence : null,
-        rationale: String(r.rationale ?? ""),
-        indicators: r.indicators,
-        newsHeadlines: r.news_headlines,
-        createdAt: String(r.created_at),
-      }];
-    });
+    const events = mapAiEventRows(rows);
+    const total = parseContentRangeTotal(
+      response.headers.get("content-range"),
+    ) ?? events.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    return {
+      events,
+      page: Math.min(safePage, totalPages),
+      pageSize,
+      total,
+      totalPages,
+    };
   } catch {
     return null;
   }
+}
+
+export async function listAiEvents(limit = 50): Promise<AiEvent[] | null> {
+  const page = await listAiEventsPage(1, limit);
+  return page?.events ?? null;
 }
 
 export type EngineRun = {

@@ -3,7 +3,7 @@ from dataclasses import asdict
 
 import requests
 
-from signals.models import BotSettings, Signal
+from signals.models import BotSettings, DEFAULT_SIGNAL_STRATEGY, SIGNAL_STRATEGIES, Signal
 
 
 def save_signal(signal: Signal, supabase_url: str, service_key: str,
@@ -128,7 +128,7 @@ def fetch_bot_settings(supabase_url: str, service_key: str,
     try:
         response = session.get(
             f"{supabase_url}/rest/v1/bot_settings"
-            "?id=eq.1&select=symbols,min_alert_confidence",
+            "?id=eq.1&select=symbols,min_alert_confidence,signal_strategy",
             headers={
                 "apikey": service_key,
                 "Authorization": f"Bearer {service_key}",
@@ -143,9 +143,16 @@ def fetch_bot_settings(supabase_url: str, service_key: str,
             if isinstance(s, str) and s.strip()
         )
         confidence = int(row["min_alert_confidence"])
+        strategy = row.get("signal_strategy", DEFAULT_SIGNAL_STRATEGY)
+        if strategy not in SIGNAL_STRATEGIES:
+            strategy = DEFAULT_SIGNAL_STRATEGY
         if not symbols or not 0 <= confidence <= 100:
             raise ValueError("empty symbols or confidence out of range")
-        return BotSettings(symbols=symbols, min_alert_confidence=confidence)
+        return BotSettings(
+            symbols=symbols,
+            min_alert_confidence=confidence,
+            signal_strategy=strategy,
+        )
     except Exception as exc:
         print(f"bot_settings unavailable ({type(exc).__name__}), using defaults")
         return BotSettings()

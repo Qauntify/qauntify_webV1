@@ -5,33 +5,82 @@ unconfirmed signal is never stored.
 """
 import json
 
-from signals.models import CandidateSetup, Confirmation
+from signals.models import DEFAULT_SIGNAL_STRATEGY, CandidateSetup, Confirmation
 
 SYSTEM_PROMPT = (
     "You are a disciplined trading-signal reviewer. You receive a candidate "
-    "trade setup derived from technical indicators, plus recent news "
+    "trade setup derived from technical rules, plus recent news "
     "headlines. Decide whether the setup is worth taking.\n"
     "Respond with ONLY a JSON object, no other text:\n"
     '{"verdict": "confirm" or "reject", "confidence": <integer 0-100>, '
     '"rationale": "<one short paragraph explaining your decision>"}'
 )
 
+NO_SETUP_PROMPTS = {
+    "ema_cross": (
+        "The rules engine found no valid trade setup (no EMA 9/21 crossover "
+        "with aligned RSI and MACD filters on the last few hourly bars)."
+    ),
+    "ict_smc": (
+        "The rules engine found no valid ICT/SMC setup (no recent liquidity "
+        "sweep followed by a structure shift / CHoCH on the hourly chart)."
+    ),
+}
 
-def build_messages(setup: CandidateSetup, headlines: list) -> list:
+
+def _format_indicators(strategy: str, indicators: dict) -> str:
+    active = indicators.get("strategy", strategy)
+    if active == "ict_smc":
+        parts = []
+        for key, label in (
+            ("structure", "structure"),
+            ("sweep_level", "sweep level"),
+            ("choch_level", "CHoCH level"),
+            ("sweep_low", "sweep low"),
+            ("sweep_high", "sweep high"),
+            ("atr", "ATR"),
+        ):
+            if key in indicators:
+                value = indicators[key]
+                if isinstance(value, float):
+                    parts.append(f"{label}={value:.4f}")
+                else:
+                    parts.append(f"{label}={value}")
+        if "ema9" in indicators and "ema21" in indicators:
+            parts.append(
+                f"EMA9={indicators['ema9']:.2f}, EMA21={indicators['ema21']:.2f}"
+            )
+        if "rsi" in indicators:
+            parts.append(f"RSI={indicators['rsi']:.1f}")
+        return ", ".join(parts) if parts else "no ICT structure on chart"
+    return (
+        f"EMA9={indicators['ema9']:.2f}, EMA21={indicators['ema21']:.2f}, "
+        f"RSI={indicators['rsi']:.1f}, MACD hist={indicators['macd_hist']:.4f}"
+    )
+
+
+def build_messages(setup: CandidateSetup, headlines: list,
+                   strategy: str = DEFAULT_SIGNAL_STRATEGY) -> list:
     if headlines:
         news_block = "\n".join(f"- {h}" for h in headlines)
     else:
         news_block = "No recent headlines available."
     ind = setup.indicators
+    active = ind.get("strategy", strategy)
+    strategy_line = (
+        f"- Strategy: ICT/SMC (liquidity sweep + structure shift)\n"
+        if active == "ict_smc"
+        else "- Strategy: EMA 9/21 crossover with RSI + MACD filters\n"
+    )
     user_content = (
         f"Candidate setup:\n"
+        f"{strategy_line}"
         f"- Symbol: {setup.symbol}\n"
         f"- Direction: {setup.direction}\n"
         f"- Entry: {setup.entry}\n"
         f"- Stop loss: {setup.stop_loss}\n"
         f"- Take profit: {setup.take_profit}\n"
-        f"- Indicators: EMA9={ind['ema9']:.2f}, EMA21={ind['ema21']:.2f}, "
-        f"RSI={ind['rsi']:.1f}, MACD hist={ind['macd_hist']:.4f}\n\n"
+        f"- Context: {_format_indicators(strategy, ind)}\n\n"
         f"Recent news headlines:\n{news_block}"
     )
     return [
@@ -60,27 +109,32 @@ def parse_confirmation(text: str) -> Confirmation:
     return Confirmation(verdict, confidence, rationale)
 
 
-def confirm_setup(setup: CandidateSetup, headlines: list, llm) -> Confirmation:
+def confirm_setup(setup: CandidateSetup, headlines: list, llm,
+                  strategy: str = DEFAULT_SIGNAL_STRATEGY) -> Confirmation:
     try:
-        reply = llm.chat(build_messages(setup, headlines))
+        reply = llm.chat(build_messages(setup, headlines, strategy=strategy))
         return parse_confirmation(reply)
     except Exception as exc:
         return Confirmation("reject", 0, f"LLM call failed: {exc}")
 
 
-NO_SETUP_SYSTEM_PROMPT = (
-    "You are a disciplined trading analyst. You receive the current technical "
-    "indicator readings for a market pair (crypto, gold, or forex) and recent "
-    "news headlines. The rules "
-    "engine found no valid trade setup (no EMA 9/21 crossover with aligned RSI "
-    "and MACD filters on the last few hourly bars). Explain briefly why "
-    "conditions do not support a long or short entry right now.\n"
-    "Respond with ONLY a JSON object, no other text:\n"
-    '{"rationale": "<one short paragraph>"}'
-)
+def no_setup_system_prompt(strategy: str = DEFAULT_SIGNAL_STRATEGY) -> str:
+    reason = NO_SETUP_PROMPTS.get(strategy, NO_SETUP_PROMPTS["ema_cross"])
+    return (
+        "You are a disciplined trading analyst. You receive the current "
+        "technical readings for a market pair (crypto, gold, or forex) and "
+        f"recent news headlines. {reason} Explain briefly why conditions do "
+        "not support a long or short entry right now.\n"
+        "Respond with ONLY a JSON object, no other text:\n"
+        '{"rationale": "<one short paragraph>"}'
+    )
 
 
-def build_no_setup_messages(symbol, timeframe, indicators, headlines) -> list:
+NO_SETUP_SYSTEM_PROMPT = no_setup_system_prompt()
+
+
+def build_no_setup_messages(symbol, timeframe, indicators, headlines,
+                            strategy: str = DEFAULT_SIGNAL_STRATEGY) -> list:
     if headlines:
         news_block = "\n".join(f"- {h}" for h in headlines)
     else:
@@ -89,12 +143,12 @@ def build_no_setup_messages(symbol, timeframe, indicators, headlines) -> list:
         f"Market snapshot:\n"
         f"- Symbol: {symbol}\n"
         f"- Timeframe: {timeframe}\n"
-        f"- EMA9={indicators['ema9']:.2f}, EMA21={indicators['ema21']:.2f}, "
-        f"RSI={indicators['rsi']:.1f}, MACD hist={indicators['macd_hist']:.4f}\n\n"
+        f"- Strategy: {strategy}\n"
+        f"- Readings: {_format_indicators(strategy, indicators)}\n\n"
         f"Recent news headlines:\n{news_block}"
     )
     return [
-        {"role": "system", "content": NO_SETUP_SYSTEM_PROMPT},
+        {"role": "system", "content": no_setup_system_prompt(strategy)},
         {"role": "user", "content": user_content},
     ]
 
@@ -113,10 +167,11 @@ def parse_rationale(text: str) -> str:
     return text.strip() or "No analysis available."
 
 
-def explain_no_setup(symbol, timeframe, indicators, headlines, llm) -> str:
+def explain_no_setup(symbol, timeframe, indicators, headlines, llm,
+                     strategy: str = DEFAULT_SIGNAL_STRATEGY) -> str:
     try:
         reply = llm.chat(build_no_setup_messages(
-            symbol, timeframe, indicators, headlines,
+            symbol, timeframe, indicators, headlines, strategy=strategy,
         ))
         return parse_rationale(reply)
     except Exception as exc:

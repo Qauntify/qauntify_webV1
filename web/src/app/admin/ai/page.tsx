@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function AdminBotRedirect() {
+export default function AdminAiIndex() {
   redirect("/admin/ai/settings");
 }

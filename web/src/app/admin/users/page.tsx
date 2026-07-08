@@ -43,7 +43,7 @@ export default async function AdminUsers({
       ) : null}
 
       {users && users.length > 0 ? (
-        <div className="mt-8 max-w-3xl overflow-x-auto rounded-xl border border-line">
+        <div className="mt-8 overflow-x-auto rounded-xl border border-line">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs uppercase tracking-wider text-slate">

@@ -59,8 +59,14 @@ create table if not exists public.bot_settings (
     symbols jsonb not null default '["BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT"]',
     min_alert_confidence integer not null
         default 0 check (min_alert_confidence between 0 and 100),
+    signal_strategy text not null default 'ema_cross'
+        check (signal_strategy in ('ema_cross', 'ict_smc')),
     updated_at timestamptz not null default now()
 );
+
+-- Existing installs: add strategy column without recreating the table.
+alter table public.bot_settings
+    add column if not exists signal_strategy text not null default 'ema_cross';
 
 alter table public.bot_settings enable row level security;
 
