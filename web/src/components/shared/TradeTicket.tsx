@@ -16,6 +16,13 @@ function DirectionBadge({ direction }: { direction: Signal["direction"] }) {
 
 function StatusBadge({ status }: { status: Signal["status"] }) {
   if (status === "open") return null;
+  if (status === "expired") {
+    return (
+      <span className="inline-flex items-center rounded-md bg-line px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-slate">
+        Expired
+      </span>
+    );
+  }
   const isWin = status === "tp_hit";
   return (
     <span

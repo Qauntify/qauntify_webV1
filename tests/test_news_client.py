@@ -1,6 +1,11 @@
 import pytest
 
-from signals.news_client import FEED_URLS, fetch_headlines
+from signals.news_client import (
+    FEED_URLS,
+    fetch_feed_titles,
+    fetch_headlines,
+    filter_headlines,
+)
 
 RSS_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel>
@@ -114,3 +119,64 @@ def test_fetch_headlines_unknown_symbol_returns_empty_without_network():
     session = FakeSession({})
     assert fetch_headlines("DOGEUSDT", session=session) == []
     assert session.requested == []
+
+
+def test_fetch_feed_titles_collects_all_feeds_once():
+    session = FakeSession({
+        FEED_URLS[0]: _rss("Bitcoin breaks resistance", "Solana hits new high"),
+        FEED_URLS[1]: _rss("Ether steadies after selloff"),
+    })
+    titles = fetch_feed_titles(session=session)
+    assert "Bitcoin breaks resistance" in titles
+    assert "Solana hits new high" in titles
+    assert "Ether steadies after selloff" in titles
+    assert session.requested == list(FEED_URLS)
+
+
+def test_fetch_feed_titles_raises_when_all_feeds_fail():
+    session = FakeSession({url: ConnectionError("down") for url in FEED_URLS})
+    with pytest.raises(RuntimeError, match="all RSS feeds unavailable"):
+        fetch_feed_titles(session=session)
+
+
+def test_filter_headlines_matches_dedupes_and_limits_without_network():
+    titles = (["Bitcoin breaks resistance", "Solana hits new high",
+               "Bitcoin breaks resistance"]
+              + [f"Bitcoin headline number {i}" for i in range(15)])
+    headlines = filter_headlines(titles, "BTCUSDT")
+    assert len(headlines) == 10
+    assert headlines.count("Bitcoin breaks resistance") == 1
+    assert "Solana hits new high" not in headlines
+    assert filter_headlines(titles, "DOGEUSDT") == []
+
+
+def test_gold_and_forex_feeds_are_polled():
+    # The feed list must include at least one non-crypto source so PAXG/GBP
+    # confirmation isn't permanently running on empty headlines.
+    non_crypto = [u for u in FEED_URLS
+                  if "fxstreet" in u or "forexlive" in u]
+    assert non_crypto, f"no gold/forex feed in {FEED_URLS}"
+
+
+def test_gold_headlines_match_xau_and_gold():
+    titles = [
+        "Gold retreats from record high on dollar strength",
+        "XAU/USD holds above key support",
+        "Bitcoin ETF inflows surge",
+    ]
+    headlines = filter_headlines(titles, "PAXGUSDT")
+    assert "Gold retreats from record high on dollar strength" in headlines
+    assert "XAU/USD holds above key support" in headlines
+    assert "Bitcoin ETF inflows surge" not in headlines
+
+
+def test_gbp_headlines_match_boe_and_sterling():
+    titles = [
+        "GBP/USD climbs as BoE holds rates",
+        "Sterling rallies on inflation surprise",
+        "Ethereum upgrade ships",
+    ]
+    headlines = filter_headlines(titles, "GBPUSDT")
+    assert "GBP/USD climbs as BoE holds rates" in headlines
+    assert "Sterling rallies on inflation surprise" in headlines
+    assert "Ethereum upgrade ships" not in headlines

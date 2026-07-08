@@ -16,7 +16,7 @@ function DirectionPill({ direction }: { direction: Signal["direction"] }) {
   const isLong = direction === "long";
   return (
     <span
-      className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+      className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide ${
         isLong ? "bg-long-soft text-long" : "bg-short-soft text-short"
       }`}
     >
@@ -28,15 +28,22 @@ function DirectionPill({ direction }: { direction: Signal["direction"] }) {
 function StatusPill({ status }: { status: Signal["status"] }) {
   if (status === "open") {
     return (
-      <span className="inline-flex items-center rounded bg-line px-2 py-0.5 text-[11px] font-medium text-slate">
+      <span className="inline-flex items-center rounded-md bg-line px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide text-slate">
         Open
+      </span>
+    );
+  }
+  if (status === "expired") {
+    return (
+      <span className="inline-flex items-center rounded-md bg-line px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-slate">
+        Expired
       </span>
     );
   }
   const isWin = status === "tp_hit";
   return (
     <span
-      className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${
+      className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide ${
         isWin ? "bg-long-soft text-long" : "bg-short-soft text-short"
       }`}
     >

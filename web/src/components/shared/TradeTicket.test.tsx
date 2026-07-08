@@ -47,6 +47,8 @@ describe("TradeTicket", () => {
     expect(screen.getByText("TP hit")).toBeDefined();
     rerender(<TradeTicket signal={{ ...SIGNAL, status: "sl_hit" }} />);
     expect(screen.getByText("SL hit")).toBeDefined();
+    rerender(<TradeTicket signal={{ ...SIGNAL, status: "expired" }} />);
+    expect(screen.getByText("Expired")).toBeDefined();
   });
 
   it("renders short direction with the short badge", () => {

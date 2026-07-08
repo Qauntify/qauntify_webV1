@@ -57,6 +57,24 @@ def test_fetch_candles_sends_correct_params():
     assert session.last_params == {"symbol": "ETHUSDT", "interval": "1h", "limit": 200}
 
 
+def test_fetch_candles_sends_start_time_when_given():
+    session = FakeSession(KLINE_ROWS)
+    fetch_candles("BTCUSDT", interval="1h", limit=1000,
+                  start_time=1720000000000, session=session)
+    assert session.last_params == {
+        "symbol": "BTCUSDT",
+        "interval": "1h",
+        "limit": 1000,
+        "startTime": 1720000000000,
+    }
+
+
+def test_fetch_candles_omits_start_time_by_default():
+    session = FakeSession(KLINE_ROWS)
+    fetch_candles("BTCUSDT", session=session)
+    assert "startTime" not in session.last_params
+
+
 def test_fetch_candles_raises_on_http_error():
     session = FakeSession([], status=500)
     with pytest.raises(RuntimeError):

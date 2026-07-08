@@ -122,6 +122,44 @@ def test_detect_setup_short_blocked_by_positive_macd():
     assert detect_setup("ETHUSDT", candles, ema9, ema21, rsi14, macd_hist, atr14) is None
 
 
+def test_detect_setup_long_blocked_when_cross_already_reversed():
+    # Crossed above 2 bars ago but EMA9 fell back below EMA21 by now:
+    # the trend the entry relies on is already gone.
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(99.0, n - 3) + [101.0, 100.5, 99.5]  # cross, then reversal
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(55.0, n)
+    macd_hist = _flat(0.5, n)
+    atr14 = _flat(2.0, n)
+    assert detect_setup("BTCUSDT", candles, ema9, ema21, rsi14, macd_hist, atr14) is None
+
+
+def test_detect_setup_short_blocked_when_cross_already_reversed():
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(101.0, n - 3) + [99.0, 99.5, 100.5]  # cross down, then reversal
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(45.0, n)
+    macd_hist = _flat(-0.5, n)
+    atr14 = _flat(2.0, n)
+    assert detect_setup("ETHUSDT", candles, ema9, ema21, rsi14, macd_hist, atr14) is None
+
+
+def test_detect_setup_long_allows_recent_cross_still_aligned():
+    # Cross 2 bars ago and EMA9 still above EMA21 now: valid long.
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(99.0, n - 3) + [101.0, 101.2, 101.5]
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(55.0, n)
+    macd_hist = _flat(0.5, n)
+    atr14 = _flat(2.0, n)
+    setup = detect_setup("BTCUSDT", candles, ema9, ema21, rsi14, macd_hist, atr14)
+    assert setup is not None
+    assert setup.direction == "long"
+
+
 def test_detect_setup_no_cross_returns_none():
     n = 20
     candles = _candles([100.0] * n)

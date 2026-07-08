@@ -8,11 +8,17 @@ from signals.models import Candle
 KLINES_URL = "https://data-api.binance.vision/api/v3/klines"
 
 
-def fetch_candles(symbol, interval="1h", limit=200, session=None):
+def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
+                  session=None):
+    """`start_time` (epoch ms) fetches history forward from that moment
+    instead of the trailing window — used to cover a signal's whole life."""
     session = session or requests.Session()
+    params = {"symbol": symbol, "interval": interval, "limit": limit}
+    if start_time is not None:
+        params["startTime"] = start_time
     response = session.get(
         KLINES_URL,
-        params={"symbol": symbol, "interval": interval, "limit": limit},
+        params=params,
         timeout=10,
     )
     response.raise_for_status()

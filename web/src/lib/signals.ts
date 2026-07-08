@@ -1,4 +1,4 @@
-export type SignalStatus = "open" | "tp_hit" | "sl_hit";
+export type SignalStatus = "open" | "tp_hit" | "sl_hit" | "expired";
 
 export type Signal = {
   id: string;
@@ -45,7 +45,9 @@ type SignalRow = {
 };
 
 function parseStatus(value: string | undefined): SignalStatus {
-  if (value === "tp_hit" || value === "sl_hit") return value;
+  if (value === "tp_hit" || value === "sl_hit" || value === "expired") {
+    return value;
+  }
   return "open";
 }
 

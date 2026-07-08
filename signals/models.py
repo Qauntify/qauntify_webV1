@@ -78,6 +78,9 @@ class Signal:
 class ScanResult:
     signal: Signal | None = None
     no_signal: NoSignalReport | None = None
+    # Closed candles the scan fetched, reused by the outcome tracker so the
+    # same symbol isn't fetched twice per run. None when the fetch failed.
+    candles: list | None = None
 
 
 def make_signal(setup: CandidateSetup, confirmation: Confirmation,

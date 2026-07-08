@@ -20,12 +20,18 @@ create index if not exists signals_created_at_idx
     on public.signals (created_at desc);
 
 -- Outcome tracking: signals stay in the table forever; the engine flips
--- status to tp_hit/sl_hit when price reaches the target or the stop.
+-- status to tp_hit/sl_hit when price reaches the target or the stop, or to
+-- expired when a signal stays open past the engine's MAX_OPEN_DAYS window.
 alter table public.signals
     add column if not exists status text not null default 'open'
         check (status in ('open', 'tp_hit', 'sl_hit'));
 alter table public.signals
     add column if not exists closed_at timestamptz;
+
+-- Existing installs: widen the status check to allow 'expired'.
+alter table public.signals drop constraint if exists signals_status_check;
+alter table public.signals add constraint signals_status_check
+    check (status in ('open', 'tp_hit', 'sl_hit', 'expired'));
 
 create index if not exists signals_status_idx
     on public.signals (status)

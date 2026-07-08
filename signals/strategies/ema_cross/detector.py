@@ -44,7 +44,10 @@ def detect_setup(symbol, candles, ema9, ema21, rsi14, macd_hist, atr14):
     }
     recent = candles[-SWING_WINDOW:]
 
+    # A cross within the lookback only counts while it still holds on the
+    # current bar — a cross that already reversed has no trend to trade.
     if (crossed_above_within(ema9, ema21)
+            and ema9[-1] > ema21[-1]
             and rsi14[-1] < RSI_OVERBOUGHT
             and macd_hist[-1] > 0):
         swing_low = min(c.low for c in recent)
@@ -55,6 +58,7 @@ def detect_setup(symbol, candles, ema9, ema21, rsi14, macd_hist, atr14):
         return CandidateSetup(symbol, "long", entry, stop, take_profit, indicators)
 
     if (crossed_below_within(ema9, ema21)
+            and ema9[-1] < ema21[-1]
             and rsi14[-1] > RSI_OVERSOLD
             and macd_hist[-1] < 0):
         swing_high = max(c.high for c in recent)

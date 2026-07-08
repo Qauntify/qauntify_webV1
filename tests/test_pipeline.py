@@ -1,6 +1,6 @@
 from signals import run as run_module
 from signals.config import Config
-from signals.models import Candle, CandidateSetup
+from signals.models import BotSettings, Candle, CandidateSetup
 from signals.run import scan_symbol, with_retry
 
 
@@ -84,9 +84,9 @@ def test_with_retry_raises_after_exhausting_attempts():
 def test_scan_symbol_no_setup_stores_nothing(monkeypatch):
     # Flat prices produce no crossover → real detector returns None.
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit: _flat_candles())
+                        lambda symbol, interval, limit, session=None: _flat_candles())
     monkeypatch.setattr(run_module, "fetch_headlines",
-                        lambda symbol: [])
+                        lambda symbol, session=None: [])
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"rationale": "Indicators flat."}')
@@ -103,9 +103,9 @@ def test_scan_symbol_no_setup_stores_nothing(monkeypatch):
 
 def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit: _flat_candles())
+                        lambda symbol, interval, limit, session=None: _flat_candles())
     monkeypatch.setattr(run_module, "fetch_headlines",
-                        lambda symbol: ["Bitcoin steady"])
+                        lambda symbol, session=None: ["Bitcoin steady"])
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"rationale": "No EMA crossover yet."}')
@@ -122,11 +122,11 @@ def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
 
 def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit: _flat_candles())
+                        lambda symbol, interval, limit, session=None: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     monkeypatch.setattr(run_module, "fetch_headlines",
-                        lambda symbol: ["BTC rally continues"])
+                        lambda symbol, session=None: ["BTC rally continues"])
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 82, "rationale": "Aligned."}')
@@ -148,11 +148,11 @@ def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
 
 def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit: _flat_candles())
+                        lambda symbol, interval, limit, session=None: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     monkeypatch.setattr(run_module, "fetch_headlines",
-                        lambda symbol: [])
+                        lambda symbol, session=None: [])
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "reject", "confidence": 25, "rationale": "Bearish news."}')
@@ -170,11 +170,11 @@ def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
 
 def test_scan_symbol_news_failure_proceeds_with_empty_headlines(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit: _flat_candles())
+                        lambda symbol, interval, limit, session=None: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
 
-    def broken_news(symbol):
+    def broken_news(symbol, session=None):
         raise RuntimeError("all RSS feeds unavailable")
 
     monkeypatch.setattr(run_module, "fetch_headlines", broken_news)
@@ -190,7 +190,7 @@ def test_scan_symbol_news_failure_proceeds_with_empty_headlines(monkeypatch):
 
 
 def test_scan_symbol_binance_failure_returns_none(monkeypatch):
-    def broken_candles(symbol, interval, limit):
+    def broken_candles(symbol, interval, limit, session=None):
         raise RuntimeError("binance down")
 
     monkeypatch.setattr(run_module, "fetch_candles", broken_candles)
@@ -202,11 +202,11 @@ def test_scan_symbol_binance_failure_returns_none(monkeypatch):
 
 def test_scan_symbol_storage_failure_discards_without_raising(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit: _flat_candles())
+                        lambda symbol, interval, limit, session=None: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     monkeypatch.setattr(run_module, "fetch_headlines",
-                        lambda symbol: [])
+                        lambda symbol, session=None: [])
     monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
 
     def broken_save(signal, supabase_url, service_key, session=None):
@@ -215,16 +215,18 @@ def test_scan_symbol_storage_failure_discards_without_raising(monkeypatch):
     monkeypatch.setattr(run_module, "save_signal", broken_save)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 82, "rationale": "ok"}')
 
-    assert scan_symbol("BTCUSDT", _config(), llm) == run_module.ScanResult()
+    result = scan_symbol("BTCUSDT", _config(), llm)
+    assert result.signal is None
+    assert result.no_signal is None
 
 
 def test_scan_symbol_never_prints_news_secrets(monkeypatch, capsys):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit: _flat_candles())
+                        lambda symbol, interval, limit, session=None: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
 
-    def leaky_news(symbol):
+    def leaky_news(symbol, session=None):
         # Guards the invariant that news exception text (which could embed a
         # URL with credentials, depending on the source) is never printed.
         raise RuntimeError(
@@ -255,7 +257,8 @@ def test_scan_symbol_drops_forming_candle(monkeypatch):
         return None
 
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit: candles + [forming])
+                        lambda symbol, interval, limit, session=None:
+                        candles + [forming])
     monkeypatch.setattr(run_module, "detect_setup", capture_detect)
     llm = FakeLLM(reply="{}")
 
@@ -263,3 +266,159 @@ def test_scan_symbol_drops_forming_candle(monkeypatch):
 
     assert seen["candles"][-1].close == 100.0  # forming 999-close bar excluded
     assert len(seen["candles"]) == 200
+
+
+def test_scan_symbol_filters_provided_feed_titles_without_refetching(monkeypatch):
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None:
+                        _flat_candles())
+    monkeypatch.setattr(run_module, "detect_setup",
+                        lambda *args, **kwargs: SETUP)
+
+    def must_not_fetch(symbol, session=None):
+        raise AssertionError("feed titles were provided; no network fetch")
+
+    monkeypatch.setattr(run_module, "fetch_headlines", must_not_fetch)
+    _capture_saves(monkeypatch)
+    _capture_ai_events(monkeypatch)
+    llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 80, "rationale": "ok"}')
+
+    titles = ["Bitcoin rally continues", "Solana hits new high"]
+    result = scan_symbol("BTCUSDT", _config(), llm, feed_titles=titles)
+
+    assert result.signal is not None
+    assert result.signal.news_headlines == ["Bitcoin rally continues"]
+
+
+def test_scan_symbol_returns_candles_for_reuse(monkeypatch):
+    candles = _flat_candles(n=200)
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None: candles)
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
+    _capture_ai_events(monkeypatch)
+    llm = FakeLLM(reply='{"rationale": "flat"}')
+
+    result = scan_symbol("BTCUSDT", _config(), llm)
+
+    # Closed candles come back so the outcome tracker can reuse them.
+    assert result.candles == candles[:-1]
+
+
+def test_scan_symbol_threads_session_through_fetches(monkeypatch):
+    sessions_seen = {}
+
+    def capture_candles(symbol, interval, limit, session=None):
+        sessions_seen["candles"] = session
+        return _flat_candles()
+
+    def capture_save(signal, supabase_url, service_key, session=None):
+        sessions_seen["save"] = session
+
+    monkeypatch.setattr(run_module, "fetch_candles", capture_candles)
+    monkeypatch.setattr(run_module, "detect_setup",
+                        lambda *args, **kwargs: SETUP)
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
+    monkeypatch.setattr(run_module, "save_signal", capture_save)
+    _capture_ai_events(monkeypatch)
+    llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 80, "rationale": "ok"}')
+
+    marker = object()
+    scan_symbol("BTCUSDT", _config(), llm, session=marker)
+
+    assert sessions_seen["candles"] is marker
+    assert sessions_seen["save"] is marker
+
+
+def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
+    import threading
+
+    settings = BotSettings(
+        symbols=("BTCUSDT", "ETHUSDT", "PAXGUSDT"))
+    monkeypatch.setattr(run_module, "load_config", _config)
+    monkeypatch.setattr(run_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(run_module, "fetch_feed_titles",
+                        lambda session=None: [])
+    monkeypatch.setattr(run_module, "track_open_signals",
+                        lambda cfg, prefetched=None, session=None: [])
+
+    started = threading.Barrier(3, timeout=5)
+    scanned = []
+
+    def fake_scan(symbol, cfg, llm, *, strategy, feed_titles=None,
+                  session=None):
+        # Every scan must be in flight before any finishes — proves the
+        # loop is parallel, not sequential.
+        started.wait()
+        scanned.append(symbol)
+        return run_module.ScanResult()
+
+    monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
+    runs = []
+    monkeypatch.setattr(run_module, "save_engine_run",
+                        lambda run, url, key, session=None: runs.append(run))
+
+    run_module.main()
+
+    assert sorted(scanned) == ["BTCUSDT", "ETHUSDT", "PAXGUSDT"]
+    assert len(runs) == 1
+    statuses = [(o["symbol"], o["status"]) for o in runs[0]["outcomes"]]
+    assert statuses == [("BTCUSDT", "SKIPPED"), ("ETHUSDT", "SKIPPED"),
+                        ("PAXGUSDT", "SKIPPED")]
+
+
+def test_main_reports_expired_signals_in_run_summary(monkeypatch):
+    settings = BotSettings(symbols=("BTCUSDT",))
+    monkeypatch.setattr(run_module, "load_config", _config)
+    monkeypatch.setattr(run_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(run_module, "fetch_feed_titles",
+                        lambda session=None: [])
+    monkeypatch.setattr(
+        run_module, "scan_symbol",
+        lambda symbol, cfg, llm, *, strategy, feed_titles=None, session=None:
+        run_module.ScanResult())
+
+    expired_row = {"symbol": "ETHUSDT", "direction": "long", "entry": 100.0}
+    monkeypatch.setattr(run_module, "track_open_signals",
+                        lambda cfg, prefetched=None, session=None:
+                        [(expired_row, "expired")])
+    runs = []
+    monkeypatch.setattr(run_module, "save_engine_run",
+                        lambda run, url, key, session=None: runs.append(run))
+
+    run_module.main()
+
+    outcomes = runs[0]["outcomes"]
+    assert {"symbol": "ETHUSDT", "status": "EXPIRED",
+            "extra": "LONG closed"} in outcomes
+
+
+def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
+    settings = BotSettings(symbols=("BTCUSDT",))
+    candles = _flat_candles(n=5)
+    monkeypatch.setattr(run_module, "load_config", _config)
+    monkeypatch.setattr(run_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(run_module, "fetch_feed_titles",
+                        lambda session=None: [])
+    monkeypatch.setattr(
+        run_module, "scan_symbol",
+        lambda symbol, cfg, llm, *, strategy, feed_titles=None, session=None:
+        run_module.ScanResult(candles=candles))
+
+    seen = {}
+
+    def capture_track(cfg, prefetched=None, session=None):
+        seen["prefetched"] = prefetched
+        return []
+
+    monkeypatch.setattr(run_module, "track_open_signals", capture_track)
+    monkeypatch.setattr(run_module, "save_engine_run",
+                        lambda run, url, key, session=None: None)
+
+    run_module.main()
+
+    assert seen["prefetched"] == {"BTCUSDT": candles}

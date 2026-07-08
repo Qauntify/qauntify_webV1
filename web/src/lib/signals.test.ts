@@ -70,6 +70,12 @@ describe("getSignals", () => {
     expect(options.cache).toBe("no-store");
   });
 
+  it("keeps the expired status instead of treating it as open", async () => {
+    mockFetch([{ ...ROW, status: "expired" }]);
+    const signals = await getSignals();
+    expect(signals[0].status).toBe("expired");
+  });
+
   it("skips malformed rows instead of crashing", async () => {
     mockFetch([{ ...ROW, direction: "sideways" }, ROW]);
     expect(await getSignals()).toHaveLength(1);
@@ -115,5 +121,18 @@ describe("getStats", () => {
       slHits: 1,
       winRate: 50,
     });
+  });
+
+  it("excludes expired signals from the win rate", async () => {
+    const stats = await (async () => {
+      mockFetch([
+        { confidence: 80, direction: "long", status: "tp_hit" },
+        { confidence: 70, direction: "long", status: "expired" },
+      ]);
+      return getStats();
+    })();
+    expect(stats.tpHits).toBe(1);
+    expect(stats.slHits).toBe(0);
+    expect(stats.winRate).toBe(100); // expired is not a loss — or a win
   });
 });
