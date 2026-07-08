@@ -23,10 +23,10 @@ export default async function AdminUsers({
 
   return (
     <>
-      <h1 className="font-display text-3xl tracking-tight">
+      <h1 className="text-2xl font-bold">
         Users{users ? ` (${users.length})` : ""}
       </h1>
-      <p className="mt-2 text-sm text-slate">
+      <p className="mt-1 text-sm text-slate">
         Everyone with an account. Deleting a user signs them out and removes
         their login for good.
       </p>
@@ -46,7 +46,7 @@ export default async function AdminUsers({
         <div className="mt-8 overflow-x-auto rounded-xl border border-line">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-line text-left text-xs uppercase tracking-wider text-slate">
+              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-slate">
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Signed up</th>
                 <th className="px-4 py-3 font-medium">Last sign-in</th>

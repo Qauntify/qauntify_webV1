@@ -32,8 +32,8 @@ export default async function AdminAiSettings({
       {settings ? (
         <form className="mt-2 flex w-full flex-col gap-8">
           <div className="grid w-full grid-cols-1 gap-6 lg:grid-cols-3">
-            <section className="rounded-xl border border-line bg-card p-5">
-              <h2 className="font-display text-lg tracking-tight">Scanning</h2>
+            <section className="card-surface p-5">
+              <h2 className="text-lg font-semibold">Scanning</h2>
               <p className="mt-1 text-sm text-slate">
                 Pairs the engine checks every run (Binance symbols).
               </p>
@@ -45,7 +45,7 @@ export default async function AdminAiSettings({
                   required
                   defaultValue={settings.symbols.join(", ")}
                   placeholder="BTCUSDT, ETHUSDT"
-                  className="w-full rounded-lg border border-line bg-paper px-3 py-2 font-mono text-sm font-normal outline-none focus:border-slate"
+                  className="input-field w-full font-mono"
                 />
                 <span className="text-xs font-normal text-slate">
                   Comma-separated list, e.g. BTCUSDT, ETHUSDT, PAXGUSDT
@@ -53,8 +53,8 @@ export default async function AdminAiSettings({
               </label>
             </section>
 
-            <section className="rounded-xl border border-line bg-card p-5">
-              <h2 className="font-display text-lg tracking-tight">Strategy</h2>
+            <section className="card-surface p-5">
+              <h2 className="text-lg font-semibold">Strategy</h2>
               <p className="mt-1 text-sm text-slate">
                 Rules used to find candidate setups before SEA-LION confirms
                 them.
@@ -64,7 +64,7 @@ export default async function AdminAiSettings({
                 <select
                   name="signalStrategy"
                   defaultValue={settings.signalStrategy}
-                  className="w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm font-normal outline-none focus:border-slate"
+                  className="input-field w-full"
                 >
                   {SIGNAL_STRATEGIES.map((strategy) => (
                     <option key={strategy.id} value={strategy.id}>
@@ -82,8 +82,8 @@ export default async function AdminAiSettings({
               </label>
             </section>
 
-            <section className="rounded-xl border border-line bg-card p-5">
-              <h2 className="font-display text-lg tracking-tight">
+            <section className="card-surface p-5">
+              <h2 className="text-lg font-semibold">
                 Telegram alerts
               </h2>
               <p className="mt-1 text-sm text-slate">
@@ -100,7 +100,7 @@ export default async function AdminAiSettings({
                   max={100}
                   step={1}
                   defaultValue={settings.minAlertConfidence}
-                  className="w-full max-w-[8rem] rounded-lg border border-line bg-paper px-3 py-2 text-sm font-normal outline-none focus:border-slate"
+                  className="input-field w-full max-w-[8rem]"
                 />
                 <span className="text-xs font-normal text-slate">
                   0 = alert on every confirmed signal
@@ -115,7 +115,7 @@ export default async function AdminAiSettings({
             </p>
             <button
               formAction={saveBotSettings}
-              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink/85"
+              className="btn-primary"
             >
               Save AI settings
             </button>

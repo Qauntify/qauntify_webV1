@@ -46,7 +46,7 @@ export default async function AdminAiResponses({
     <div className="w-full">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-display text-lg tracking-tight">
+          <h2 className="text-lg font-semibold">
             Recent responses
           </h2>
           <p className="mt-1 text-sm text-slate">
@@ -67,13 +67,13 @@ export default async function AdminAiResponses({
             {events.map((e) => (
               <div
                 key={e.id}
-                className="rounded-xl border border-line bg-card p-5"
+                className="card-surface p-5"
               >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                   <span className="font-mono text-xs text-slate">
                     {formatDateTime(e.createdAt)}
                   </span>
-                  <span className="font-display text-base">
+                  <span className="font-mono text-sm font-semibold uppercase tracking-wide">
                     {e.kind === "confirm"
                       ? "CONFIRM"
                       : e.kind === "reject"

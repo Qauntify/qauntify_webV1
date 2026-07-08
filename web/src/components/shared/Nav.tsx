@@ -50,7 +50,7 @@ export async function Nav() {
               Sign in
             </Link>
           )}
-          <Link href="/dashboard" className="btn-primary !px-4 !py-2">
+          <Link href="/dashboard" className="btn-primary-sm">
             Dashboard
           </Link>
         </div>

@@ -131,6 +131,23 @@ body {
   background: var(--accent-hover);
 }
 
+.btn-primary-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  transition: background 0.15s ease;
+}
+
+.btn-primary-sm:hover {
+  background: var(--accent-hover);
+}
+
 .btn-secondary {
   display: inline-flex;
   align-items: center;

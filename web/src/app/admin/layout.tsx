@@ -18,7 +18,7 @@ export default async function AdminLayout({
   return (
     <div className="flex min-h-full flex-1">
       <aside className="flex w-full shrink-0 flex-col border-b border-line bg-sidebar lg:min-h-dvh lg:w-56 lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between px-4 py-4">
+        <div className="flex h-14 items-center justify-between border-b border-line px-4">
           <Logo suffix="admin" />
           <ThemeToggle />
         </div>

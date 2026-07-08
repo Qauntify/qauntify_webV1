@@ -8,7 +8,7 @@ export default function AdminAiLayout({
   return (
     <>
       <h1 className="text-2xl font-bold">AI</h1>
-      <p className="mt-2 text-sm text-slate">
+      <p className="mt-1 text-sm text-slate">
         Configure how the engine scans markets and review every SEA-LION
         response from recent runs.
       </p>
