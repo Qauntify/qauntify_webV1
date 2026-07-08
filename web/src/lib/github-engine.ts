@@ -1,4 +1,4 @@
-const DEFAULT_REPO = "FinhubKh/finhub_ai";
+const DEFAULT_REPO = "Qauntify/qauntify_webV1";
 const WORKFLOW_FILE = "engine.yml";
 
 export type DispatchResult =

@@ -25,7 +25,7 @@ describe("dispatchEngineWorkflow", () => {
     const result = await dispatchEngineWorkflow();
     expect(result.ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.github.com/repos/FinhubKh/finhub_ai/actions/workflows/engine.yml/dispatches",
+      "https://api.github.com/repos/Qauntify/qauntify_webV1/actions/workflows/engine.yml/dispatches",
       expect.objectContaining({ method: "POST" }),
     );
   });

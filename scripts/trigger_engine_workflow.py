@@ -16,7 +16,7 @@ import urllib.error
 import urllib.request
 
 
-DEFAULT_REPO = "FinhubKh/finhub_ai"
+DEFAULT_REPO = "Qauntify/qauntify_webV1"
 DEFAULT_WEB_URL = "https://web-seven-pi-76.vercel.app/api/cron/trigger-engine"
 
 
