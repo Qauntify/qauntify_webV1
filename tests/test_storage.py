@@ -142,3 +142,25 @@ def test_list_open_signals_selects_timeframe():
 
     list_open_signals("https://abc.supabase.co", "key", session=session)
     assert "timeframe" in session.last_url
+
+
+def test_latest_ai_event_time_returns_created_at_for_symbol_and_timeframe():
+    session = FakeGetSession(
+        payload=[{"created_at": "2026-07-08T09:00:00+00:00"}])
+    from signals.storage import latest_ai_event_time
+
+    result = latest_ai_event_time(
+        "BTCUSDT", "1h", "https://abc.supabase.co", "key", session=session)
+    assert result == "2026-07-08T09:00:00+00:00"
+    assert "symbol=eq.BTCUSDT" in session.last_url
+    assert "timeframe=eq.1h" in session.last_url
+    assert "ai_events" in session.last_url
+
+
+def test_latest_ai_event_time_none_when_no_history():
+    session = FakeGetSession(payload=[])
+    from signals.storage import latest_ai_event_time
+
+    result = latest_ai_event_time(
+        "BTCUSDT", "1h", "https://abc.supabase.co", "key", session=session)
+    assert result is None

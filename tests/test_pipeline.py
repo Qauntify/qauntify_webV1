@@ -260,6 +260,8 @@ def test_scan_symbol_drops_forming_candle(monkeypatch):
                         lambda symbol, interval, limit, session=None:
                         candles + [forming])
     monkeypatch.setattr(run_module, "detect_setup", capture_detect)
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
     llm = FakeLLM(reply="{}")
 
     scan_symbol("BTCUSDT", _config(), llm)
@@ -552,3 +554,100 @@ def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
         ("BTCUSDT", "15m"): candles,
         ("BTCUSDT", "1h"): candles,
     }
+
+
+def test_scan_symbol_skips_when_recently_evaluated_this_session(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    recent = datetime.now(timezone.utc) - timedelta(minutes=20)
+    monkeypatch.setattr(run_module, "latest_ai_event_time",
+                        lambda symbol, timeframe, url, key, session=None:
+                        recent.isoformat())
+    fetch_called = []
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda *a, **k: fetch_called.append(1) or _flat_candles())
+
+    # 20 minutes ago is well inside swing's (1h) throttle window.
+    result = scan_symbol("BTCUSDT", _config(), FakeLLM(reply="{}"),
+                         timeframe="1h")
+
+    assert result == run_module.ScanResult()
+    assert fetch_called == []  # market data isn't even fetched — no LLM spam
+
+
+def test_scan_symbol_runs_when_throttle_window_has_elapsed(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    stale = datetime.now(timezone.utc) - timedelta(hours=2)
+    monkeypatch.setattr(run_module, "latest_ai_event_time",
+                        lambda symbol, timeframe, url, key, session=None:
+                        stale.isoformat())
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None:
+                        _flat_candles())
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
+    _capture_ai_events(monkeypatch)
+
+    result = scan_symbol("BTCUSDT", _config(), FakeLLM(reply='{"rationale": "flat"}'),
+                         timeframe="1h")
+
+    assert result.no_signal is not None  # a real evaluation happened
+
+
+def test_scan_symbol_runs_when_never_evaluated_before(monkeypatch):
+    monkeypatch.setattr(run_module, "latest_ai_event_time",
+                        lambda symbol, timeframe, url, key, session=None: None)
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None:
+                        _flat_candles())
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
+    _capture_ai_events(monkeypatch)
+
+    result = scan_symbol("BTCUSDT", _config(), FakeLLM(reply='{"rationale": "flat"}'),
+                         timeframe="15m")
+
+    assert result.no_signal is not None
+
+
+def test_scan_symbol_proceeds_when_throttle_lookup_fails(monkeypatch):
+    def boom(symbol, timeframe, url, key, session=None):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(run_module, "latest_ai_event_time", boom)
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None:
+                        _flat_candles())
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
+    _capture_ai_events(monkeypatch)
+
+    result = scan_symbol("BTCUSDT", _config(), FakeLLM(reply='{"rationale": "flat"}'),
+                         timeframe="1h")
+
+    assert result.no_signal is not None  # fail open — evaluate rather than go silent
+
+
+def test_scan_symbol_scalp_throttle_is_shorter_than_swing(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    # 20 minutes ago: outside scalp's (15m) throttle window, inside swing's (1h).
+    stamp = datetime.now(timezone.utc) - timedelta(minutes=20)
+    monkeypatch.setattr(run_module, "latest_ai_event_time",
+                        lambda symbol, timeframe, url, key, session=None:
+                        stamp.isoformat())
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None:
+                        _flat_candles())
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
+    _capture_ai_events(monkeypatch)
+
+    swing_result = scan_symbol("BTCUSDT", _config(), FakeLLM(reply='{"rationale": "x"}'),
+                               timeframe="1h")
+    scalp_result = scan_symbol("BTCUSDT", _config(), FakeLLM(reply='{"rationale": "x"}'),
+                               timeframe="15m")
+
+    assert swing_result == run_module.ScanResult()  # still throttled
+    assert scalp_result.no_signal is not None  # 20 min clears the 15m window

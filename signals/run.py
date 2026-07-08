@@ -25,7 +25,14 @@ from signals.models import (
 from signals.news_client import fetch_feed_titles, fetch_headlines, filter_headlines
 from signals.outcome_tracker import track_open_signals
 from signals.strategies import detect_setup
-from signals.storage import fetch_bot_settings, latest_signal, save_ai_event, save_engine_run, save_signal
+from signals.storage import (
+    fetch_bot_settings,
+    latest_ai_event_time,
+    latest_signal,
+    save_ai_event,
+    save_engine_run,
+    save_signal,
+)
 from signals.telegram_client import send_alert, send_no_signal_alert, send_run_summary
 
 RETRY_DELAY = 2.0
@@ -45,6 +52,35 @@ DEDUP_BARS = 3
 def _dedup_window(timeframe: str) -> timedelta:
     minutes = TIMEFRAME_MINUTES.get(timeframe, TIMEFRAME_MINUTES["1h"])
     return timedelta(minutes=minutes * DEDUP_BARS)
+
+
+# The engine is invoked far more often (~every 10 min, via external cron and
+# the GitHub Actions backup schedule) than either session's own bar closes.
+# Without this throttle every run re-evaluates a symbol against the *same*
+# still-open candle, producing identical LLM rationale and duplicate
+# no-signal/rejected Telegram alerts run after run. Skip re-evaluating a
+# (symbol, timeframe) until most of its own bar has elapsed since the last
+# logged outcome — 90% of the bar, so a slightly early cron tick still
+# lands inside the window instead of missing it by a few minutes.
+EVAL_THROTTLE_FRACTION = 0.9
+
+
+def _recently_evaluated(symbol, timeframe, cfg, session=None) -> bool:
+    """True when this (symbol, timeframe) already produced a logged outcome
+    within its throttle window. On any lookup failure return False — fail
+    open, since evaluating an extra time is far better than going silent."""
+    try:
+        last = latest_ai_event_time(symbol, timeframe, cfg.supabase_url,
+                                    cfg.supabase_service_key, session=session)
+    except Exception as exc:
+        print(f"[{symbol}] recency check failed ({type(exc).__name__}), proceeding")
+        return False
+    if last is None:
+        return False
+    minutes = TIMEFRAME_MINUTES.get(timeframe, TIMEFRAME_MINUTES["1h"])
+    threshold = timedelta(minutes=minutes * EVAL_THROTTLE_FRACTION)
+    elapsed = datetime.now(timezone.utc) - datetime.fromisoformat(last)
+    return elapsed < threshold
 
 
 def with_retry(fn, attempts=2, delay=None):
@@ -152,6 +188,11 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     headlines are fetched directly (single-symbol / legacy use).
     """
     timeframe = timeframe or cfg.timeframe
+
+    if _recently_evaluated(symbol, timeframe, cfg, session=session):
+        print(f"[{symbol}] {timeframe} evaluated recently, skipping this run")
+        return ScanResult()
+
     try:
         candles = with_retry(
             lambda: fetch_candles(symbol, timeframe, cfg.candle_limit,
