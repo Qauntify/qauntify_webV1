@@ -13,6 +13,69 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
+const SESSIONS = [
+  {
+    title: "Scalping",
+    subtitle: "15m chart — fast, frequent setups",
+    timeframe: "15m",
+    emptyHint: "Scalp setups are checked every ~10 minutes on the 15m chart.",
+  },
+  {
+    title: "Swing",
+    subtitle: "1h chart — slower, higher-conviction setups",
+    timeframe: "1h",
+    emptyHint: "Swing setups are checked every ~10 minutes on the 1h chart.",
+  },
+] as const;
+
+async function SessionSection({
+  title,
+  subtitle,
+  timeframe,
+  emptyHint,
+  accessToken,
+}: {
+  title: string;
+  subtitle: string;
+  timeframe: string;
+  emptyHint: string;
+  accessToken: string;
+}) {
+  const [signals, stats] = await Promise.all([
+    getSignals(30, accessToken, timeframe),
+    getStats(accessToken, timeframe),
+  ]);
+
+  return (
+    <section>
+      <div className="mb-3 flex items-baseline justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          <p className="text-xs text-slate">{subtitle}</p>
+        </div>
+        {signals.length > 0 ? (
+          <span className="font-mono text-xs text-slate">
+            {signals.length} signal{signals.length === 1 ? "" : "s"}
+          </span>
+        ) : null}
+      </div>
+
+      <StatsBar stats={stats} />
+
+      {signals.length > 0 ? (
+        <div className="mt-4">
+          <SignalsGrid signals={signals} />
+        </div>
+      ) : (
+        <div className="mt-4 rounded-lg border border-dashed border-line bg-card p-10 text-center">
+          <p className="text-sm font-semibold">No {title.toLowerCase()} signals yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-slate">{emptyHint}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default async function Dashboard({
   searchParams,
 }: {
@@ -24,15 +87,12 @@ export default async function Dashboard({
   const accessToken = data.session.access_token;
   const { admin } = await searchParams;
 
-  const signals = await getSignals(50, accessToken);
-  const stats = await getStats(accessToken);
-
   return (
     <DashboardShell
       title="Signals"
       subtitle="AI-confirmed setups — refreshed every engine run"
     >
-      <div className="w-full space-y-6">
+      <div className="w-full space-y-8">
         {admin === "denied" ? (
           <Notice tone="error">
             Admin access is not enabled for {data.session.user.email}. Ask the
@@ -47,29 +107,9 @@ export default async function Dashboard({
           </p>
         </div>
 
-        <StatsBar stats={stats} />
-
-        {signals.length > 0 ? (
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-ink">
-                Trade log
-                <span className="ml-2 font-normal text-slate">
-                  ({signals.length} signal{signals.length === 1 ? "" : "s"})
-                </span>
-              </h2>
-            </div>
-            <SignalsGrid signals={signals} />
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed border-line bg-card p-16 text-center">
-            <p className="text-lg font-semibold">No signals yet</p>
-            <p className="mx-auto mt-2 max-w-md text-sm text-slate">
-              The engine scans every 10 minutes. A quiet dashboard is normal —
-              good setups are rare by design.
-            </p>
-          </div>
-        )}
+        {SESSIONS.map((s) => (
+          <SessionSection key={s.timeframe} accessToken={accessToken} {...s} />
+        ))}
       </div>
     </DashboardShell>
   );

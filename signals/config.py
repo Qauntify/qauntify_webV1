@@ -42,7 +42,7 @@ class Config:
     sealion_api_keys: tuple = ()
     # Optional: alerts are skipped when either is empty.
     telegram_bot_token: str = ""
-    telegram_chat_id: str = ""
+    telegram_channel_id: str = ""
     symbols: tuple = ("BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT")
     timeframe: str = "1h"
     candle_limit: int = 201  # one extra: the last fetched candle is still forming and gets dropped
@@ -72,5 +72,5 @@ def load_config() -> Config:
         supabase_url=supabase_url.rstrip("/"),
         supabase_service_key=supabase_service_key,
         telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", ""),
-        telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID", ""),
+        telegram_channel_id=os.environ.get("TELEGRAM_CHANNEL_ID", ""),
     )

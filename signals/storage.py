@@ -67,7 +67,7 @@ def list_open_signals(supabase_url: str, service_key: str, session=None):
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
         "?status=eq.open"
-        "&select=id,symbol,direction,entry,stop_loss,take_profit,created_at"
+        "&select=id,symbol,timeframe,direction,entry,stop_loss,take_profit,created_at"
         "&order=created_at.asc",
         headers={
             "apikey": service_key,
@@ -98,13 +98,16 @@ def close_signal(signal_id: str, status: str, closed_at: str,
 
 
 def latest_signal(symbol: str, supabase_url: str, service_key: str,
-                  session=None):
+                  timeframe: str | None = None, session=None):
     """Newest stored signal for `symbol` as {"direction", "created_at"},
-    or None when the symbol has no signals. Raises on any failure."""
+    or None when the symbol has no signals. `timeframe` scopes the lookup
+    to one session's stream so scalp and swing never dedup each other.
+    Raises on any failure."""
     session = session or requests.Session()
+    timeframe_filter = f"&timeframe=eq.{timeframe}" if timeframe else ""
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
-        f"?symbol=eq.{symbol}&select=direction,created_at"
+        f"?symbol=eq.{symbol}{timeframe_filter}&select=direction,created_at"
         "&order=created_at.desc&limit=1",
         headers={
             "apikey": service_key,

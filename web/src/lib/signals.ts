@@ -114,19 +114,25 @@ function parseRow(row: SignalRow): Signal | null {
 export async function getSignals(
   limit = 50,
   accessToken?: string,
+  timeframe?: string,
 ): Promise<Signal[]> {
+  const timeframeFilter = timeframe ? `&timeframe=eq.${timeframe}` : "";
   const rows = await fetchRows(
-    `select=*&order=created_at.desc&limit=${limit}`,
+    `select=*${timeframeFilter}&order=created_at.desc&limit=${limit}`,
     accessToken,
   );
   if (!rows) return [];
   return rows.map(parseRow).filter((s): s is Signal => s !== null);
 }
 
-export async function getStats(accessToken?: string): Promise<Stats> {
+export async function getStats(
+  accessToken?: string,
+  timeframe?: string,
+): Promise<Stats> {
   // Low volume: fetch all columns (select=* tolerates the status column
   // not existing yet) and aggregate here.
-  const rows = await fetchRows("select=*", accessToken);
+  const timeframeFilter = timeframe ? `&timeframe=eq.${timeframe}` : "";
+  const rows = await fetchRows(`select=*${timeframeFilter}`, accessToken);
   if (!rows || rows.length === 0) {
     return {
       total: 0, avgConfidence: 0, longs: 0, shorts: 0,

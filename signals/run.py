@@ -14,7 +14,14 @@ from signals.composer import confirm_setup, explain_no_setup
 from signals.config import load_config
 from signals.indicators import atr, ema, macd_histogram, rsi
 from signals.llm_client import SeaLionClient
-from signals.models import DEFAULT_SIGNAL_STRATEGY, NoSignalReport, ScanResult, make_signal
+from signals.models import (
+    DEFAULT_SIGNAL_STRATEGY,
+    TIMEFRAME_MINUTES,
+    TRADING_SESSIONS,
+    NoSignalReport,
+    ScanResult,
+    make_signal,
+)
 from signals.news_client import fetch_feed_titles, fetch_headlines, filter_headlines
 from signals.outcome_tracker import track_open_signals
 from signals.strategies import detect_setup
@@ -28,10 +35,16 @@ RETRY_DELAY = 2.0
 # neither is thread-safe to share.
 MAX_SCAN_WORKERS = 4
 
-# The detector flags a crossover on any of the last CROSS_LOOKBACK (3) hourly
-# bars, so runs closer together than that would re-store the same setup.
-# Skip a candidate when the same symbol+direction was stored this recently.
-DEDUP_WINDOW = timedelta(hours=3)
+# The detector flags a crossover on any of the last DEDUP_BARS bars, so runs
+# closer together than that would re-store the same setup. The window scales
+# with each session's timeframe (3 bars of 15m = 45m; 3 bars of 1h = 3h) so
+# scalp and swing each dedup against their own bar size.
+DEDUP_BARS = 3
+
+
+def _dedup_window(timeframe: str) -> timedelta:
+    minutes = TIMEFRAME_MINUTES.get(timeframe, TIMEFRAME_MINUTES["1h"])
+    return timedelta(minutes=minutes * DEDUP_BARS)
 
 
 def with_retry(fn, attempts=2, delay=None):
@@ -52,13 +65,16 @@ def with_retry(fn, attempts=2, delay=None):
     raise last_error
 
 
-def already_signaled(setup, cfg, session=None):
-    """True when the newest stored signal for this symbol duplicates the
-    candidate (same direction, within DEDUP_WINDOW). On any lookup failure
-    return False — better a duplicate than a missed signal."""
+def already_signaled(setup, cfg, timeframe="1h", session=None):
+    """True when the newest stored signal for this symbol+timeframe
+    duplicates the candidate (same direction, within that timeframe's dedup
+    window). Scoped per timeframe so scalp and swing never dedup each
+    other. On any lookup failure return False — better a duplicate than a
+    missed signal."""
     try:
         row = latest_signal(setup.symbol, cfg.supabase_url,
-                            cfg.supabase_service_key, session=session)
+                            cfg.supabase_service_key, timeframe=timeframe,
+                            session=session)
     except Exception as exc:
         print(f"[{setup.symbol}] dedup check failed "
               f"({type(exc).__name__}), proceeding")
@@ -66,7 +82,7 @@ def already_signaled(setup, cfg, session=None):
     if row is None or row["direction"] != setup.direction:
         return False
     stored_at = datetime.fromisoformat(row["created_at"])
-    return datetime.now(timezone.utc) - stored_at < DEDUP_WINDOW
+    return datetime.now(timezone.utc) - stored_at < _dedup_window(timeframe)
 
 
 def _latest_indicators(ema9, ema21, rsi14, macd_hist):
@@ -126,15 +142,19 @@ def _log_ai_event(kind: str, symbol: str, cfg, *, timeframe: str,
 
 
 def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
-                feed_titles=None, session=None):
-    """Scan one symbol; return a ScanResult with a stored signal or a no-signal report.
+                timeframe=None, feed_titles=None, session=None):
+    """Scan one symbol on one session's timeframe; return a ScanResult with
+    a stored signal or a no-signal report.
 
-    `feed_titles` holds this run's already-fetched RSS titles; when None the
-    symbol's headlines are fetched directly (single-symbol / legacy use).
+    `timeframe` selects the session (e.g. "15m" scalp, "1h" swing);
+    defaults to cfg.timeframe for single-session callers. `feed_titles`
+    holds this run's already-fetched RSS titles; when None the symbol's
+    headlines are fetched directly (single-symbol / legacy use).
     """
+    timeframe = timeframe or cfg.timeframe
     try:
         candles = with_retry(
-            lambda: fetch_candles(symbol, cfg.timeframe, cfg.candle_limit,
+            lambda: fetch_candles(symbol, timeframe, cfg.candle_limit,
                                   session=session)
         )
     except Exception as exc:
@@ -178,14 +198,14 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             return ScanResult(candles=candles)
         headlines = headlines_for_symbol()
         rationale = explain_no_setup(
-            symbol, cfg.timeframe, indicators, headlines, llm,
+            symbol, timeframe, indicators, headlines, llm,
             strategy=strategy,
         )
         _log_ai_event(
             "no_setup",
             symbol,
             cfg,
-            timeframe=cfg.timeframe,
+            timeframe=timeframe,
             rationale=rationale,
             indicators=indicators,
             headlines=headlines,
@@ -194,7 +214,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         print(f"[{symbol}] no-signal analysis: {rationale}")
         return ScanResult(no_signal=NoSignalReport(
             symbol=symbol,
-            timeframe=cfg.timeframe,
+            timeframe=timeframe,
             kind="no_setup",
             rationale=rationale,
             indicators=indicators,
@@ -203,7 +223,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     print(f"[{symbol}] candidate {setup.direction}: entry={setup.entry} "
           f"SL={setup.stop_loss} TP={setup.take_profit}")
 
-    if already_signaled(setup, cfg, session=session):
+    if already_signaled(setup, cfg, timeframe=timeframe, session=session):
         print(f"[{symbol}] same setup already stored recently, skipping")
         return ScanResult(candles=candles)
 
@@ -214,7 +234,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             "reject",
             symbol,
             cfg,
-            timeframe=cfg.timeframe,
+            timeframe=timeframe,
             rationale=confirmation.rationale,
             indicators=setup.indicators,
             headlines=headlines,
@@ -228,7 +248,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         print(f"[{symbol}] rejected by LLM: {confirmation.rationale}")
         return ScanResult(no_signal=NoSignalReport(
             symbol=symbol,
-            timeframe=cfg.timeframe,
+            timeframe=timeframe,
             kind="rejected",
             rationale=confirmation.rationale,
             indicators=setup.indicators,
@@ -239,7 +259,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             confidence=confirmation.confidence,
         ), candles=candles)
 
-    signal = make_signal(setup, confirmation, headlines, timeframe=cfg.timeframe)
+    signal = make_signal(setup, confirmation, headlines, timeframe=timeframe)
     try:
         with_retry(lambda: save_signal(
             signal, cfg.supabase_url, cfg.supabase_service_key, session=session,
@@ -251,7 +271,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         "confirm",
         symbol,
         cfg,
-        timeframe=cfg.timeframe,
+        timeframe=timeframe,
         rationale=signal.rationale,
         indicators=signal.indicators,
         headlines=signal.news_headlines,
@@ -270,7 +290,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
 def maybe_send_alert(signal, settings, cfg):
     """Telegram alert for a stored signal; never raises — a failed or
     skipped alert must not affect the rest of the run."""
-    if not cfg.telegram_bot_token or not cfg.telegram_chat_id:
+    if not cfg.telegram_bot_token or not cfg.telegram_channel_id:
         return
     if signal.confidence < settings.min_alert_confidence:
         print(f"[{signal.symbol}] confidence {signal.confidence} below alert "
@@ -278,7 +298,7 @@ def maybe_send_alert(signal, settings, cfg):
         return
     try:
         with_retry(lambda: send_alert(
-            signal, cfg.telegram_bot_token, cfg.telegram_chat_id,
+            signal, cfg.telegram_bot_token, cfg.telegram_channel_id,
         ))
         print(f"[{signal.symbol}] Telegram alert sent")
     except Exception as exc:
@@ -288,11 +308,11 @@ def maybe_send_alert(signal, settings, cfg):
 
 def maybe_send_no_signal_alert(report, cfg):
     """Telegram alert explaining why no signal was stored; never raises."""
-    if not cfg.telegram_bot_token or not cfg.telegram_chat_id:
+    if not cfg.telegram_bot_token or not cfg.telegram_channel_id:
         return
     try:
         with_retry(lambda: send_no_signal_alert(
-            report, cfg.telegram_bot_token, cfg.telegram_chat_id,
+            report, cfg.telegram_bot_token, cfg.telegram_channel_id,
         ))
         print(f"[{report.symbol}] Telegram no-signal alert sent")
     except Exception as exc:
@@ -302,7 +322,7 @@ def maybe_send_no_signal_alert(report, cfg):
 
 def maybe_send_run_summary(run_id: str, timeframe: str, outcomes: list[dict], cfg) -> None:
     """Telegram per-run summary; never raises."""
-    if not cfg.telegram_bot_token or not cfg.telegram_chat_id:
+    if not cfg.telegram_bot_token or not cfg.telegram_channel_id:
         return
     try:
         with_retry(lambda: send_run_summary(
@@ -310,7 +330,7 @@ def maybe_send_run_summary(run_id: str, timeframe: str, outcomes: list[dict], cf
             timeframe,
             outcomes,
             cfg.telegram_bot_token,
-            cfg.telegram_chat_id,
+            cfg.telegram_channel_id,
         ))
         print("Telegram run summary sent")
     except Exception as exc:
@@ -327,15 +347,16 @@ def main():
     settings = fetch_bot_settings(cfg.supabase_url, cfg.supabase_service_key,
                                   session=db_session)
     keys = cfg.sealion_api_keys or (cfg.sealion_api_key,)
+    session_label = "+".join(s.timeframe for s in TRADING_SESSIONS)
     print(f"Using {len(keys)} SEA-LION API key(s) across "
-          f"{len(settings.symbols)} symbol(s), "
-          f"strategy={settings.signal_strategy}.")
+          f"{len(settings.symbols)} symbol(s) in {len(TRADING_SESSIONS)} "
+          f"session(s) ({session_label}), strategy={settings.signal_strategy}.")
     # RSS feeds change slower than a run: fetch them once, filter per symbol.
     feed_titles = _fetch_feed_titles_safe(session=requests.Session())
 
     def scan_one(item):
-        """(index, symbol) -> (ScanResult | None, error | None)."""
-        index, symbol = item
+        """(index, symbol, TradingSession) -> (ScanResult | None, error | None)."""
+        index, symbol, trading_session = item
         # Symbols round-robin across keys so a full scan never concentrates
         # its LLM calls on a single key's rate limit.
         llm = SeaLionClient(
@@ -346,75 +367,93 @@ def main():
         try:
             return scan_symbol(
                 symbol, cfg, llm, strategy=settings.signal_strategy,
+                timeframe=trading_session.timeframe,
                 feed_titles=feed_titles, session=requests.Session(),
             ), None
         except Exception as exc:
             return None, exc
 
-    workers = max(1, min(len(settings.symbols), MAX_SCAN_WORKERS))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        results = list(pool.map(scan_one, enumerate(settings.symbols)))
-
     stored = 0
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     outcomes: list[dict] = []
     candles_by_symbol: dict = {}
-    # Alerts go out from the main thread, in symbol order, after all scans.
-    for symbol, (result, error) in zip(settings.symbols, results):
-        if error is not None:
-            print(f"[{symbol}] unexpected error, skipping: "
-                  f"{type(error).__name__}: {error}")
-            outcomes.append({
-                "symbol": symbol,
-                "status": "ERROR",
-                "extra": f"{type(error).__name__}",
-            })
-            continue
-        if result.candles:
-            candles_by_symbol[symbol] = result.candles
-        if result.signal is not None:
-            stored += 1
-            maybe_send_alert(result.signal, settings, cfg)
-            outcomes.append({
-                "symbol": symbol,
-                "status": "CONFIRMED",
-                "extra": f"{result.signal.direction.upper()} {result.signal.confidence}%",
-            })
-        elif result.no_signal is not None:
-            maybe_send_no_signal_alert(result.no_signal, cfg)
-            if result.no_signal.kind == "rejected":
+    workers = max(1, min(len(settings.symbols), MAX_SCAN_WORKERS))
+
+    # Each session (scalp, swing) scans all symbols in parallel, one session
+    # at a time — so a run's outcomes group by session for a clear summary.
+    for trading_session in TRADING_SESSIONS:
+        tasks = [(i, symbol, trading_session)
+                for i, symbol in enumerate(settings.symbols)]
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(scan_one, tasks))
+
+        # Alerts go out from the main thread, in symbol order, after the
+        # session's scans finish.
+        for symbol, (result, error) in zip(settings.symbols, results):
+            if error is not None:
+                print(f"[{symbol}] unexpected error, skipping: "
+                      f"{type(error).__name__}: {error}")
                 outcomes.append({
                     "symbol": symbol,
-                    "status": "REJECTED",
-                    "extra": (result.no_signal.rationale or "")[:140],
+                    "timeframe": trading_session.timeframe,
+                    "status": "ERROR",
+                    "extra": f"{type(error).__name__}",
                 })
+                continue
+            if result.candles:
+                candles_by_symbol[(symbol, trading_session.timeframe)] = result.candles
+            if result.signal is not None:
+                stored += 1
+                maybe_send_alert(result.signal, settings, cfg)
+                outcomes.append({
+                    "symbol": symbol,
+                    "timeframe": trading_session.timeframe,
+                    "status": "CONFIRMED",
+                    "extra": f"{result.signal.direction.upper()} {result.signal.confidence}%",
+                })
+            elif result.no_signal is not None:
+                maybe_send_no_signal_alert(result.no_signal, cfg)
+                if result.no_signal.kind == "rejected":
+                    outcomes.append({
+                        "symbol": symbol,
+                        "timeframe": trading_session.timeframe,
+                        "status": "REJECTED",
+                        "extra": (result.no_signal.rationale or "")[:140],
+                    })
+                else:
+                    outcomes.append({
+                        "symbol": symbol,
+                        "timeframe": trading_session.timeframe,
+                        "status": "NO SIGNAL",
+                        "extra": (result.no_signal.rationale or "")[:140],
+                    })
             else:
                 outcomes.append({
                     "symbol": symbol,
-                    "status": "NO SIGNAL",
-                    "extra": (result.no_signal.rationale or "")[:140],
+                    "timeframe": trading_session.timeframe,
+                    "status": "SKIPPED",
+                    "extra": "No change (dedup) or missing indicators/data",
                 })
-        else:
-            outcomes.append({
-                "symbol": symbol,
-                "status": "SKIPPED",
-                "extra": "No change (dedup) or missing indicators/data",
-            })
-    # After scanning, settle open signals whose TP or SL has been hit and
-    # expire stale ones, reusing this run's candles where they suffice.
+
+    # After scanning both sessions, settle open signals whose TP or SL has
+    # been hit and expire stale ones (per-session window), reusing this
+    # run's candles where they already cover a signal's life.
     for row, outcome in track_open_signals(cfg, prefetched=candles_by_symbol,
                                            session=db_session):
-        outcomes.append({
+        entry = {
             "symbol": row["symbol"],
             "status": OUTCOME_LABELS.get(outcome, outcome.upper()),
             "extra": f"{row['direction'].upper()} closed",
-        })
+        }
+        if row.get("timeframe"):
+            entry["timeframe"] = row["timeframe"]
+        outcomes.append(entry)
     try:
         with_retry(lambda: save_engine_run(
             {
                 "id": str(uuid.uuid4()),
                 "run_id": run_id,
-                "timeframe": cfg.timeframe,
+                "timeframe": session_label,
                 "stored_count": stored,
                 "outcomes": outcomes,
                 "finished_at": datetime.now(timezone.utc).isoformat(),
@@ -425,7 +464,7 @@ def main():
         ))
     except Exception as exc:
         print(f"Failed to store engine run heartbeat ({type(exc).__name__}), continuing")
-    maybe_send_run_summary(run_id, cfg.timeframe, outcomes, cfg)
+    maybe_send_run_summary(run_id, session_label, outcomes, cfg)
     print(f"Done. {stored} signal(s) stored in Supabase.")
 
 

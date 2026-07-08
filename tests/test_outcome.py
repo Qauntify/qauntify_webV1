@@ -128,7 +128,7 @@ def _config(telegram=False):
         supabase_url="https://abc.supabase.co",
         supabase_service_key="service-key",
         telegram_bot_token="bot-token" if telegram else "",
-        telegram_chat_id="chat-id" if telegram else "",
+        telegram_channel_id="chat-id" if telegram else "",
     )
 
 
@@ -207,7 +207,7 @@ def test_track_uses_prefetched_candles_that_cover_creation(monkeypatch):
         datetime.now(timezone.utc) - timedelta(days=2), hours=48, high=111.0)
 
     closed, fetches, closes, _ = _track(
-        monkeypatch, [row], prefetched={"BTCUSDT": covering})
+        monkeypatch, [row], prefetched={("BTCUSDT", "1h"): covering})
 
     assert fetches == []  # no refetch: scan candles already cover the signal
     assert closes == [(row["id"], "tp_hit")]
@@ -221,7 +221,7 @@ def test_track_refetches_when_prefetched_starts_too_late(monkeypatch):
         datetime.now(timezone.utc) - timedelta(days=9), hours=48, high=111.0)
 
     closed, fetches, closes, _ = _track(
-        monkeypatch, [row], prefetched={"BTCUSDT": too_short},
+        monkeypatch, [row], prefetched={("BTCUSDT", "1h"): too_short},
         fetched_candles=full)
 
     assert len(fetches) == 1  # prefetch misses the signal's early life
@@ -284,3 +284,65 @@ def test_format_outcome_alert_short_sl_is_negative():
     text = format_outcome_alert(row, "sl_hit")
     assert "SL HIT BTCUSDT" in text
     assert "SHORT -5.00%" in text
+
+
+def test_track_fetches_candles_in_the_rows_own_timeframe(monkeypatch):
+    row = _live_row(days_old=1, timeframe="15m", id="scalp-1")
+    intervals = []
+
+    monkeypatch.setattr(outcome_tracker, "list_open_signals",
+                        lambda url, key, session=None: [row])
+
+    def fake_fetch(symbol, interval, limit, start_time=None, session=None):
+        intervals.append(interval)
+        return _candles_from(
+            datetime.now(timezone.utc) - timedelta(days=1), hours=24,
+            high=111.0)
+
+    monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
+    closes = []
+    monkeypatch.setattr(
+        outcome_tracker, "close_signal",
+        lambda sig_id, status, closed_at, url, key, session=None:
+        closes.append((sig_id, status)))
+
+    track_open_signals(_config())
+
+    assert intervals == ["15m"]
+    assert closes == [("scalp-1", "tp_hit")]
+
+
+def test_track_prefetch_key_includes_timeframe(monkeypatch):
+    # 1h candles must never settle a 15m signal: the prefetch for
+    # ("BTCUSDT", "1h") does not apply to a 15m row.
+    row = _live_row(days_old=1, timeframe="15m")
+    covering = _candles_from(
+        datetime.now(timezone.utc) - timedelta(days=2), hours=48, high=111.0)
+
+    closed, fetches, closes, _ = _track(
+        monkeypatch, [row],
+        prefetched={("BTCUSDT", "1h"): covering},
+        fetched_candles=covering)
+
+    assert len(fetches) == 1  # wrong-timeframe prefetch ignored, refetched
+
+    closed, fetches, closes, _ = _track(
+        monkeypatch, [row],
+        prefetched={("BTCUSDT", "15m"): covering})
+
+    assert fetches == []  # right-timeframe prefetch is used
+
+
+def test_track_scalp_signals_expire_faster_than_swing(monkeypatch):
+    quiet = _candles_from(
+        datetime.now(timezone.utc) - timedelta(days=4), hours=48)
+
+    scalp = _live_row(days_old=3, timeframe="15m", id="scalp-old")
+    closed, _, closes, _ = _track(monkeypatch, [scalp],
+                                  fetched_candles=quiet)
+    assert closes == [("scalp-old", "expired")]
+
+    swing = _live_row(days_old=3, timeframe="1h", id="swing-young")
+    closed, _, closes, _ = _track(monkeypatch, [swing],
+                                  fetched_candles=quiet)
+    assert closes == []  # 3 days is nothing on the 1h session

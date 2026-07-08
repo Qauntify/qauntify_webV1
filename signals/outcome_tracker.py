@@ -1,20 +1,23 @@
 """Checks open signals against fresh candles and closes TP/SL hits.
 
 Signals are never deleted: a hit flips status to tp_hit/sl_hit and stamps
-closed_at; a signal open past MAX_OPEN_DAYS is closed as expired so stale
-setups stop counting as live. Runs as part of every engine run, after
-scanning.
+closed_at; a signal open past its session's max_open_days is closed as
+expired so stale setups stop counting as live. Runs as part of every engine
+run, after scanning both sessions.
 """
 from datetime import datetime, timedelta, timezone
 
 from signals.binance_client import fetch_candles
+from signals.models import TRADING_SESSIONS
 from signals.storage import close_signal, list_open_signals
 from signals.telegram_client import send_outcome_alert
 
-# A 1h setup unresolved after two weeks is no longer the trade the engine
-# proposed; expiring it keeps the win-rate denominator honest.
-MAX_OPEN_DAYS = 14
-# Enough hourly candles to cover the full expiry window in one fetch.
+# Rows stored before the timeframe column existed default to the swing
+# session's window, matching this engine's original (1h-only) behavior.
+_SESSION_BY_TIMEFRAME = {s.timeframe: s for s in TRADING_SESSIONS}
+_DEFAULT_MAX_OPEN_DAYS = next(
+    s.max_open_days for s in TRADING_SESSIONS if s.timeframe == "1h")
+# Enough candles to cover the longest session's expiry window in one fetch.
 HISTORY_LIMIT = 1000
 
 
@@ -51,9 +54,9 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
     signals open past MAX_OPEN_DAYS; returns the closed rows as (row, status)
     pairs. Never raises — outcome tracking must not break a scan run.
 
-    `prefetched` maps symbol -> closed candles already fetched by the scan;
-    a signal's history is refetched from its created_at only when the scan
-    candles don't reach back that far."""
+    `prefetched` maps (symbol, timeframe) -> closed candles already fetched
+    by the scan; a signal's history is refetched from its created_at only
+    when the scan candles don't reach back that far."""
     try:
         open_rows = list_open_signals(cfg.supabase_url,
                                       cfg.supabase_service_key,
@@ -68,18 +71,18 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
     prefetched = prefetched or {}
     fetch_cache: dict = {}
 
-    def candles_covering(symbol, created_ms):
+    def candles_covering(symbol, timeframe, created_ms):
         """Closed candles spanning the signal's life, or None when market
         data is unavailable (skip the row and retry next run)."""
-        pre = prefetched.get(symbol)
+        pre = prefetched.get((symbol, timeframe))
         if pre and pre[0].open_time <= created_ms:
             return pre
-        key = (symbol, created_ms)
+        key = (symbol, timeframe, created_ms)
         if key not in fetch_cache:
             try:
                 # Drop the still-forming candle: only closed bars decide hits.
                 fetch_cache[key] = fetch_candles(
-                    symbol, cfg.timeframe, HISTORY_LIMIT,
+                    symbol, timeframe, HISTORY_LIMIT,
                     start_time=int(created_ms), session=session,
                 )[:-1]
             except Exception as exc:
@@ -91,10 +94,14 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
     closed = []
     for row in open_rows:
         symbol = row["symbol"]
+        timeframe = row.get("timeframe") or "1h"
+        session_cfg = _SESSION_BY_TIMEFRAME.get(timeframe)
+        max_open_days = (session_cfg.max_open_days if session_cfg
+                         else _DEFAULT_MAX_OPEN_DAYS)
         created = datetime.fromisoformat(row["created_at"])
         created_ms = created.timestamp() * 1000
-        expires_at = created + timedelta(days=MAX_OPEN_DAYS)
-        candles = candles_covering(symbol, created_ms)
+        expires_at = created + timedelta(days=max_open_days)
+        candles = candles_covering(symbol, timeframe, created_ms)
         if candles is None:
             continue
         # Hits only count inside the expiry window: a level touched weeks
@@ -120,10 +127,10 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
         closed.append((row, outcome))
         # Expiry is bookkeeping, not a tradeable outcome — no alert.
         if (outcome in ("tp_hit", "sl_hit")
-                and cfg.telegram_bot_token and cfg.telegram_chat_id):
+                and cfg.telegram_bot_token and cfg.telegram_channel_id):
             try:
                 send_outcome_alert(row, outcome, cfg.telegram_bot_token,
-                                   cfg.telegram_chat_id)
+                                   cfg.telegram_channel_id)
                 print(f"[{symbol}] Telegram outcome alert sent")
             except Exception as exc:
                 print(f"[{symbol}] Telegram outcome alert failed "

@@ -108,6 +108,9 @@ def format_run_summary(run_id: str, timeframe: str, outcomes: list[dict]) -> str
     # One compact line per symbol to avoid spammy multi-paragraph messages.
     for o in outcomes:
         symbol = html.escape(str(o.get("symbol", "")))
+        tf = o.get("timeframe")
+        if tf:
+            symbol = f"{symbol} [{html.escape(str(tf))}]"
         status = html.escape(str(o.get("status", "")))
         extra = str(o.get("extra", "") or "")
         extra = html.escape(extra)

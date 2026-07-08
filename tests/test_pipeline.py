@@ -344,15 +344,18 @@ def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
     monkeypatch.setattr(run_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
 
+    # 3 symbols per session; the barrier is reused across the two sessions'
+    # sequential batches since each ThreadPoolExecutor fully drains before
+    # the next session starts.
     started = threading.Barrier(3, timeout=5)
     scanned = []
 
-    def fake_scan(symbol, cfg, llm, *, strategy, feed_titles=None,
+    def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
                   session=None):
-        # Every scan must be in flight before any finishes — proves the
-        # loop is parallel, not sequential.
+        # Every scan in a session's batch must be in flight before any
+        # finishes — proves the loop is parallel, not sequential.
         started.wait()
-        scanned.append(symbol)
+        scanned.append((symbol, timeframe))
         return run_module.ScanResult()
 
     monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
@@ -362,11 +365,12 @@ def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
 
     run_module.main()
 
-    assert sorted(scanned) == ["BTCUSDT", "ETHUSDT", "PAXGUSDT"]
+    assert sorted(scanned) == sorted(
+        (symbol, trading_session.timeframe)
+        for trading_session in run_module.TRADING_SESSIONS
+        for symbol in settings.symbols
+    )
     assert len(runs) == 1
-    statuses = [(o["symbol"], o["status"]) for o in runs[0]["outcomes"]]
-    assert statuses == [("BTCUSDT", "SKIPPED"), ("ETHUSDT", "SKIPPED"),
-                        ("PAXGUSDT", "SKIPPED")]
 
 
 def test_main_reports_expired_signals_in_run_summary(monkeypatch):
@@ -378,8 +382,8 @@ def test_main_reports_expired_signals_in_run_summary(monkeypatch):
                         lambda session=None: [])
     monkeypatch.setattr(
         run_module, "scan_symbol",
-        lambda symbol, cfg, llm, *, strategy, feed_titles=None, session=None:
-        run_module.ScanResult())
+        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+        session=None: run_module.ScanResult())
 
     expired_row = {"symbol": "ETHUSDT", "direction": "long", "entry": 100.0}
     monkeypatch.setattr(run_module, "track_open_signals",
@@ -406,8 +410,8 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
                         lambda session=None: [])
     monkeypatch.setattr(
         run_module, "scan_symbol",
-        lambda symbol, cfg, llm, *, strategy, feed_titles=None, session=None:
-        run_module.ScanResult(candles=candles))
+        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+        session=None: run_module.ScanResult(candles=candles))
 
     seen = {}
 
@@ -421,4 +425,130 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
 
     run_module.main()
 
-    assert seen["prefetched"] == {"BTCUSDT": candles}
+    assert seen["prefetched"] == {
+        ("BTCUSDT", "15m"): candles,
+        ("BTCUSDT", "1h"): candles,
+    }
+
+
+def test_trading_sessions_define_scalp_and_swing():
+    from signals.models import TRADING_SESSIONS
+
+    by_name = {s.name: s for s in TRADING_SESSIONS}
+    assert set(by_name) == {"scalp", "swing"}
+    assert by_name["scalp"].timeframe == "15m"
+    assert by_name["swing"].timeframe == "1h"
+    # Scalp must expire much faster than swing: a 15m setup that sat open
+    # for two weeks is meaningless.
+    assert by_name["scalp"].max_open_days < by_name["swing"].max_open_days
+
+
+def test_scan_symbol_uses_the_session_timeframe(monkeypatch):
+    seen = {}
+
+    def capture_candles(symbol, interval, limit, session=None):
+        seen["interval"] = interval
+        return _flat_candles()
+
+    monkeypatch.setattr(run_module, "fetch_candles", capture_candles)
+    monkeypatch.setattr(run_module, "detect_setup",
+                        lambda *args, **kwargs: SETUP)
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
+    saved = _capture_saves(monkeypatch)
+    events = _capture_ai_events(monkeypatch)
+    llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 80, "rationale": "ok"}')
+
+    result = scan_symbol("BTCUSDT", _config(), llm, timeframe="15m")
+
+    assert seen["interval"] == "15m"
+    assert result.signal.timeframe == "15m"
+    assert saved[0][0].timeframe == "15m"
+    assert events[0][0]["timeframe"] == "15m"
+
+
+def test_already_signaled_dedup_window_scales_with_timeframe(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    # Same-direction signal stored 50 minutes ago.
+    stored_at = datetime.now(timezone.utc) - timedelta(minutes=50)
+    captured = {}
+
+    def fake_latest(symbol, url, key, timeframe=None, session=None):
+        captured.setdefault("timeframes", []).append(timeframe)
+        return {"direction": "long", "created_at": stored_at.isoformat()}
+
+    monkeypatch.setattr(run_module, "latest_signal", fake_latest)
+
+    # 1h bars: dedup window 3h -> still a duplicate.
+    assert run_module.already_signaled(SETUP, _config(), timeframe="1h") is True
+    # 15m bars: dedup window 45m -> 50 minutes ago is a fresh setup again.
+    assert run_module.already_signaled(SETUP, _config(), timeframe="15m") is False
+    # The lookup itself must be per-timeframe so sessions don't block each other.
+    assert captured["timeframes"] == ["1h", "15m"]
+
+
+def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
+    settings = BotSettings(symbols=("BTCUSDT", "ETHUSDT"))
+    monkeypatch.setattr(run_module, "load_config", _config)
+    monkeypatch.setattr(run_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(run_module, "fetch_feed_titles",
+                        lambda session=None: [])
+    monkeypatch.setattr(run_module, "track_open_signals",
+                        lambda cfg, prefetched=None, session=None: [])
+
+    scanned = []
+
+    def fake_scan(symbol, cfg, llm, *, strategy, timeframe,
+                  feed_titles=None, session=None):
+        scanned.append((symbol, timeframe))
+        return run_module.ScanResult()
+
+    monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
+    runs = []
+    monkeypatch.setattr(run_module, "save_engine_run",
+                        lambda run, url, key, session=None: runs.append(run))
+
+    run_module.main()
+
+    assert sorted(scanned) == [
+        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"),
+        ("ETHUSDT", "15m"), ("ETHUSDT", "1h"),
+    ]
+    outcomes = runs[0]["outcomes"]
+    assert [(o["symbol"], o["timeframe"]) for o in outcomes] == [
+        ("BTCUSDT", "15m"), ("ETHUSDT", "15m"),
+        ("BTCUSDT", "1h"), ("ETHUSDT", "1h"),
+    ]
+
+
+def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
+    settings = BotSettings(symbols=("BTCUSDT",))
+    candles = _flat_candles(n=5)
+    monkeypatch.setattr(run_module, "load_config", _config)
+    monkeypatch.setattr(run_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(run_module, "fetch_feed_titles",
+                        lambda session=None: [])
+    monkeypatch.setattr(
+        run_module, "scan_symbol",
+        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+        session=None: run_module.ScanResult(candles=candles))
+
+    seen = {}
+
+    def capture_track(cfg, prefetched=None, session=None):
+        seen["prefetched"] = prefetched
+        return []
+
+    monkeypatch.setattr(run_module, "track_open_signals", capture_track)
+    monkeypatch.setattr(run_module, "save_engine_run",
+                        lambda run, url, key, session=None: None)
+
+    run_module.main()
+
+    assert seen["prefetched"] == {
+        ("BTCUSDT", "15m"): candles,
+        ("BTCUSDT", "1h"): candles,
+    }

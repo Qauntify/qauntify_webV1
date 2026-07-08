@@ -79,7 +79,7 @@ def _cfg(token="bot-token", chat="chat-42"):
     return Config(
         sealion_api_key="k", supabase_url="https://abc.supabase.co",
         supabase_service_key="s", telegram_bot_token=token,
-        telegram_chat_id=chat,
+        telegram_channel_id=chat,
     )
 
 
@@ -266,3 +266,16 @@ def test_maybe_send_run_summary_sends_when_configured(monkeypatch):
                         lambda *a, **k: calls.append(a))
     maybe_send_run_summary("run-1", "1h", [{"symbol": "BTCUSDT", "status": "NO SIGNAL"}], _cfg())
     assert len(calls) == 1
+
+
+def test_format_run_summary_tags_lines_with_timeframe():
+    from signals.telegram_client import format_run_summary
+
+    text = format_run_summary("run-1", "15m+1h", [
+        {"symbol": "BTCUSDT", "status": "CONFIRMED", "extra": "LONG 82%",
+         "timeframe": "15m"},
+        {"symbol": "BTCUSDT", "status": "NO SIGNAL", "extra": "",
+         "timeframe": "1h"},
+    ])
+    assert "BTCUSDT [15m]: CONFIRMED — LONG 82%" in text
+    assert "BTCUSDT [1h]: NO SIGNAL" in text

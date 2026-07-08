@@ -125,3 +125,20 @@ def test_fetch_bot_settings_defaults_on_malformed_row():
         "https://abc.supabase.co", "service-key", session=session,
     )
     assert settings == BotSettings()
+
+
+def test_latest_signal_filters_by_timeframe():
+    session = FakeGetSession(payload=[])
+    from signals.storage import latest_signal
+
+    latest_signal("BTCUSDT", "https://abc.supabase.co", "key",
+                  timeframe="15m", session=session)
+    assert "timeframe=eq.15m" in session.last_url
+
+
+def test_list_open_signals_selects_timeframe():
+    session = FakeGetSession(payload=[])
+    from signals.storage import list_open_signals
+
+    list_open_signals("https://abc.supabase.co", "key", session=session)
+    assert "timeframe" in session.last_url

@@ -49,6 +49,25 @@ class NoSignalReport:
 SIGNAL_STRATEGIES = ("ema_cross", "ict_smc")
 DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
+TIMEFRAME_MINUTES = {"15m": 15, "1h": 60}
+
+
+@dataclass(frozen=True)
+class TradingSession:
+    """One signal stream: a name, the timeframe it scans, and how long its
+    signals stay meaningful before expiring."""
+    name: str        # "scalp" | "swing"
+    timeframe: str   # Binance kline interval
+    max_open_days: int
+
+
+# Every engine run scans each session; signals carry their session's
+# timeframe so streams never collide (dedup, outcomes, dashboard).
+TRADING_SESSIONS = (
+    TradingSession(name="scalp", timeframe="15m", max_open_days=2),
+    TradingSession(name="swing", timeframe="1h", max_open_days=14),
+)
+
 
 @dataclass(frozen=True)
 class BotSettings:

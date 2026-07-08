@@ -70,6 +70,22 @@ describe("getSignals", () => {
     expect(options.cache).toBe("no-store");
   });
 
+  it("filters by timeframe when a session is requested", async () => {
+    const fetchFn = mockFetch([]);
+    await getSignals(10, undefined, "15m");
+    const [url] = fetchFn.mock.calls[0];
+    expect(url).toBe(
+      "https://abc.supabase.co/rest/v1/signals?select=*&timeframe=eq.15m&order=created_at.desc&limit=10",
+    );
+  });
+
+  it("omits the timeframe filter when no session is requested", async () => {
+    const fetchFn = mockFetch([]);
+    await getSignals(10);
+    const [url] = fetchFn.mock.calls[0];
+    expect(url).not.toContain("timeframe=eq.");
+  });
+
   it("keeps the expired status instead of treating it as open", async () => {
     mockFetch([{ ...ROW, status: "expired" }]);
     const signals = await getSignals();
@@ -134,5 +150,12 @@ describe("getStats", () => {
     expect(stats.tpHits).toBe(1);
     expect(stats.slHits).toBe(0);
     expect(stats.winRate).toBe(100); // expired is not a loss — or a win
+  });
+
+  it("filters by timeframe when a session is requested", async () => {
+    const fetchFn = mockFetch([]);
+    await getStats(undefined, "1h");
+    const [url] = fetchFn.mock.calls[0];
+    expect(url).toContain("timeframe=eq.1h");
   });
 });
