@@ -66,69 +66,85 @@ function ConfidenceBar({ value, compact = false }: { value: number; compact?: bo
   );
 }
 
-function SignalCard({
+export function SignalCard({
   signal,
   onSelect,
+  adminSlot,
 }: {
   signal: Signal;
-  onSelect: (signal: Signal) => void;
+  onSelect?: (signal: Signal) => void;
+  adminSlot?: React.ReactNode;
 }) {
   const isLong = signal.direction === "long";
+  const Component = onSelect ? "button" : "div";
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(signal)}
-      className={`group w-full rounded-lg border border-line bg-card text-left shadow-[var(--shadow-card)] transition-all hover:border-accent/40 hover:shadow-[var(--shadow-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${
-        isLong ? "border-l-[3px] border-l-long" : "border-l-[3px] border-l-short"
-      }`}
+    <Component
+      type={onSelect ? "button" : undefined}
+      onClick={onSelect ? () => onSelect(signal) : undefined}
+      className={`group relative w-full overflow-hidden rounded-xl border border-line bg-card text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-accent/40 hover:shadow-xl hover:shadow-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper`}
     >
-      <div className="flex items-start justify-between gap-3 p-4 pb-3">
+      {/* Dynamic border based on direction */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${isLong ? "bg-long" : "bg-short"} transition-all duration-300 group-hover:w-1.5`} />
+      
+      {/* Subtle background glow on hover */}
+      <div className={`absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br ${isLong ? "from-long/5" : "from-short/5"} to-transparent pointer-events-none`} />
+
+      <div className="relative flex items-start justify-between gap-3 p-5 pb-4 pl-6">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-base font-bold text-ink">{signal.symbol}</span>
+            <span className="font-mono text-lg font-bold tracking-tight text-ink drop-shadow-sm">{signal.symbol}</span>
             <DirectionPill direction={signal.direction} />
           </div>
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase text-accent">
+          <div className="mt-2 flex items-center gap-2">
+            <span className="rounded-md bg-accent/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-accent border border-accent/20">
               {signal.timeframe}
             </span>
             <StatusPill status={signal.status} />
           </div>
         </div>
-        <ConfidenceBar value={signal.confidence} compact />
+        <div className="flex flex-col items-end justify-center pt-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1.5">Confidence</p>
+          <ConfidenceBar value={signal.confidence} compact />
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 border-t border-line px-4 py-3">
+      <div className="relative grid grid-cols-3 gap-3 border-t border-line/50 px-6 py-4 bg-slate/5">
         <div>
-          <p className="text-[10px] font-medium uppercase tracking-wide text-slate">Entry</p>
-          <p className="mt-0.5 font-mono text-sm font-semibold text-ink">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">Entry</p>
+          <p className="font-mono text-sm font-bold text-ink">
             {formatPrice(signal.entry)}
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-medium uppercase tracking-wide text-slate">Stop</p>
-          <p className="mt-0.5 font-mono text-sm font-semibold text-short">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">Stop Loss</p>
+          <p className="font-mono text-sm font-bold text-short drop-shadow-sm">
             {formatPrice(signal.stopLoss)}
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-medium uppercase tracking-wide text-slate">Target</p>
-          <p className="mt-0.5 font-mono text-sm font-semibold text-long">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">Target</p>
+          <p className="font-mono text-sm font-bold text-long drop-shadow-sm">
             {formatPrice(signal.takeProfit)}
           </p>
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-line px-4 py-2.5">
-        <span className="font-mono text-xs text-slate">
+      <div className="relative flex items-center justify-between border-t border-line/50 px-6 py-3 bg-card transition-colors duration-300 group-hover:bg-slate/5">
+        <span className="flex items-center gap-1.5 font-mono text-xs font-medium text-slate">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-70"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           {formatRelativeTime(signal.createdAt)}
         </span>
-        <span className="text-xs font-medium text-accent opacity-0 transition-opacity group-hover:opacity-100">
-          View details
-        </span>
+        {adminSlot ? (
+          <div className="z-10">{adminSlot}</div>
+        ) : onSelect ? (
+          <span className="flex items-center gap-1 text-xs font-semibold text-accent opacity-0 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0 group-hover:opacity-100">
+            View details 
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </span>
+        ) : null}
       </div>
-    </button>
+    </Component>
   );
 }
 

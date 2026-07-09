@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
-import { TradeTicket } from "@/components/shared/TradeTicket";
+import { DailyPnLCalendar } from "@/components/admin/DailyPnLCalendar";
 import { requireAdminPage } from "@/lib/admin-guard";
-import { getSignals, getStats } from "@/lib/signals";
+import { getDailyPnLStats, getStats } from "@/lib/signals";
 import { getEngineStatus, listUsers, serviceRoleToken } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
@@ -15,11 +15,11 @@ export default async function AdminOverview() {
   await requireAdminPage();
 
   const token = serviceRoleToken();
-  const [users, stats, signals, engineStatus] = await Promise.all([
+  const [users, stats, engineStatus, pnlData] = await Promise.all([
     listUsers(),
     getStats(token),
-    getSignals(5, token),
     getEngineStatus(),
+    getDailyPnLStats(token, 365),
   ]);
 
   const engine = engineStatus
@@ -52,7 +52,7 @@ export default async function AdminOverview() {
     <>
       <h1 className="text-2xl font-bold">Overview</h1>
       <p className="mt-1 text-sm text-slate">
-        Engine health, member stats, and latest signals.
+        Engine health and member stats.
       </p>
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {tiles.map((tile) => (
@@ -65,19 +65,8 @@ export default async function AdminOverview() {
           </div>
         ))}
       </div>
-      <h2 className="mt-12 text-xl font-bold">Latest signals</h2>
-      {signals.length > 0 ? (
-        <div className="mt-4 flex flex-col gap-5">
-          {signals.map((s) => (
-            <TradeTicket key={s.id} signal={s} />
-          ))}
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-slate">
-          Nothing stored yet — the engine scans every 10 minutes, and
-          confirmed setups land here.
-        </p>
-      )}
+      
+      <DailyPnLCalendar data={pnlData} endDateStr={new Date().toISOString()} />
     </>
   );
 }

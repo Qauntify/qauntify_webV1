@@ -378,3 +378,17 @@ export async function getEngineStatus(): Promise<EngineStatus | null> {
     return null;
   }
 }
+
+export async function deleteSignal(id: string): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+  try {
+    const response = await fetch(`${cfg.url}/rest/v1/signals?id=eq.${id}`, {
+      method: "DELETE",
+      headers: headers(cfg.serviceKey),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}

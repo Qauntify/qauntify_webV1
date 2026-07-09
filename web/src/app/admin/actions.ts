@@ -1,8 +1,10 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  deleteSignal,
   deleteUser,
   getUserEmail,
   isAdminEmail,
@@ -83,4 +85,16 @@ export async function removeUser(formData: FormData) {
       ? "/admin/users?deleted=1"
       : `/admin/users?error=${encodeURIComponent("Could not delete that user.")}`,
   );
+}
+
+export async function removeSignal(formData: FormData) {
+  await requireAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const ok = await deleteSignal(id);
+  if (ok) {
+    revalidatePath("/admin", "layout");
+  }
 }

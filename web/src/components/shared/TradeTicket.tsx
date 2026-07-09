@@ -74,10 +74,12 @@ export function TradeTicket({
   signal,
   sample = false,
   showRationale = true,
+  adminSlot,
 }: {
   signal: Signal;
   sample?: boolean;
   showRationale?: boolean;
+  adminSlot?: React.ReactNode;
 }) {
   const isLong = signal.direction === "long";
   return (
@@ -114,12 +116,15 @@ export function TradeTicket({
         <span className="font-mono">
           {sample ? "example signal" : formatRelativeTime(signal.createdAt)}
         </span>
-        {signal.newsHeadlines.length > 0 && (
-          <span>
-            {signal.newsHeadlines.length} headline
-            {signal.newsHeadlines.length === 1 ? "" : "s"} reviewed
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {signal.newsHeadlines.length > 0 && (
+            <span>
+              {signal.newsHeadlines.length} headline
+              {signal.newsHeadlines.length === 1 ? "" : "s"} reviewed
+            </span>
+          )}
+          {adminSlot}
+        </div>
       </div>
     </article>
   );

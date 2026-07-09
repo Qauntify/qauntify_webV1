@@ -16,8 +16,8 @@ const links = [
 
 export async function Nav() {
   const supabase = await createClient();
-  const { data } = await supabase.auth.getSession();
-  const email = data.session?.user.email ?? null;
+  const { data: { user } } = await supabase.auth.getUser();
+  const email = user?.email ?? null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-card/90 backdrop-blur-md">
@@ -44,15 +44,15 @@ export async function Nav() {
                   Sign out
                 </button>
               </form>
+              <Link href="/dashboard" className="btn-primary-sm">
+                Dashboard
+              </Link>
             </>
           ) : (
-            <Link href="/login" className="btn-ghost hidden sm:inline">
-              Sign in
+            <Link href="/signup" className="btn-primary-sm">
+              Get Started
             </Link>
           )}
-          <Link href="/dashboard" className="btn-primary-sm">
-            Dashboard
-          </Link>
         </div>
       </div>
     </header>

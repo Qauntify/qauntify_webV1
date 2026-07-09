@@ -12,12 +12,12 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
-  const { data } = await supabase.auth.getSession();
-  const email = data.session?.user.email ?? "";
+  const { data: { user } } = await supabase.auth.getUser();
+  const email = user?.email ?? "";
 
   return (
-    <div className="flex min-h-full flex-1">
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-line bg-sidebar lg:flex">
+    <div className="flex min-h-screen flex-1">
+      <aside className="hidden w-56 flex-col border-r border-line bg-sidebar lg:flex fixed inset-y-0 left-0 z-40">
         <div className="flex h-14 items-center border-b border-line px-4">
           <Logo suffix="admin" />
         </div>
@@ -43,7 +43,7 @@ export default async function AdminLayout({
           </div>
         </div>
       </aside>
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col lg:ml-56">
         <header className="flex h-14 items-center justify-between border-b border-line bg-card px-4 lg:px-8">
           <div className="lg:hidden">
             <Logo suffix="admin" />

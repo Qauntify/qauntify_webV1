@@ -85,6 +85,40 @@ async function fetchRows(
   }
 }
 
+async function fetchRowsPaginated(
+  query: string,
+  page: number,
+  pageSize: number,
+  accessToken?: string,
+): Promise<{ rows: SignalRow[]; total: number } | null> {
+  const config = supabaseConfig();
+  if (!config) return null;
+  const offset = (page - 1) * pageSize;
+  const rangeEnd = offset + pageSize - 1;
+  try {
+    const response = await fetch(
+      `${config.url}/rest/v1/signals?${query}`,
+      {
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${accessToken ?? config.anonKey}`,
+          Range: `${offset}-${rangeEnd}`,
+          Prefer: "count=exact",
+        },
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) return null;
+    const rows = (await response.json()) as SignalRow[];
+    const contentRange = response.headers.get("content-range");
+    const match = contentRange?.match(/\d+-\d+\/(\d+|\*)/);
+    const total = match && match[1] !== "*" ? Number(match[1]) : rows.length;
+    return { rows: Array.isArray(rows) ? rows : [], total };
+  } catch {
+    return null;
+  }
+}
+
 function parseRow(row: SignalRow): Signal | null {
   if (row.direction !== "long" && row.direction !== "short") return null;
   if (!Array.isArray(row.news_headlines)) return null;
@@ -154,4 +188,92 @@ export async function getStats(
     slHits,
     winRate: closed > 0 ? Math.round((tpHits / closed) * 100) : null,
   };
+}
+
+export const SIGNALS_PAGE_SIZE = 12;
+
+export type SignalsPage = {
+  signals: Signal[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export async function getSignalsPaginated(
+  page = 1,
+  accessToken?: string,
+  timeframe?: string,
+  pageSize = SIGNALS_PAGE_SIZE,
+): Promise<SignalsPage> {
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const timeframeFilter = timeframe ? `&timeframe=eq.${timeframe}` : "";
+  const query = `select=*${timeframeFilter}&order=created_at.desc`;
+
+  const result = await fetchRowsPaginated(query, safePage, pageSize, accessToken);
+  if (!result) {
+    return { signals: [], page: 1, pageSize, total: 0, totalPages: 1 };
+  }
+
+  const signals = result.rows.map(parseRow).filter((s): s is Signal => s !== null);
+  const totalPages = Math.max(1, Math.ceil(result.total / pageSize));
+  return {
+    signals,
+    page: Math.min(safePage, totalPages),
+    pageSize,
+    total: result.total,
+    totalPages,
+  };
+}
+
+export type DailyPnL = {
+  date: string; // YYYY-MM-DD
+  wins: number;
+  losses: number;
+  net: number; // wins - losses
+};
+
+export async function getDailyPnLStats(
+  accessToken?: string,
+  days = 365
+): Promise<DailyPnL[]> {
+  // Fetch all signals in the last N days
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  
+  const query = `select=created_at,status&created_at=gte.${cutoff.toISOString()}&order=created_at.desc`;
+  const rows = await fetchRows(query, accessToken);
+  
+  if (!rows || rows.length === 0) return [];
+
+  const dailyMap = new Map<string, { wins: number; losses: number }>();
+
+  for (const r of rows) {
+    const status = parseStatus(r.status);
+    if (status !== "tp_hit" && status !== "sl_hit") continue;
+    
+    // Get YYYY-MM-DD
+    const dateStr = new Date(r.created_at).toISOString().split("T")[0];
+    
+    if (!dailyMap.has(dateStr)) {
+      dailyMap.set(dateStr, { wins: 0, losses: 0 });
+    }
+    
+    const stats = dailyMap.get(dateStr)!;
+    if (status === "tp_hit") stats.wins++;
+    if (status === "sl_hit") stats.losses++;
+  }
+
+  const result: DailyPnL[] = [];
+  for (const [date, stats] of dailyMap.entries()) {
+    result.push({
+      date,
+      wins: stats.wins,
+      losses: stats.losses,
+      net: stats.wins - stats.losses,
+    });
+  }
+
+  // Sort by date ascending (oldest to newest)
+  return result.sort((a, b) => a.date.localeCompare(b.date));
 }
