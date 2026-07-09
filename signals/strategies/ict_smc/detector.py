@@ -9,6 +9,11 @@ SWEEP_LOOKBACK = 12
 CHOCH_LOOKBACK = 5
 ATR_STOP_BUFFER = 0.5
 RISK_REWARD = 2.0
+# A tight PIVOT_LEFT/RIGHT window flags almost any small wick past a prior
+# swing point as a "sweep." Requiring the wick to clear the level by at
+# least this fraction of ATR filters that noise out, keeping only sweeps
+# large enough to plausibly be a genuine liquidity grab.
+MIN_SWEEP_ATR_FRACTION = 0.15
 
 
 def pivot_lows(candles: list[Candle], left=PIVOT_LEFT, right=PIVOT_RIGHT) -> list[int]:
@@ -67,6 +72,8 @@ def detect_setup(symbol, candles, atr14):
         bar = window[sweep_i]
         if bar.low >= swing_low or bar.close <= swing_low:
             continue
+        if swing_low - bar.low < MIN_SWEEP_ATR_FRACTION * atr_value:
+            continue
         choch_slice = window[sweep_i + 1:sweep_i + 1 + CHOCH_LOOKBACK]
         if not choch_slice:
             continue
@@ -102,6 +109,8 @@ def detect_setup(symbol, candles, atr14):
             continue
         bar = window[sweep_i]
         if bar.high <= swing_high or bar.close >= swing_high:
+            continue
+        if bar.high - swing_high < MIN_SWEEP_ATR_FRACTION * atr_value:
             continue
         choch_slice = window[sweep_i + 1:sweep_i + 1 + CHOCH_LOOKBACK]
         if not choch_slice:

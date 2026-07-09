@@ -1,5 +1,6 @@
 """Persists signals + AI scan events to Supabase (PostgREST insert)."""
 from dataclasses import asdict
+from urllib.parse import quote
 
 import requests
 
@@ -139,6 +140,90 @@ def latest_ai_event_time(symbol: str, timeframe: str, supabase_url: str,
     response.raise_for_status()
     rows = response.json()
     return rows[0]["created_at"] if rows else None
+
+
+def latest_ai_event_times_since(symbols, timeframe: str, since: str,
+                                supabase_url: str, service_key: str,
+                                session=None) -> dict:
+    """created_at of the newest ai_events row for each symbol in `symbols`
+    at `timeframe`, restricted to rows at/after `since` (an ISO timestamp) —
+    the only rows a throttle check ever needs. One query replaces what
+    would otherwise be one `latest_ai_event_time` call per symbol. Symbols
+    with no qualifying row are simply absent from the result (same meaning
+    as `latest_ai_event_time` returning None). Raises on any failure."""
+    if not symbols:
+        return {}
+    session = session or requests.Session()
+    symbols_filter = ",".join(symbols)
+    response = session.get(
+        f"{supabase_url}/rest/v1/ai_events"
+        f"?symbol=in.({symbols_filter})&timeframe=eq.{timeframe}"
+        f"&created_at=gte.{quote(since, safe='')}"
+        "&select=symbol,created_at&order=symbol.asc,created_at.desc",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    latest: dict = {}
+    for row in response.json():
+        # Rows arrive sorted newest-first within each symbol group, so the
+        # first occurrence of a symbol is already its latest timestamp.
+        latest.setdefault(row["symbol"], row["created_at"])
+    return latest
+
+
+def latest_signals_since(symbols, timeframe: str, since: str,
+                         supabase_url: str, service_key: str,
+                         session=None) -> dict:
+    """{"direction", "created_at"} of the newest signal for each symbol in
+    `symbols` at `timeframe`, restricted to rows at/after `since` — the
+    only rows a dedup check ever needs. One query replaces what would
+    otherwise be one `latest_signal` call per symbol. Symbols with no
+    qualifying row are absent from the result. Raises on any failure."""
+    if not symbols:
+        return {}
+    session = session or requests.Session()
+    symbols_filter = ",".join(symbols)
+    response = session.get(
+        f"{supabase_url}/rest/v1/signals"
+        f"?symbol=in.({symbols_filter})&timeframe=eq.{timeframe}"
+        f"&created_at=gte.{quote(since, safe='')}"
+        "&select=symbol,direction,created_at&order=symbol.asc,created_at.desc",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    latest: dict = {}
+    for row in response.json():
+        latest.setdefault(row["symbol"], row)
+    return latest
+
+
+def list_closed_signals(supabase_url: str, service_key: str, session=None):
+    """Every signal that has reached a terminal status (tp_hit/sl_hit/
+    expired), for calibration reporting — win rate and expectancy can only
+    be computed once an outcome is known. Raises on any failure."""
+    session = session or requests.Session()
+    response = session.get(
+        f"{supabase_url}/rest/v1/signals"
+        "?status=in.(tp_hit,sl_hit,expired)"
+        "&select=symbol,timeframe,direction,entry,stop_loss,take_profit,"
+        "confidence,status,indicators,created_at,closed_at"
+        "&order=created_at.asc",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
 
 
 def fetch_bot_settings(supabase_url: str, service_key: str,

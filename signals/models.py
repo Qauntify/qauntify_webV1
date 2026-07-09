@@ -59,12 +59,18 @@ class TradingSession:
     name: str        # "scalp" | "swing"
     timeframe: str   # Binance kline interval
     max_open_days: int
+    # When set, a setup on this session's timeframe only fires if it agrees
+    # with the EMA9/21 trend direction on this higher timeframe — a faster
+    # session confirming against a slower one, to cut whipsaws that go
+    # against the larger trend. None skips the check (no slower reference).
+    confluence_timeframe: str | None = None
 
 
 # Every engine run scans each session; signals carry their session's
 # timeframe so streams never collide (dedup, outcomes, dashboard).
 TRADING_SESSIONS = (
-    TradingSession(name="scalp", timeframe="15m", max_open_days=2),
+    TradingSession(name="scalp", timeframe="15m", max_open_days=2,
+                   confluence_timeframe="1h"),
     TradingSession(name="swing", timeframe="1h", max_open_days=14),
 )
 

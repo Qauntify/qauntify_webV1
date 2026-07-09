@@ -66,7 +66,7 @@ export default async function AdminOverview() {
         ))}
       </div>
       
-      <DailyPnLCalendar data={pnlData} endDateStr={new Date().toISOString()} />
+      <DailyPnLCalendar data={pnlData} />
     </>
   );
 }

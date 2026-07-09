@@ -67,6 +67,65 @@ def macd_histogram(values, fast=12, slow=26, signal=9):
     ]
 
 
+def _dx_value(plus_di, minus_di):
+    total = plus_di + minus_di
+    if total == 0.0:
+        return 0.0
+    return 100.0 * abs(plus_di - minus_di) / total
+
+
+def adx(highs, lows, closes, period=14):
+    """Wilder-smoothed Average Directional Index: how strongly a market is
+    trending (high) vs. ranging (low), independent of direction. Needs
+    2*period-1 bars of warm-up: one period to seed the smoothed +DM/-DM/TR,
+    then another to seed the DX smoothing that produces ADX itself."""
+    n = len(closes)
+    if n < 2 * period:
+        return [None] * n
+
+    plus_dm = [0.0] * n
+    minus_dm = [0.0] * n
+    true_ranges = [0.0] * n
+    for i in range(1, n):
+        up_move = highs[i] - highs[i - 1]
+        down_move = lows[i - 1] - lows[i]
+        plus_dm[i] = up_move if up_move > down_move and up_move > 0.0 else 0.0
+        minus_dm[i] = down_move if down_move > up_move and down_move > 0.0 else 0.0
+        true_ranges[i] = max(
+            highs[i] - lows[i],
+            abs(highs[i] - closes[i - 1]),
+            abs(lows[i] - closes[i - 1]),
+        )
+
+    smoothed_plus_dm = sum(plus_dm[1:period + 1])
+    smoothed_minus_dm = sum(minus_dm[1:period + 1])
+    smoothed_tr = sum(true_ranges[1:period + 1])
+
+    dx_values = [None] * period
+    plus_di = 100.0 * smoothed_plus_dm / smoothed_tr if smoothed_tr else 0.0
+    minus_di = 100.0 * smoothed_minus_dm / smoothed_tr if smoothed_tr else 0.0
+    dx_values.append(_dx_value(plus_di, minus_di))
+
+    for i in range(period + 1, n):
+        smoothed_plus_dm = smoothed_plus_dm - smoothed_plus_dm / period + plus_dm[i]
+        smoothed_minus_dm = smoothed_minus_dm - smoothed_minus_dm / period + minus_dm[i]
+        smoothed_tr = smoothed_tr - smoothed_tr / period + true_ranges[i]
+        plus_di = 100.0 * smoothed_plus_dm / smoothed_tr if smoothed_tr else 0.0
+        minus_di = 100.0 * smoothed_minus_dm / smoothed_tr if smoothed_tr else 0.0
+        dx_values.append(_dx_value(plus_di, minus_di))
+
+    # ADX is itself a Wilder-smoothed average of DX, seeded with a plain
+    # SMA of the first `period` DX values once they exist.
+    out = [None] * (2 * period - 1)
+    start = period
+    prev = sum(dx_values[start:start + period]) / period
+    out.append(prev)
+    for i in range(start + period, n):
+        prev = (prev * (period - 1) + dx_values[i]) / period
+        out.append(prev)
+    return out
+
+
 def atr(highs, lows, closes, period=14):
     """Wilder-smoothed Average True Range."""
     n = len(closes)

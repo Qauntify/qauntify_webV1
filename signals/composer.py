@@ -53,10 +53,17 @@ def _format_indicators(strategy: str, indicators: dict) -> str:
         if "rsi" in indicators:
             parts.append(f"RSI={indicators['rsi']:.1f}")
         return ", ".join(parts) if parts else "no ICT structure on chart"
-    return (
-        f"EMA9={indicators['ema9']:.2f}, EMA21={indicators['ema21']:.2f}, "
-        f"RSI={indicators['rsi']:.1f}, MACD hist={indicators['macd_hist']:.4f}"
-    )
+    parts = [
+        f"EMA9={indicators['ema9']:.2f}",
+        f"EMA21={indicators['ema21']:.2f}",
+        f"RSI={indicators['rsi']:.1f}",
+        f"MACD hist={indicators['macd_hist']:.4f}",
+    ]
+    if "adx" in indicators:
+        parts.append(f"ADX={indicators['adx']:.1f}")
+    if "htf_trend" in indicators:
+        parts.append(f"HTF trend={indicators['htf_trend']}")
+    return ", ".join(parts)
 
 
 def build_messages(setup: CandidateSetup, headlines: list,

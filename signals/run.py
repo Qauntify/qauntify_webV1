@@ -12,7 +12,7 @@ import requests
 from signals.binance_client import fetch_candles
 from signals.composer import confirm_setup, explain_no_setup
 from signals.config import load_config
-from signals.indicators import atr, ema, macd_histogram, rsi
+from signals.indicators import adx, atr, ema, macd_histogram, rsi
 from signals.llm_client import SeaLionClient
 from signals.models import (
     DEFAULT_SIGNAL_STRATEGY,
@@ -28,7 +28,9 @@ from signals.strategies import detect_setup
 from signals.storage import (
     fetch_bot_settings,
     latest_ai_event_time,
+    latest_ai_event_times_since,
     latest_signal,
+    latest_signals_since,
     save_ai_event,
     save_engine_run,
     save_signal,
@@ -65,16 +67,60 @@ def _dedup_window(timeframe: str) -> timedelta:
 EVAL_THROTTLE_FRACTION = 0.9
 
 
-def _recently_evaluated(symbol, timeframe, cfg, session=None) -> bool:
-    """True when this (symbol, timeframe) already produced a logged outcome
-    within its throttle window. On any lookup failure return False — fail
-    open, since evaluating an extra time is far better than going silent."""
+def _prefetch_recent_events(symbols, timeframe, cfg, session=None) -> dict:
+    """One batched query replacing what would otherwise be one
+    latest_ai_event_time lookup per symbol in `symbols` — the throttle
+    check in _recently_evaluated only ever cares about rows inside its own
+    window, so that's the only slice fetched. Empty dict on failure — fail
+    open, exactly like a per-symbol lookup failure would."""
+    minutes = TIMEFRAME_MINUTES.get(timeframe, TIMEFRAME_MINUTES["1h"])
+    since = (datetime.now(timezone.utc)
+             - timedelta(minutes=minutes * EVAL_THROTTLE_FRACTION)).isoformat()
     try:
-        last = latest_ai_event_time(symbol, timeframe, cfg.supabase_url,
-                                    cfg.supabase_service_key, session=session)
+        return latest_ai_event_times_since(
+            symbols, timeframe, since, cfg.supabase_url,
+            cfg.supabase_service_key, session=session,
+        )
     except Exception as exc:
-        print(f"[{symbol}] recency check failed ({type(exc).__name__}), proceeding")
-        return False
+        print(f"recency batch check failed ({type(exc).__name__}), proceeding")
+        return {}
+
+
+def _prefetch_recent_signals(symbols, timeframe, cfg, session=None) -> dict:
+    """One batched query replacing what would otherwise be one latest_signal
+    lookup per symbol with a detected setup — the dedup check in
+    already_signaled only ever cares about rows inside its own window, so
+    that's the only slice fetched. Empty dict on failure — fail open,
+    exactly like a per-symbol lookup failure would."""
+    since = (datetime.now(timezone.utc) - _dedup_window(timeframe)).isoformat()
+    try:
+        return latest_signals_since(
+            symbols, timeframe, since, cfg.supabase_url,
+            cfg.supabase_service_key, session=session,
+        )
+    except Exception as exc:
+        print(f"dedup batch check failed ({type(exc).__name__}), proceeding")
+        return {}
+
+
+def _recently_evaluated(symbol, timeframe, cfg, session=None,
+                        recent_events=None) -> bool:
+    """True when this (symbol, timeframe) already produced a logged outcome
+    within its throttle window. `recent_events`, when given, is a
+    prefetched {symbol: created_at} map covering the whole scan batch —
+    looking a symbol up in it skips the per-symbol query entirely. When
+    omitted (single-symbol / legacy callers) falls back to querying this
+    symbol directly. On any lookup failure return False — fail open, since
+    evaluating an extra time is far better than going silent."""
+    if recent_events is not None:
+        last = recent_events.get(symbol)
+    else:
+        try:
+            last = latest_ai_event_time(symbol, timeframe, cfg.supabase_url,
+                                        cfg.supabase_service_key, session=session)
+        except Exception as exc:
+            print(f"[{symbol}] recency check failed ({type(exc).__name__}), proceeding")
+            return False
     if last is None:
         return False
     minutes = TIMEFRAME_MINUTES.get(timeframe, TIMEFRAME_MINUTES["1h"])
@@ -101,20 +147,27 @@ def with_retry(fn, attempts=2, delay=None):
     raise last_error
 
 
-def already_signaled(setup, cfg, timeframe="1h", session=None):
+def already_signaled(setup, cfg, timeframe="1h", session=None,
+                     recent_signals=None):
     """True when the newest stored signal for this symbol+timeframe
     duplicates the candidate (same direction, within that timeframe's dedup
     window). Scoped per timeframe so scalp and swing never dedup each
-    other. On any lookup failure return False — better a duplicate than a
-    missed signal."""
-    try:
-        row = latest_signal(setup.symbol, cfg.supabase_url,
-                            cfg.supabase_service_key, timeframe=timeframe,
-                            session=session)
-    except Exception as exc:
-        print(f"[{setup.symbol}] dedup check failed "
-              f"({type(exc).__name__}), proceeding")
-        return False
+    other. `recent_signals`, when given, is a prefetched {symbol: row} map
+    covering the whole scan batch — skips the per-symbol query. When
+    omitted (single-symbol / legacy callers) falls back to querying this
+    symbol directly. On any lookup failure return False — better a
+    duplicate than a missed signal."""
+    if recent_signals is not None:
+        row = recent_signals.get(setup.symbol)
+    else:
+        try:
+            row = latest_signal(setup.symbol, cfg.supabase_url,
+                                cfg.supabase_service_key, timeframe=timeframe,
+                                session=session)
+        except Exception as exc:
+            print(f"[{setup.symbol}] dedup check failed "
+                  f"({type(exc).__name__}), proceeding")
+            return False
     if row is None or row["direction"] != setup.direction:
         return False
     stored_at = datetime.fromisoformat(row["created_at"])
@@ -149,6 +202,35 @@ def _fetch_feed_titles_safe(session=None):
         return []
 
 
+# Just enough candles for EMA21 to warm up plus a little history — this is
+# only a trend-direction read, not a full setup scan.
+HTF_TREND_CANDLE_LIMIT = 30
+
+
+def _fetch_htf_trend(symbol, timeframe, cfg, session=None):
+    """"up"/"down" trend on a higher timeframe, from EMA9 vs EMA21 — used to
+    gate a faster session's setups so they only fire with the larger trend.
+    None on any fetch/compute failure, or when the EMAs sit exactly equal —
+    fail open, since confluence is a filter, not a hard dependency."""
+    try:
+        candles = with_retry(lambda: fetch_candles(
+            symbol, timeframe, HTF_TREND_CANDLE_LIMIT, session=session))
+    except Exception as exc:
+        print(f"[{symbol}] HTF trend unavailable ({type(exc).__name__}), proceeding without")
+        return None
+    candles = candles[:-1]  # drop the still-forming candle, same as the main fetch
+    closes = [c.close for c in candles]
+    fast = ema(closes, 9)
+    slow = ema(closes, 21)
+    if fast[-1] is None or slow[-1] is None:
+        return None
+    if fast[-1] > slow[-1]:
+        return "up"
+    if fast[-1] < slow[-1]:
+        return "down"
+    return None
+
+
 def _log_ai_event(kind: str, symbol: str, cfg, *, timeframe: str,
                   rationale: str, indicators: dict, headlines: list,
                   direction=None, entry=None, stop_loss=None, take_profit=None,
@@ -178,7 +260,9 @@ def _log_ai_event(kind: str, symbol: str, cfg, *, timeframe: str,
 
 
 def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
-                timeframe=None, feed_titles=None, session=None):
+                timeframe=None, feed_titles=None, session=None,
+                recent_events=None, recent_signals=None,
+                confluence_timeframe=None):
     """Scan one symbol on one session's timeframe; return a ScanResult with
     a stored signal or a no-signal report.
 
@@ -186,10 +270,17 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     defaults to cfg.timeframe for single-session callers. `feed_titles`
     holds this run's already-fetched RSS titles; when None the symbol's
     headlines are fetched directly (single-symbol / legacy use).
+    `recent_events`/`recent_signals` are this session's prefetched
+    throttle/dedup maps (see `_prefetch_recent_events` /
+    `_prefetch_recent_signals`); when None each check falls back to its own
+    per-symbol query. `confluence_timeframe`, when given (see
+    TradingSession.confluence_timeframe), gates any detected setup on
+    agreeing with that higher timeframe's trend.
     """
     timeframe = timeframe or cfg.timeframe
 
-    if _recently_evaluated(symbol, timeframe, cfg, session=session):
+    if _recently_evaluated(symbol, timeframe, cfg, session=session,
+                           recent_events=recent_events):
         print(f"[{symbol}] {timeframe} evaluated recently, skipping this run")
         return ScanResult()
 
@@ -219,9 +310,15 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     rsi14 = rsi(closes, 14)
     macd_hist = macd_histogram(closes)
     atr14 = atr(highs, lows, closes, 14)
+    adx14 = adx(highs, lows, closes, 14)
+    htf_trend = None
+    if confluence_timeframe:
+        htf_trend = _fetch_htf_trend(symbol, confluence_timeframe, cfg,
+                                     session=session)
 
     setup = detect_setup(
         strategy, symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
+        adx14=adx14, htf_trend=htf_trend,
     )
     if setup is None:
         print(f"[{symbol}] no setup found ({strategy})")
@@ -264,7 +361,8 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     print(f"[{symbol}] candidate {setup.direction}: entry={setup.entry} "
           f"SL={setup.stop_loss} TP={setup.take_profit}")
 
-    if already_signaled(setup, cfg, timeframe=timeframe, session=session):
+    if already_signaled(setup, cfg, timeframe=timeframe, session=session,
+                        recent_signals=recent_signals):
         print(f"[{symbol}] same setup already stored recently, skipping")
         return ScanResult(candles=candles)
 
@@ -396,8 +494,9 @@ def main():
     feed_titles = _fetch_feed_titles_safe(session=requests.Session())
 
     def scan_one(item):
-        """(index, symbol, TradingSession) -> (ScanResult | None, error | None)."""
-        index, symbol, trading_session = item
+        """(index, symbol, TradingSession, recent_events, recent_signals)
+        -> (ScanResult | None, error | None)."""
+        index, symbol, trading_session, recent_events, recent_signals = item
         # Symbols round-robin across keys so a full scan never concentrates
         # its LLM calls on a single key's rate limit.
         llm = SeaLionClient(
@@ -410,6 +509,8 @@ def main():
                 symbol, cfg, llm, strategy=settings.signal_strategy,
                 timeframe=trading_session.timeframe,
                 feed_titles=feed_titles, session=requests.Session(),
+                recent_events=recent_events, recent_signals=recent_signals,
+                confluence_timeframe=trading_session.confluence_timeframe,
             ), None
         except Exception as exc:
             return None, exc
@@ -423,7 +524,14 @@ def main():
     # Each session (scalp, swing) scans all symbols in parallel, one session
     # at a time — so a run's outcomes group by session for a clear summary.
     for trading_session in TRADING_SESSIONS:
-        tasks = [(i, symbol, trading_session)
+        # One query each for the whole session's symbol list, instead of
+        # every symbol hitting Supabase individually before its scan even
+        # starts — collapses up to 2*len(symbols) round trips into 2.
+        recent_events = _prefetch_recent_events(
+            settings.symbols, trading_session.timeframe, cfg, session=db_session)
+        recent_signals = _prefetch_recent_signals(
+            settings.symbols, trading_session.timeframe, cfg, session=db_session)
+        tasks = [(i, symbol, trading_session, recent_events, recent_signals)
                 for i, symbol in enumerate(settings.symbols)]
         with ThreadPoolExecutor(max_workers=workers) as pool:
             results = list(pool.map(scan_one, tasks))

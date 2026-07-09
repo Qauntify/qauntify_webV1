@@ -50,6 +50,24 @@ def test_build_messages_handles_no_headlines():
     assert "No recent headlines available" in messages[1]["content"]
 
 
+def test_build_messages_includes_adx_and_htf_trend_when_present():
+    setup = CandidateSetup(
+        symbol="BTCUSDT", direction="long", entry=100.0,
+        stop_loss=98.0, take_profit=104.0,
+        indicators={"ema9": 101.0, "ema21": 100.0, "rsi": 55.0,
+                    "macd_hist": 0.5, "adx": 27.3, "htf_trend": "up"},
+    )
+    user_content = build_messages(setup, [])[1]["content"]
+    assert "ADX=27.3" in user_content
+    assert "HTF trend=up" in user_content
+
+
+def test_build_messages_omits_adx_and_htf_trend_when_absent():
+    user_content = build_messages(SETUP, [])[1]["content"]
+    assert "ADX=" not in user_content
+    assert "HTF trend=" not in user_content
+
+
 def test_parse_confirmation_valid_json():
     text = '{"verdict": "confirm", "confidence": 78, "rationale": "Momentum aligns."}'
     result = parse_confirmation(text)

@@ -42,6 +42,17 @@ def test_detect_ict_setup_none_on_flat_market():
     assert detect_ict_setup("BTCUSDT", candles, atr14) is None
 
 
+def test_detect_ict_setup_bullish_shallow_sweep_is_rejected():
+    # Same series as the passing bullish test, but the sweep wick barely
+    # clears the prior swing low (depth 0.1 vs ATR 2.0) — noise, not a
+    # genuine liquidity grab, so no setup should fire.
+    candles = list(_bullish_ict_series())
+    swept = candles[35]
+    candles[35] = _candle(35, swept.open, swept.high, 89.9, swept.close)
+    atr14 = [2.0] * len(candles)
+    assert detect_ict_setup("BTCUSDT", candles, atr14) is None
+
+
 def test_strategy_router_uses_ema_by_default():
     n = 20
     candles = [
@@ -59,6 +70,32 @@ def test_strategy_router_uses_ema_by_default():
     assert setup is not None
     assert setup.direction == "long"
     assert "ema9" in setup.indicators
+
+
+def test_strategy_router_passes_adx_and_htf_trend_to_ema_cross():
+    n = 20
+    candles = [
+        Candle(open_time=i, open=100, high=101, low=99, close=100, volume=1.0)
+        for i in range(n)
+    ]
+    ema9 = [99.0] * (n - 1) + [101.0]
+    ema21 = [100.0] * n
+    rsi14 = [55.0] * n
+    macd_hist = [0.5] * n
+    atr14 = [2.0] * n
+    adx14 = [15.0] * n  # below the trend-regime threshold -> blocks the setup
+
+    setup = detect_setup(
+        "ema_cross", "BTCUSDT", candles, ema9, ema21, rsi14, macd_hist,
+        atr14, adx14=adx14,
+    )
+    assert setup is None
+
+    setup = detect_setup(
+        "ema_cross", "BTCUSDT", candles, ema9, ema21, rsi14, macd_hist,
+        atr14, htf_trend="down",
+    )
+    assert setup is None
 
 
 def test_strategy_router_dispatches_ict():

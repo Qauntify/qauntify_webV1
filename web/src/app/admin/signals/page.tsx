@@ -30,7 +30,7 @@ export default async function AdminSignals({
   const { signals, total, totalPages, pageSize } = await getSignalsPaginated(page, token, timeframe);
 
   // Extra params to preserve the active tab when paginating
-  const extraParams = currentTab !== "all" ? { tab: currentTab } : {};
+  const extraParams: Record<string, string> = currentTab !== "all" ? { tab: currentTab } : {};
 
   return (
     <>

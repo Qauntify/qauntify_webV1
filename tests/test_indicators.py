@@ -1,4 +1,4 @@
-from signals.indicators import atr, ema, macd_histogram, rsi
+from signals.indicators import adx, atr, ema, macd_histogram, rsi
 
 
 def test_ema_constant_series_equals_constant():
@@ -68,3 +68,58 @@ def test_atr_constant_range_candles():
 
 def test_atr_too_short_is_all_none():
     assert atr([1.0] * 5, [0.5] * 5, [0.8] * 5, 14) == [None] * 5
+
+
+def test_adx_too_short_is_all_none():
+    n = 10
+    assert adx([1.0] * n, [0.5] * n, [0.8] * n, 14) == [None] * n
+
+
+def test_adx_warmup_padding_length():
+    n = 40
+    highs = [100.0 + i * 0.5 for i in range(n)]
+    lows = [98.0 + i * 0.5 for i in range(n)]
+    closes = [99.0 + i * 0.5 for i in range(n)]
+    result = adx(highs, lows, closes, 14)
+    assert len(result) == n
+    # ADX needs a full period of DX values before its own smoothing starts,
+    # so warm-up runs longer than a plain ATR/RSI (roughly 2x the period).
+    assert result[:27] == [None] * 27
+    assert result[27] is not None
+
+
+def test_adx_flat_series_is_zero():
+    # No directional movement at all (every bar's high/low is unchanged) ->
+    # +DI and -DI are both zero -> ADX is defined as 0, not trending.
+    n = 40
+    highs = [101.0] * n
+    lows = [99.0] * n
+    closes = [100.0] * n
+    result = adx(highs, lows, closes, 14)
+    for v in result[27:]:
+        assert abs(v - 0.0) < 1e-9
+
+
+def test_adx_strong_uptrend_is_high():
+    # Every bar makes a new high and a new low, no overlap -> textbook
+    # strongly-trending series -> ADX should read high (>40).
+    n = 40
+    highs = [100.0 + i * 3.0 for i in range(n)]
+    lows = [98.0 + i * 3.0 for i in range(n)]
+    closes = [99.0 + i * 3.0 for i in range(n)]
+    result = adx(highs, lows, closes, 14)
+    assert result[-1] > 40.0
+
+
+def test_adx_choppy_series_is_low():
+    # Alternating up/down swings of equal size -> no sustained direction ->
+    # ADX should read low (<20), the "don't trade this" regime.
+    n = 40
+    highs, lows, closes = [], [], []
+    for i in range(n):
+        base = 100.0 + (2.0 if i % 2 == 0 else -2.0)
+        highs.append(base + 1.0)
+        lows.append(base - 1.0)
+        closes.append(base)
+    result = adx(highs, lows, closes, 14)
+    assert result[-1] < 20.0

@@ -252,7 +252,7 @@ def test_scan_symbol_drops_forming_candle(monkeypatch):
                      low=99.0, close=999.0, volume=1.0)
     seen = {}
 
-    def capture_detect(strategy, symbol, candles, *series):
+    def capture_detect(strategy, symbol, candles, *series, **kwargs):
         seen["candles"] = candles
         return None
 
@@ -290,6 +290,118 @@ def test_scan_symbol_filters_provided_feed_titles_without_refetching(monkeypatch
 
     assert result.signal is not None
     assert result.signal.news_headlines == ["Bitcoin rally continues"]
+
+
+def _rising_candles(n=40, start=100.0, step=1.0):
+    return [
+        Candle(open_time=i, open=start + i * step, high=start + i * step + 1.0,
+              low=start + i * step - 1.0, close=start + i * step, volume=1.0)
+        for i in range(n)
+    ]
+
+
+def _falling_candles(n=40, start=140.0, step=1.0):
+    return [
+        Candle(open_time=i, open=start - i * step, high=start - i * step + 1.0,
+              low=start - i * step - 1.0, close=start - i * step, volume=1.0)
+        for i in range(n)
+    ]
+
+
+def test_fetch_htf_trend_up_when_fast_ema_above_slow(monkeypatch):
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None: _rising_candles())
+    assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) == "up"
+
+
+def test_fetch_htf_trend_down_when_fast_ema_below_slow(monkeypatch):
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None: _falling_candles())
+    assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) == "down"
+
+
+def test_fetch_htf_trend_none_on_fetch_failure(monkeypatch):
+    def boom(symbol, interval, limit, session=None):
+        raise RuntimeError("binance down")
+
+    monkeypatch.setattr(run_module, "fetch_candles", boom)
+    monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
+    assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) is None
+
+
+def test_fetch_htf_trend_none_during_warmup(monkeypatch):
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None: _rising_candles(n=5))
+    assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) is None
+
+
+def test_scan_symbol_computes_and_passes_adx_to_detect_setup(monkeypatch):
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None: _flat_candles())
+    seen = {}
+
+    def capture_detect(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
+                       atr14, adx14=None, htf_trend=None):
+        seen["adx14"] = adx14
+        return None
+
+    monkeypatch.setattr(run_module, "detect_setup", capture_detect)
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
+    llm = FakeLLM(reply='{"rationale": "flat"}')
+
+    scan_symbol("BTCUSDT", _config(), llm)
+
+    assert seen["adx14"] is not None
+    assert len(seen["adx14"]) == 199  # 200 candles minus the dropped forming one
+    assert seen["adx14"][-1] is not None
+
+
+def test_scan_symbol_passes_htf_trend_when_confluence_timeframe_given(monkeypatch):
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None: _flat_candles())
+    monkeypatch.setattr(run_module, "_fetch_htf_trend",
+                        lambda symbol, timeframe, cfg, session=None: "up")
+    seen = {}
+
+    def capture_detect(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
+                       atr14, adx14=None, htf_trend=None):
+        seen["htf_trend"] = htf_trend
+        return None
+
+    monkeypatch.setattr(run_module, "detect_setup", capture_detect)
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
+    llm = FakeLLM(reply='{"rationale": "flat"}')
+
+    scan_symbol("BTCUSDT", _config(), llm, confluence_timeframe="1h")
+
+    assert seen["htf_trend"] == "up"
+
+
+def test_scan_symbol_skips_htf_fetch_without_confluence_timeframe(monkeypatch):
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None: _flat_candles())
+
+    def must_not_fetch(symbol, timeframe, cfg, session=None):
+        raise AssertionError("no confluence_timeframe given; HTF trend must not be fetched")
+
+    monkeypatch.setattr(run_module, "_fetch_htf_trend", must_not_fetch)
+    seen = {}
+
+    def capture_detect(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
+                       atr14, adx14=None, htf_trend=None):
+        seen["htf_trend"] = htf_trend
+        return None
+
+    monkeypatch.setattr(run_module, "detect_setup", capture_detect)
+    monkeypatch.setattr(run_module, "fetch_headlines",
+                        lambda symbol, session=None: [])
+    llm = FakeLLM(reply='{"rationale": "flat"}')
+
+    scan_symbol("BTCUSDT", _config(), llm)
+
+    assert seen["htf_trend"] is None
 
 
 def test_scan_symbol_returns_candles_for_reuse(monkeypatch):
@@ -353,7 +465,8 @@ def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
     scanned = []
 
     def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
-                  session=None):
+                  session=None, recent_events=None, recent_signals=None,
+                  confluence_timeframe=None):
         # Every scan in a session's batch must be in flight before any
         # finishes — proves the loop is parallel, not sequential.
         started.wait()
@@ -385,7 +498,9 @@ def test_main_reports_expired_signals_in_run_summary(monkeypatch):
     monkeypatch.setattr(
         run_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
-        session=None: run_module.ScanResult())
+        session=None, recent_events=None, recent_signals=None,
+        confluence_timeframe=None:
+        run_module.ScanResult())
 
     expired_row = {"symbol": "ETHUSDT", "direction": "long", "entry": 100.0}
     monkeypatch.setattr(run_module, "track_open_signals",
@@ -413,7 +528,9 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
     monkeypatch.setattr(
         run_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
-        session=None: run_module.ScanResult(candles=candles))
+        session=None, recent_events=None, recent_signals=None,
+        confluence_timeframe=None:
+        run_module.ScanResult(candles=candles))
 
     seen = {}
 
@@ -443,6 +560,10 @@ def test_trading_sessions_define_scalp_and_swing():
     # Scalp must expire much faster than swing: a 15m setup that sat open
     # for two weeks is meaningless.
     assert by_name["scalp"].max_open_days < by_name["swing"].max_open_days
+    # Scalp setups must agree with the swing session's own timeframe trend
+    # before firing; swing has no faster reference session to confirm against.
+    assert by_name["scalp"].confluence_timeframe == "1h"
+    assert by_name["swing"].confluence_timeframe is None
 
 
 def test_scan_symbol_uses_the_session_timeframe(monkeypatch):
@@ -490,6 +611,123 @@ def test_already_signaled_dedup_window_scales_with_timeframe(monkeypatch):
     assert captured["timeframes"] == ["1h", "15m"]
 
 
+def test_recently_evaluated_uses_prefetched_map_without_querying(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    def boom(*a, **k):
+        raise AssertionError("per-symbol query must be skipped when recent_events is given")
+
+    monkeypatch.setattr(run_module, "latest_ai_event_time", boom)
+
+    recent = datetime.now(timezone.utc) - timedelta(minutes=20)
+    recent_events = {"BTCUSDT": recent.isoformat()}
+
+    # 20 minutes ago is inside swing's (1h) throttle window.
+    assert run_module._recently_evaluated(
+        "BTCUSDT", "1h", _config(), recent_events=recent_events) is True
+    # A symbol absent from the map is treated as never evaluated.
+    assert run_module._recently_evaluated(
+        "ETHUSDT", "1h", _config(), recent_events=recent_events) is False
+
+
+def test_already_signaled_uses_prefetched_map_without_querying(monkeypatch):
+    def boom(*a, **k):
+        raise AssertionError("per-symbol query must be skipped when recent_signals is given")
+
+    monkeypatch.setattr(run_module, "latest_signal", boom)
+
+    from datetime import datetime, timezone
+    recent_signals = {
+        "BTCUSDT": {"direction": "long", "created_at": datetime.now(timezone.utc).isoformat()},
+    }
+
+    assert run_module.already_signaled(
+        SETUP, _config(), timeframe="1h", recent_signals=recent_signals) is True
+    # A symbol absent from the map behaves like "no prior signal".
+    other_setup = CandidateSetup(
+        symbol="ETHUSDT", direction="long", entry=100.0,
+        stop_loss=98.0, take_profit=104.0, indicators={})
+    assert run_module.already_signaled(
+        other_setup, _config(), timeframe="1h", recent_signals=recent_signals) is False
+
+
+def test_main_prefetches_recent_maps_once_per_session_not_per_symbol(monkeypatch):
+    settings = BotSettings(symbols=("BTCUSDT", "ETHUSDT", "PAXGUSDT"))
+    monkeypatch.setattr(run_module, "load_config", _config)
+    monkeypatch.setattr(run_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(run_module, "fetch_feed_titles",
+                        lambda session=None: [])
+    monkeypatch.setattr(run_module, "track_open_signals",
+                        lambda cfg, prefetched=None, session=None: [])
+    monkeypatch.setattr(
+        run_module, "scan_symbol",
+        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+        session=None, recent_events=None, recent_signals=None,
+        confluence_timeframe=None:
+        run_module.ScanResult())
+    monkeypatch.setattr(run_module, "save_engine_run",
+                        lambda run, url, key, session=None: None)
+
+    events_calls = []
+    signals_calls = []
+    monkeypatch.setattr(
+        run_module, "latest_ai_event_times_since",
+        lambda symbols, timeframe, since, url, key, session=None:
+        events_calls.append((tuple(symbols), timeframe)) or {})
+    monkeypatch.setattr(
+        run_module, "latest_signals_since",
+        lambda symbols, timeframe, since, url, key, session=None:
+        signals_calls.append((tuple(symbols), timeframe)) or {})
+
+    run_module.main()
+
+    # One batched call per session (2 sessions), each covering all 3
+    # symbols — not one call per symbol (which would be 6).
+    assert events_calls == [
+        (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "15m"),
+        (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "1h"),
+    ]
+    assert signals_calls == [
+        (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "15m"),
+        (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "1h"),
+    ]
+
+
+def test_main_passes_prefetched_maps_into_scan_symbol(monkeypatch):
+    settings = BotSettings(symbols=("BTCUSDT",))
+    monkeypatch.setattr(run_module, "load_config", _config)
+    monkeypatch.setattr(run_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(run_module, "fetch_feed_titles",
+                        lambda session=None: [])
+    monkeypatch.setattr(run_module, "track_open_signals",
+                        lambda cfg, prefetched=None, session=None: [])
+    monkeypatch.setattr(run_module, "save_engine_run",
+                        lambda run, url, key, session=None: None)
+
+    sentinel_events = {"BTCUSDT": "2026-07-09T00:00:00+00:00"}
+    sentinel_signals = {"BTCUSDT": {"direction": "long", "created_at": "2026-07-09T00:00:00+00:00"}}
+    monkeypatch.setattr(run_module, "latest_ai_event_times_since",
+                        lambda *a, **k: sentinel_events)
+    monkeypatch.setattr(run_module, "latest_signals_since",
+                        lambda *a, **k: sentinel_signals)
+
+    seen = []
+
+    def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+                 session=None, recent_events=None, recent_signals=None,
+                 confluence_timeframe=None):
+        seen.append((recent_events, recent_signals))
+        return run_module.ScanResult()
+
+    monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
+
+    run_module.main()
+
+    assert all(pair == (sentinel_events, sentinel_signals) for pair in seen)
+
+
 def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
     settings = BotSettings(symbols=("BTCUSDT", "ETHUSDT"))
     monkeypatch.setattr(run_module, "load_config", _config)
@@ -503,7 +741,8 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
     scanned = []
 
     def fake_scan(symbol, cfg, llm, *, strategy, timeframe,
-                  feed_titles=None, session=None):
+                  feed_titles=None, session=None, recent_events=None,
+                  recent_signals=None, confluence_timeframe=None):
         scanned.append((symbol, timeframe))
         return run_module.ScanResult()
 
@@ -525,6 +764,33 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
     ]
 
 
+def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypatch):
+    settings = BotSettings(symbols=("BTCUSDT",))
+    monkeypatch.setattr(run_module, "load_config", _config)
+    monkeypatch.setattr(run_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(run_module, "fetch_feed_titles",
+                        lambda session=None: [])
+    monkeypatch.setattr(run_module, "track_open_signals",
+                        lambda cfg, prefetched=None, session=None: [])
+    monkeypatch.setattr(run_module, "save_engine_run",
+                        lambda run, url, key, session=None: None)
+
+    seen = []
+
+    def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+                 session=None, recent_events=None, recent_signals=None,
+                 confluence_timeframe=None):
+        seen.append((timeframe, confluence_timeframe))
+        return run_module.ScanResult()
+
+    monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
+
+    run_module.main()
+
+    assert sorted(seen) == [("15m", "1h"), ("1h", None)]
+
+
 def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
     settings = BotSettings(symbols=("BTCUSDT",))
     candles = _flat_candles(n=5)
@@ -536,7 +802,9 @@ def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
     monkeypatch.setattr(
         run_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
-        session=None: run_module.ScanResult(candles=candles))
+        session=None, recent_events=None, recent_signals=None,
+        confluence_timeframe=None:
+        run_module.ScanResult(candles=candles))
 
     seen = {}
 

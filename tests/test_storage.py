@@ -164,3 +164,99 @@ def test_latest_ai_event_time_none_when_no_history():
     result = latest_ai_event_time(
         "BTCUSDT", "1h", "https://abc.supabase.co", "key", session=session)
     assert result is None
+
+
+def test_latest_ai_event_times_since_batches_one_query_for_all_symbols():
+    from signals.storage import latest_ai_event_times_since
+
+    # Two rows for BTCUSDT (newest first within the group), one for ETHUSDT;
+    # SOLUSDT has none.
+    session = FakeGetSession(payload=[
+        {"symbol": "BTCUSDT", "created_at": "2026-07-09T10:00:00+00:00"},
+        {"symbol": "BTCUSDT", "created_at": "2026-07-09T09:00:00+00:00"},
+        {"symbol": "ETHUSDT", "created_at": "2026-07-09T08:00:00+00:00"},
+    ])
+
+    result = latest_ai_event_times_since(
+        ["BTCUSDT", "ETHUSDT", "SOLUSDT"], "1h",
+        "2026-07-09T00:00:00+00:00",
+        "https://abc.supabase.co", "key", session=session,
+    )
+
+    assert result == {
+        "BTCUSDT": "2026-07-09T10:00:00+00:00",
+        "ETHUSDT": "2026-07-09T08:00:00+00:00",
+    }
+    assert "symbol=in.(BTCUSDT,ETHUSDT,SOLUSDT)" in session.last_url
+    assert "timeframe=eq.1h" in session.last_url
+    assert "created_at=gte.2026-07-09T00%3A00%3A00%2B00%3A00" in session.last_url
+    assert "order=symbol.asc,created_at.desc" in session.last_url
+
+
+def test_latest_ai_event_times_since_empty_symbols_skips_request():
+    class ExplodingSession:
+        def get(self, *a, **k):
+            raise AssertionError("no request should be made for an empty symbol list")
+
+    from signals.storage import latest_ai_event_times_since
+
+    result = latest_ai_event_times_since(
+        [], "1h", "2026-07-09T00:00:00+00:00",
+        "https://abc.supabase.co", "key", session=ExplodingSession(),
+    )
+    assert result == {}
+
+
+def test_latest_signals_since_batches_one_query_for_all_symbols():
+    from signals.storage import latest_signals_since
+
+    session = FakeGetSession(payload=[
+        {"symbol": "BTCUSDT", "direction": "long",
+         "created_at": "2026-07-09T10:00:00+00:00"},
+        {"symbol": "BTCUSDT", "direction": "short",
+         "created_at": "2026-07-09T09:00:00+00:00"},
+    ])
+
+    result = latest_signals_since(
+        ["BTCUSDT", "ETHUSDT"], "15m", "2026-07-09T00:00:00+00:00",
+        "https://abc.supabase.co", "key", session=session,
+    )
+
+    assert result == {
+        "BTCUSDT": {"symbol": "BTCUSDT", "direction": "long",
+                    "created_at": "2026-07-09T10:00:00+00:00"},
+    }
+    assert "ETHUSDT" not in result
+    assert "symbol=in.(BTCUSDT,ETHUSDT)" in session.last_url
+    assert "timeframe=eq.15m" in session.last_url
+
+
+def test_list_closed_signals_filters_terminal_statuses():
+    from signals.storage import list_closed_signals
+
+    session = FakeGetSession(payload=[
+        {"symbol": "BTCUSDT", "status": "tp_hit"},
+        {"symbol": "ETHUSDT", "status": "sl_hit"},
+    ])
+    rows = list_closed_signals("https://abc.supabase.co", "key", session=session)
+
+    assert rows == [
+        {"symbol": "BTCUSDT", "status": "tp_hit"},
+        {"symbol": "ETHUSDT", "status": "sl_hit"},
+    ]
+    assert "status=in.(tp_hit,sl_hit,expired)" in session.last_url
+    assert session.last_headers["apikey"] == "key"
+
+
+def test_latest_signals_since_empty_symbols_skips_request():
+    class ExplodingSession:
+        def get(self, *a, **k):
+            raise AssertionError("no request should be made for an empty symbol list")
+
+    from signals.storage import latest_signals_since
+
+    result = latest_signals_since(
+        [], "1h", "2026-07-09T00:00:00+00:00",
+        "https://abc.supabase.co", "key", session=ExplodingSession(),
+    )
+    assert result == {}

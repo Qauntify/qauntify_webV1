@@ -177,3 +177,97 @@ def test_detect_setup_warmup_none_returns_none():
     none_series = [None] * n
     assert detect_setup("BTCUSDT", candles, none_series, none_series,
                         none_series, none_series, none_series) is None
+
+
+def test_detect_setup_long_blocked_by_low_adx():
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(99.0, n - 1) + [101.0]
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(55.0, n)
+    macd_hist = _flat(0.5, n)
+    atr14 = _flat(2.0, n)
+    adx14 = _flat(15.0, n)  # below the trend-regime threshold
+    assert detect_setup("BTCUSDT", candles, ema9, ema21, rsi14, macd_hist,
+                        atr14, adx14=adx14) is None
+
+
+def test_detect_setup_long_allowed_by_high_adx():
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(99.0, n - 1) + [101.0]
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(55.0, n)
+    macd_hist = _flat(0.5, n)
+    atr14 = _flat(2.0, n)
+    adx14 = _flat(25.0, n)  # above the trend-regime threshold
+    setup = detect_setup("BTCUSDT", candles, ema9, ema21, rsi14, macd_hist,
+                         atr14, adx14=adx14)
+    assert setup is not None
+    assert setup.indicators["adx"] == 25.0
+
+
+def test_detect_setup_adx_omitted_does_not_block():
+    # Legacy/adx-unavailable callers: omitting adx14 must not change
+    # existing crossover-only behavior.
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(99.0, n - 1) + [101.0]
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(55.0, n)
+    macd_hist = _flat(0.5, n)
+    atr14 = _flat(2.0, n)
+    setup = detect_setup("BTCUSDT", candles, ema9, ema21, rsi14, macd_hist, atr14)
+    assert setup is not None
+    assert "adx" not in setup.indicators
+
+
+def test_detect_setup_long_blocked_by_opposing_htf_trend():
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(99.0, n - 1) + [101.0]
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(55.0, n)
+    macd_hist = _flat(0.5, n)
+    atr14 = _flat(2.0, n)
+    assert detect_setup("BTCUSDT", candles, ema9, ema21, rsi14, macd_hist,
+                        atr14, htf_trend="down") is None
+
+
+def test_detect_setup_long_allowed_by_agreeing_htf_trend():
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(99.0, n - 1) + [101.0]
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(55.0, n)
+    macd_hist = _flat(0.5, n)
+    atr14 = _flat(2.0, n)
+    setup = detect_setup("BTCUSDT", candles, ema9, ema21, rsi14, macd_hist,
+                         atr14, htf_trend="up")
+    assert setup is not None
+    assert setup.indicators["htf_trend"] == "up"
+
+
+def test_detect_setup_short_blocked_by_opposing_htf_trend():
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(101.0, n - 1) + [99.0]
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(45.0, n)
+    macd_hist = _flat(-0.5, n)
+    atr14 = _flat(2.0, n)
+    assert detect_setup("ETHUSDT", candles, ema9, ema21, rsi14, macd_hist,
+                        atr14, htf_trend="up") is None
+
+
+def test_detect_setup_htf_trend_omitted_does_not_block():
+    n = 20
+    candles = _candles([100.0] * n)
+    ema9 = _flat(99.0, n - 1) + [101.0]
+    ema21 = _flat(100.0, n)
+    rsi14 = _flat(55.0, n)
+    macd_hist = _flat(0.5, n)
+    atr14 = _flat(2.0, n)
+    setup = detect_setup("BTCUSDT", candles, ema9, ema21, rsi14, macd_hist, atr14)
+    assert setup is not None
+    assert "htf_trend" not in setup.indicators

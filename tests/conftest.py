@@ -10,7 +10,9 @@ import pytest
 
 _INERT_RUN_STORAGE_DEFAULTS = {
     "signals.run.latest_ai_event_time": lambda *a, **k: None,
+    "signals.run.latest_ai_event_times_since": lambda *a, **k: {},
     "signals.run.latest_signal": lambda *a, **k: None,
+    "signals.run.latest_signals_since": lambda *a, **k: {},
     "signals.run.save_ai_event": lambda *a, **k: None,
     "signals.run.save_signal": lambda *a, **k: None,
     "signals.run.save_engine_run": lambda *a, **k: None,
