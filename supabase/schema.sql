@@ -57,6 +57,38 @@ create policy "member full access"
     to authenticated
     using (true);
 
+-- Server-side aggregation for the landing/dashboard/admin stats tiles —
+-- avoids pulling every matching row into Node just to count/average them.
+-- security invoker (not definer) is essential: it makes this function run
+-- as the calling role, so the RLS policies above still apply per caller —
+-- anon still only sees the 24h preview, authenticated still sees full
+-- history. A definer function here would silently bypass that gate.
+create or replace function public.get_signal_stats(p_timeframe text default null)
+returns table (
+    total int,
+    avg_confidence int,
+    longs int,
+    shorts int,
+    tp_hits int,
+    sl_hits int
+)
+language sql
+stable
+security invoker
+as $$
+    select
+        count(*)::int as total,
+        coalesce(round(avg(confidence)), 0)::int as avg_confidence,
+        count(*) filter (where direction = 'long')::int as longs,
+        count(*) filter (where direction = 'short')::int as shorts,
+        count(*) filter (where status = 'tp_hit')::int as tp_hits,
+        count(*) filter (where status = 'sl_hit')::int as sl_hits
+    from public.signals
+    where p_timeframe is null or timeframe = p_timeframe;
+$$;
+
+grant execute on function public.get_signal_stats(text) to anon, authenticated;
+
 -- Bot settings: one row, read by the engine at the start of each run and
 -- edited from /admin. RLS is enabled with NO policies on purpose — only the
 -- service-role key (engine + admin page) can read or write it.

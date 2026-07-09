@@ -85,6 +85,33 @@ async function fetchRows(
   }
 }
 
+async function callRpc<T>(
+  fn: string,
+  params: Record<string, unknown>,
+  accessToken?: string,
+): Promise<T | null> {
+  const config = supabaseConfig();
+  if (!config) return null;
+  try {
+    const response = await fetch(`${config.url}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: {
+        apikey: config.anonKey,
+        // A signed-in user's JWT makes RLS grant full history;
+        // the anon key alone only sees the 24-hour preview.
+        Authorization: `Bearer ${accessToken ?? config.anonKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+      cache: "no-store", // signals change whenever the engine runs
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchRowsPaginated(
   query: string,
   page: number,
@@ -159,34 +186,43 @@ export async function getSignals(
   return rows.map(parseRow).filter((s): s is Signal => s !== null);
 }
 
+const ZERO_STATS: Stats = {
+  total: 0, avgConfidence: 0, longs: 0, shorts: 0,
+  tpHits: 0, slHits: 0, winRate: null,
+};
+
+type StatsRpcRow = {
+  total: number;
+  avg_confidence: number;
+  longs: number;
+  shorts: number;
+  tp_hits: number;
+  sl_hits: number;
+};
+
 export async function getStats(
   accessToken?: string,
   timeframe?: string,
 ): Promise<Stats> {
-  // Low volume: fetch all columns (select=* tolerates the status column
-  // not existing yet) and aggregate here.
-  const timeframeFilter = timeframe ? `&timeframe=eq.${timeframe}` : "";
-  const rows = await fetchRows(`select=*${timeframeFilter}`, accessToken);
-  if (!rows || rows.length === 0) {
-    return {
-      total: 0, avgConfidence: 0, longs: 0, shorts: 0,
-      tpHits: 0, slHits: 0, winRate: null,
-    };
-  }
-  const total = rows.length;
-  const sum = rows.reduce((acc, r) => acc + r.confidence, 0);
-  const longs = rows.filter((r) => r.direction === "long").length;
-  const tpHits = rows.filter((r) => parseStatus(r.status) === "tp_hit").length;
-  const slHits = rows.filter((r) => parseStatus(r.status) === "sl_hit").length;
-  const closed = tpHits + slHits;
+  // Aggregated server-side by supabase/schema.sql's get_signal_stats() —
+  // counting/averaging in Postgres instead of pulling every matching row
+  // into Node. Degrades to zero stats (not a crash) if the RPC 404s, e.g.
+  // the migration hasn't been applied to this project yet.
+  const row = await callRpc<StatsRpcRow[]>(
+    "get_signal_stats",
+    { p_timeframe: timeframe ?? null },
+    accessToken,
+  ).then((rows) => rows?.[0]);
+  if (!row) return ZERO_STATS;
+  const closed = row.tp_hits + row.sl_hits;
   return {
-    total,
-    avgConfidence: Math.round(sum / total),
-    longs,
-    shorts: total - longs,
-    tpHits,
-    slHits,
-    winRate: closed > 0 ? Math.round((tpHits / closed) * 100) : null,
+    total: row.total,
+    avgConfidence: row.avg_confidence,
+    longs: row.longs,
+    shorts: row.shorts,
+    tpHits: row.tp_hits,
+    slHits: row.sl_hits,
+    winRate: closed > 0 ? Math.round((row.tp_hits / closed) * 100) : null,
   };
 }
 

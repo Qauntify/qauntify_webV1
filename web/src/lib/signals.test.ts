@@ -109,53 +109,63 @@ describe("getSignals", () => {
 });
 
 describe("getStats", () => {
+  const ZERO_STATS = {
+    total: 0, avgConfidence: 0, longs: 0, shorts: 0,
+    tpHits: 0, slHits: 0, winRate: null,
+  };
+
+  function mockRpc(row: Record<string, unknown>) {
+    return mockFetch([row]);
+  }
+
   it("returns zeros when Supabase env vars are missing", async () => {
     delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    expect(await getStats()).toEqual({
-      total: 0,
-      avgConfidence: 0,
-      longs: 0,
-      shorts: 0,
-      tpHits: 0,
-      slHits: 0,
-      winRate: null,
-    });
+    const fetchFn = mockFetch([]);
+    expect(await getStats()).toEqual(ZERO_STATS);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it("computes totals, rounded average confidence, and direction split", async () => {
-    mockFetch([
-      { confidence: 80, direction: "long", status: "tp_hit" },
-      { confidence: 71, direction: "short", status: "sl_hit" },
-      { confidence: 90, direction: "long" },
-    ]);
-    expect(await getStats()).toEqual({
-      total: 3,
-      avgConfidence: 80,
-      longs: 2,
-      shorts: 1,
-      tpHits: 1,
-      slHits: 1,
-      winRate: 50,
+  it("calls the get_signal_stats RPC and maps the aggregated row", async () => {
+    const fetchFn = mockRpc({
+      total: 3, avg_confidence: 80, longs: 2, shorts: 1, tp_hits: 1, sl_hits: 1,
     });
+
+    expect(await getStats()).toEqual({
+      total: 3, avgConfidence: 80, longs: 2, shorts: 1,
+      tpHits: 1, slHits: 1, winRate: 50,
+    });
+
+    const [url, options] = fetchFn.mock.calls[0];
+    expect(url).toBe("https://abc.supabase.co/rest/v1/rpc/get_signal_stats");
+    expect(options.method).toBe("POST");
+    expect(options.headers.apikey).toBe("anon-key");
+    expect(JSON.parse(options.body)).toEqual({ p_timeframe: null });
   });
 
-  it("excludes expired signals from the win rate", async () => {
+  it("passes the timeframe as an RPC parameter, not a query filter", async () => {
+    const fetchFn = mockRpc({
+      total: 0, avg_confidence: 0, longs: 0, shorts: 0, tp_hits: 0, sl_hits: 0,
+    });
+    await getStats(undefined, "1h");
+    const [, options] = fetchFn.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({ p_timeframe: "1h" });
+  });
+
+  it("returns null win rate when nothing has closed yet", async () => {
     const stats = await (async () => {
-      mockFetch([
-        { confidence: 80, direction: "long", status: "tp_hit" },
-        { confidence: 70, direction: "long", status: "expired" },
-      ]);
+      mockRpc({ total: 3, avg_confidence: 75, longs: 2, shorts: 1, tp_hits: 0, sl_hits: 0 });
       return getStats();
     })();
-    expect(stats.tpHits).toBe(1);
-    expect(stats.slHits).toBe(0);
-    expect(stats.winRate).toBe(100); // expired is not a loss — or a win
+    expect(stats.winRate).toBeNull();
   });
 
-  it("filters by timeframe when a session is requested", async () => {
-    const fetchFn = mockFetch([]);
-    await getStats(undefined, "1h");
-    const [url] = fetchFn.mock.calls[0];
-    expect(url).toContain("timeframe=eq.1h");
+  it("degrades to zero stats when the RPC is unavailable (e.g. migration not yet applied)", async () => {
+    mockFetch({ message: "function get_signal_stats() does not exist" }, false);
+    expect(await getStats()).toEqual(ZERO_STATS);
+  });
+
+  it("degrades to zero stats when fetch itself rejects", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+    expect(await getStats()).toEqual(ZERO_STATS);
   });
 });

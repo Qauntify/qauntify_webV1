@@ -20,9 +20,11 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   const supabase = await createClient();
-  const { data } = await supabase.auth.getSession();
-  if (data.session) {
-    if (data.session.user.email && isAdminEmail(data.session.user.email)) {
+  // getUser() re-verifies the token with the auth server, unlike
+  // getSession() which just trusts the cookie's claimed contents.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    if (user.email && isAdminEmail(user.email)) {
       redirect("/admin");
     } else {
       redirect("/dashboard");

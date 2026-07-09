@@ -40,7 +40,7 @@ async function SessionSection({
   subtitle: string;
   timeframe: string;
   emptyHint: string;
-  accessToken: string;
+  accessToken: string | undefined;
 }) {
   const [signals, stats] = await Promise.all([
     getSignals(30, accessToken, timeframe),
@@ -83,9 +83,14 @@ export default async function Dashboard({
   searchParams: Promise<{ admin?: string; tab?: string }>;
 }) {
   const supabase = await createClient();
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) redirect("/login");
-  const accessToken = data.session.access_token;
+  // getUser() re-verifies the token with the auth server — the redirect
+  // decision must not trust a raw (possibly stale/tampered) cookie
+  // session. getSession() is only safe to read afterward, purely to pull
+  // out the access token for the RLS-authenticated signals fetches below.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  const { data: { session } } = await supabase.auth.getSession();
+  const accessToken = session?.access_token;
   const { admin, tab } = await searchParams;
   
   const currentTab = tab === "swing" ? "swing" : tab === "scalping" ? "scalping" : "all";
@@ -98,7 +103,7 @@ export default async function Dashboard({
       <div className="w-full space-y-6">
         {admin === "denied" ? (
           <Notice tone="error">
-            Admin access is not enabled for {data.session.user.email}. Ask the
+            Admin access is not enabled for {user.email}. Ask the
             owner to add your email to ADMIN_EMAILS, then sign out and back in.
           </Notice>
         ) : null}
