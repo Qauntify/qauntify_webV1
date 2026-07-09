@@ -52,4 +52,21 @@ describe("SignalsGrid", () => {
     render(<SignalsGrid signals={[{ ...SIGNAL, status: "tp_hit" }]} />);
     expect(screen.getByText("TP hit")).toBeDefined();
   });
+
+  it("grays out the card when the signal hit stop loss", () => {
+    render(<SignalsGrid signals={[{ ...SIGNAL, status: "sl_hit" }]} />);
+    const card = screen.getByRole("button", { name: /btcusdt/i });
+    expect(card.className).toContain("grayscale");
+  });
+
+  it("does not gray out open, tp_hit, or expired cards", () => {
+    for (const status of ["open", "tp_hit", "expired"] as const) {
+      const { unmount } = render(
+        <SignalsGrid signals={[{ ...SIGNAL, status }]} />,
+      );
+      const card = screen.getByRole("button", { name: /btcusdt/i });
+      expect(card.className).not.toContain("grayscale");
+      unmount();
+    }
+  });
 });

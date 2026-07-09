@@ -76,13 +76,16 @@ export function SignalCard({
   adminSlot?: React.ReactNode;
 }) {
   const isLong = signal.direction === "long";
+  const isSlHit = signal.status === "sl_hit";
   const Component = onSelect ? "button" : "div";
 
   return (
     <Component
       type={onSelect ? "button" : undefined}
       onClick={onSelect ? () => onSelect(signal) : undefined}
-      className={`group relative w-full overflow-hidden rounded-xl border border-line bg-card text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-accent/40 hover:shadow-xl hover:shadow-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper`}
+      className={`group relative w-full overflow-hidden rounded-xl border border-line bg-card text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-accent/40 hover:shadow-xl hover:shadow-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${
+        isSlHit ? "grayscale opacity-60 hover:opacity-80" : ""
+      }`}
     >
       {/* Dynamic border based on direction */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${isLong ? "bg-long" : "bg-short"} transition-all duration-300 group-hover:w-1.5`} />
