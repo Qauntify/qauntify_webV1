@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export function Logo({
@@ -12,12 +13,15 @@ export function Logo({
       href="/"
       className={`inline-flex items-center gap-2.5 text-lg font-bold tracking-tight ${className}`}
     >
-      <span
-        className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white"
+      <Image
+        src="/logo/logo.png"
+        alt=""
+        width={32}
+        height={32}
+        priority
+        className="h-8 w-8"
         aria-hidden
-      >
-        Q
-      </span>
+      />
       <span className="text-ink">
         Qaunt<span className="text-accent">ify</span>
         {suffix ? (
