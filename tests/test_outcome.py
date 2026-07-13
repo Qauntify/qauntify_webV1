@@ -32,21 +32,26 @@ def _candle(hours_after=1, high=105.0, low=99.0):
 
 
 def test_long_tp_hit():
-    assert check_outcome(_row(), [_candle(high=111.0)]) == "tp_hit"
+    outcome, closed_at = check_outcome(_row(), [_candle(high=111.0)])
+    assert outcome == "tp_hit"
+    assert closed_at.startswith("2026-07-07T13:00:00")
 
 
 def test_long_sl_hit():
-    assert check_outcome(_row(), [_candle(low=94.0)]) == "sl_hit"
+    outcome, _ = check_outcome(_row(), [_candle(low=94.0)])
+    assert outcome == "sl_hit"
 
 
 def test_short_tp_hit():
     row = _row(direction="short", stop=105.0, target=90.0)
-    assert check_outcome(row, [_candle(high=100.0, low=89.0)]) == "tp_hit"
+    outcome, _ = check_outcome(row, [_candle(high=100.0, low=89.0)])
+    assert outcome == "tp_hit"
 
 
 def test_short_sl_hit():
     row = _row(direction="short", stop=105.0, target=90.0)
-    assert check_outcome(row, [_candle(high=106.0)]) == "sl_hit"
+    outcome, _ = check_outcome(row, [_candle(high=106.0)])
+    assert outcome == "sl_hit"
 
 
 def test_still_open_when_neither_level_reached():
@@ -54,7 +59,8 @@ def test_still_open_when_neither_level_reached():
 
 
 def test_candle_spanning_both_levels_counts_as_stop():
-    assert check_outcome(_row(), [_candle(high=111.0, low=94.0)]) == "sl_hit"
+    outcome, _ = check_outcome(_row(), [_candle(high=111.0, low=94.0)])
+    assert outcome == "sl_hit"
 
 
 def test_candles_before_creation_are_ignored():
@@ -64,7 +70,9 @@ def test_candles_before_creation_are_ignored():
 
 def test_first_hit_wins_across_candles():
     candles = [_candle(hours_after=1, high=111.0), _candle(hours_after=2, low=94.0)]
-    assert check_outcome(_row(), candles) == "tp_hit"
+    outcome, closed_at = check_outcome(_row(), candles)
+    assert outcome == "tp_hit"
+    assert "T13:00:00" in closed_at
 
 
 class FakeResponse:

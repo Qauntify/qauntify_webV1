@@ -160,7 +160,8 @@ def test_already_signaled_false_when_no_history_or_error(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("db down")
     monkeypatch.setattr("signals.run.latest_signal", boom)
-    assert already_signaled(_setup(), _cfg()) is False
+    # Fail closed: lookup errors block stores rather than allow duplicates.
+    assert already_signaled(_setup(), _cfg()) is True
 
 
 def _no_signal_report(kind="no_setup", rationale="No crossover yet."):

@@ -8,32 +8,45 @@ def _candle(i, o, h, l, c):
 
 
 def _bullish_ict_series():
-    """Candles with liquidity sweep below swing low then CHoCH above swing high."""
+    """Fresh sweep + CHoCH with clear pivots and stop risk inside ATR cap.
+
+    Layout (indices in the returned list):
+      0-11  flat warmup
+      12    swing low pivot (~98)
+      13-14 rise
+      15    swing high pivot (~102)
+      16-17 pullback
+      18    liquidity sweep below swing low, close back above
+      19-20 CHoCH closes above swing high (fresh vs latest entry)
+    """
     candles = []
-    for i in range(10):
-        candles.append(_candle(i, 95, 96, 92, 95))
-    candles.append(_candle(10, 94, 95, 90, 94))
-    for i in range(11, 20):
-        candles.append(_candle(i, 95, 96, 91, 95))
-    for i in range(20, 25):
-        candles.append(_candle(i, 100, 105, 99, 102))
-    candles.append(_candle(25, 104, 110, 103, 108))
-    for i in range(26, 35):
-        candles.append(_candle(i, 105, 109, 104, 106))
-    candles.append(_candle(35, 93, 94, 88, 92))
-    for i, close in enumerate([107, 111, 112], start=36):
-        candles.append(_candle(i, close - 0.5, close + 0.5, close - 1.0, close))
+    for i in range(16):
+        candles.append(_candle(i, 100, 100.8, 99.2, 100))
+    # Swing low pivot at 16 (lower than neighbors on both sides).
+    candles.append(_candle(16, 99.5, 100.0, 98.0, 99.0))
+    candles.append(_candle(17, 99.0, 100.5, 98.8, 100.0))
+    candles.append(_candle(18, 100.0, 101.0, 99.5, 100.5))
+    # Swing high pivot at 19.
+    candles.append(_candle(19, 100.5, 102.0, 100.2, 101.5))
+    candles.append(_candle(20, 101.5, 101.8, 100.5, 101.0))
+    candles.append(_candle(21, 101.0, 101.2, 100.0, 100.2))
+    # Sweep: wick below 98, close back above.
+    candles.append(_candle(22, 100.0, 100.5, 96.8, 99.2))
+    # CHoCH within last 3 bars.
+    candles.append(_candle(23, 99.5, 102.5, 99.0, 102.2))
+    candles.append(_candle(24, 102.0, 102.8, 101.5, 102.4))
     return candles
 
 
 def test_detect_ict_setup_bullish():
     candles = _bullish_ict_series()
-    atr14 = [2.0] * len(candles)
+    atr14 = [4.0] * len(candles)
     setup = detect_ict_setup("BTCUSDT", candles, atr14)
     assert setup is not None
     assert setup.direction == "long"
     assert setup.indicators["structure"] == "bullish_choch"
     assert setup.stop_loss < setup.entry < setup.take_profit
+    assert abs(setup.entry - setup.stop_loss) / 4.0 <= 2.0
 
 
 def test_detect_ict_setup_none_on_flat_market():
@@ -43,14 +56,26 @@ def test_detect_ict_setup_none_on_flat_market():
 
 
 def test_detect_ict_setup_bullish_shallow_sweep_is_rejected():
-    # Same series as the passing bullish test, but the sweep wick barely
-    # clears the prior swing low (depth 0.1 vs ATR 2.0) — noise, not a
-    # genuine liquidity grab, so no setup should fire.
     candles = list(_bullish_ict_series())
-    swept = candles[35]
-    candles[35] = _candle(35, swept.open, swept.high, 89.9, swept.close)
-    atr14 = [2.0] * len(candles)
+    candles[22] = _candle(22, 100.0, 100.5, 97.8, 99.2)
+    atr14 = [4.0] * len(candles)
     assert detect_ict_setup("BTCUSDT", candles, atr14) is None
+
+
+def test_detect_ict_setup_rejects_oversized_stop():
+    candles = _bullish_ict_series()
+    atr14 = [0.2] * len(candles)
+    assert detect_ict_setup("BTCUSDT", candles, atr14) is None
+
+
+def test_detect_ict_setup_honors_htf_and_adx():
+    candles = _bullish_ict_series()
+    atr14 = [4.0] * len(candles)
+    adx14 = [15.0] * len(candles)
+    assert detect_ict_setup("BTCUSDT", candles, atr14, adx14=adx14) is None
+    assert detect_ict_setup(
+        "BTCUSDT", candles, atr14, htf_trend="down",
+    ) is None
 
 
 def test_strategy_router_uses_ema_by_default():
@@ -83,7 +108,7 @@ def test_strategy_router_passes_adx_and_htf_trend_to_ema_cross():
     rsi14 = [55.0] * n
     macd_hist = [0.5] * n
     atr14 = [2.0] * n
-    adx14 = [15.0] * n  # below the trend-regime threshold -> blocks the setup
+    adx14 = [15.0] * n
 
     setup = detect_setup(
         "ema_cross", "BTCUSDT", candles, ema9, ema21, rsi14, macd_hist,
@@ -102,10 +127,22 @@ def test_strategy_router_dispatches_ict():
     candles = _bullish_ict_series()
     n = len(candles)
     none_series = [None] * n
-    atr14 = [2.0] * n
+    atr14 = [4.0] * n
     setup = detect_setup(
         "ict_smc", "BTCUSDT", candles, none_series, none_series,
         none_series, none_series, atr14,
     )
     assert setup is not None
     assert setup.indicators["strategy"] == "ict_smc"
+
+
+def test_strategy_router_passes_htf_to_ict():
+    candles = _bullish_ict_series()
+    n = len(candles)
+    none_series = [None] * n
+    atr14 = [4.0] * n
+    setup = detect_setup(
+        "ict_smc", "BTCUSDT", candles, none_series, none_series,
+        none_series, none_series, atr14, htf_trend="down",
+    )
+    assert setup is None

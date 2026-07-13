@@ -1,5 +1,21 @@
 export type SignalStatus = "open" | "tp_hit" | "sl_hit" | "expired";
 
+export type SignalIndicators = {
+  strategy?: string;
+  ema9?: number;
+  ema21?: number;
+  rsi?: number;
+  macdHist?: number;
+  adx?: number;
+  htfTrend?: string;
+  structure?: string;
+  sweepLevel?: number;
+  chochLevel?: number;
+  sweepLow?: number;
+  sweepHigh?: number;
+  atr?: number;
+};
+
 export type Signal = {
   id: string;
   symbol: string;
@@ -10,7 +26,7 @@ export type Signal = {
   takeProfit: number;
   confidence: number;
   rationale: string;
-  indicators: { ema9: number; ema21: number; rsi: number; macdHist: number };
+  indicators: SignalIndicators;
   newsHeadlines: string[];
   createdAt: string;
   closedAt: string | null;
@@ -38,7 +54,7 @@ type SignalRow = {
   take_profit: number;
   confidence: number;
   rationale: string;
-  indicators: { ema9: number; ema21: number; rsi: number; macd_hist: number };
+  indicators: Record<string, unknown>;
   news_headlines: unknown;
   created_at: string;
   closed_at?: string | null;
@@ -148,6 +164,32 @@ async function fetchRowsPaginated(
   }
 }
 
+function num(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function str(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function parseIndicators(raw: Record<string, unknown>): SignalIndicators {
+  return {
+    strategy: str(raw.strategy),
+    ema9: num(raw.ema9),
+    ema21: num(raw.ema21),
+    rsi: num(raw.rsi),
+    macdHist: num(raw.macd_hist),
+    adx: num(raw.adx),
+    htfTrend: str(raw.htf_trend),
+    structure: str(raw.structure),
+    sweepLevel: num(raw.sweep_level),
+    chochLevel: num(raw.choch_level),
+    sweepLow: num(raw.sweep_low),
+    sweepHigh: num(raw.sweep_high),
+    atr: num(raw.atr),
+  };
+}
+
 function parseRow(row: SignalRow): Signal | null {
   if (row.direction !== "long" && row.direction !== "short") return null;
   if (!Array.isArray(row.news_headlines)) return null;
@@ -162,12 +204,7 @@ function parseRow(row: SignalRow): Signal | null {
     takeProfit: row.take_profit,
     confidence: row.confidence,
     rationale: row.rationale,
-    indicators: {
-      ema9: row.indicators.ema9,
-      ema21: row.indicators.ema21,
-      rsi: row.indicators.rsi,
-      macdHist: row.indicators.macd_hist,
-    },
+    indicators: parseIndicators(row.indicators),
     newsHeadlines: row.news_headlines as string[],
     createdAt: row.created_at,
     closedAt: typeof row.closed_at === "string" ? row.closed_at : null,

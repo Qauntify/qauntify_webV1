@@ -7,8 +7,15 @@ STRUCTURE_LOOKBACK = 60
 MIN_CANDLES = 25
 SWEEP_LOOKBACK = 12
 CHOCH_LOOKBACK = 5
+# CHoCH must complete within this many bars of the latest closed candle,
+# otherwise the setup is stale relative to a market-order entry.
+MAX_BARS_SINCE_CHOCH = 3
 ATR_STOP_BUFFER = 0.5
 RISK_REWARD = 2.0
+# Reject setups whose stop is farther than this many ATRs from entry —
+# otherwise 2R targets become unrealistic for a late market entry.
+MAX_STOP_ATR = 2.0
+ADX_TREND_MIN = 20.0
 # A tight PIVOT_LEFT/RIGHT window flags almost any small wick past a prior
 # swing point as a "sweep." Requiring the wick to clear the level by at
 # least this fraction of ATR filters that noise out, keeping only sweeps
@@ -47,9 +54,29 @@ def _recent_pivot_level(candles, pivot_indices, before_index, *, kind):
     return None, None
 
 
-def detect_setup(symbol, candles, atr14):
-    """Return a CandidateSetup on liquidity sweep + CHoCH, else None."""
+def _choch_bar_index(choch_slice, sweep_i, predicate) -> int | None:
+    for offset, candle in enumerate(choch_slice):
+        if predicate(candle):
+            return sweep_i + 1 + offset
+    return None
+
+
+def _risk_ok(entry: float, stop: float, atr_value: float) -> bool:
+    if atr_value <= 0:
+        return False
+    return abs(entry - stop) / atr_value <= MAX_STOP_ATR
+
+
+def detect_setup(symbol, candles, atr14, adx14=None, htf_trend=None):
+    """Return a CandidateSetup on liquidity sweep + CHoCH, else None.
+
+    Prefers the newest valid sweep in the lookback so entry at the latest
+    close is not paired with an ancient stop. `adx14`/`htf_trend` apply the
+    same regime/confluence gates as ema_cross when provided.
+    """
     if len(candles) < MIN_CANDLES or atr14[-1] is None:
+        return None
+    if adx14 is not None and adx14[-1] is not None and adx14[-1] < ADX_TREND_MIN:
         return None
 
     window = candles[-STRUCTURE_LOOKBACK:]
@@ -60,10 +87,11 @@ def detect_setup(symbol, candles, atr14):
 
     entry = candles[-1].close
     atr_value = atr14[-1]
+    last_i = len(window) - 1
     sweep_start = max(0, len(window) - SWEEP_LOOKBACK)
 
-    # Bullish: sweep below swing low, close back above, then break swing high.
-    for sweep_i in range(sweep_start, len(window) - 1):
+    # Newest sweep first — stale structure + fresh entry is the failure mode.
+    for sweep_i in range(len(window) - 2, sweep_start - 1, -1):
         pivot_idx, swing_low = _recent_pivot_level(
             window, lows, sweep_i, kind="low",
         )
@@ -82,10 +110,17 @@ def detect_setup(symbol, candles, atr14):
         )
         if swing_high is None:
             continue
-        if not any(c.close > swing_high for c in choch_slice):
+        choch_i = _choch_bar_index(
+            choch_slice, sweep_i, lambda c: c.close > swing_high,
+        )
+        if choch_i is None:
+            continue
+        if last_i - choch_i > MAX_BARS_SINCE_CHOCH:
+            continue
+        if htf_trend == "down":
             continue
         stop = bar.low - ATR_STOP_BUFFER * atr_value
-        if stop >= entry:
+        if stop >= entry or not _risk_ok(entry, stop, atr_value):
             continue
         take_profit = entry + RISK_REWARD * (entry - stop)
         indicators = {
@@ -96,12 +131,15 @@ def detect_setup(symbol, candles, atr14):
             "sweep_low": bar.low,
             "atr": atr_value,
         }
+        if adx14 is not None and adx14[-1] is not None:
+            indicators["adx"] = adx14[-1]
+        if htf_trend is not None:
+            indicators["htf_trend"] = htf_trend
         return CandidateSetup(
             symbol, "long", entry, stop, take_profit, indicators,
         )
 
-    # Bearish: sweep above swing high, close back below, then break swing low.
-    for sweep_i in range(sweep_start, len(window) - 1):
+    for sweep_i in range(len(window) - 2, sweep_start - 1, -1):
         pivot_idx, swing_high = _recent_pivot_level(
             window, highs, sweep_i, kind="high",
         )
@@ -120,10 +158,17 @@ def detect_setup(symbol, candles, atr14):
         )
         if swing_low is None:
             continue
-        if not any(c.close < swing_low for c in choch_slice):
+        choch_i = _choch_bar_index(
+            choch_slice, sweep_i, lambda c: c.close < swing_low,
+        )
+        if choch_i is None:
+            continue
+        if last_i - choch_i > MAX_BARS_SINCE_CHOCH:
+            continue
+        if htf_trend == "up":
             continue
         stop = bar.high + ATR_STOP_BUFFER * atr_value
-        if stop <= entry:
+        if stop <= entry or not _risk_ok(entry, stop, atr_value):
             continue
         take_profit = entry - RISK_REWARD * (stop - entry)
         indicators = {
@@ -134,6 +179,10 @@ def detect_setup(symbol, candles, atr14):
             "sweep_high": bar.high,
             "atr": atr_value,
         }
+        if adx14 is not None and adx14[-1] is not None:
+            indicators["adx"] = adx14[-1]
+        if htf_trend is not None:
+            indicators["htf_trend"] = htf_trend
         return CandidateSetup(
             symbol, "short", entry, stop, take_profit, indicators,
         )

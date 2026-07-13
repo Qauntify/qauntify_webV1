@@ -21,17 +21,27 @@ def format_alert(signal: Signal) -> str:
 def format_no_signal_alert(report: NoSignalReport) -> str:
     """Telegram HTML-mode message explaining why no signal was stored."""
     ind = report.indicators
-    indicator_line = (
-        f"EMA9 {ind['ema9']:.2f} | EMA21 {ind['ema21']:.2f} | "
-        f"RSI {ind['rsi']:.1f} | MACD {ind['macd_hist']:.4f}"
-    )
+    if ind.get("strategy") == "ict_smc" or "structure" in ind:
+        parts = []
+        if "structure" in ind:
+            parts.append(f"structure {ind['structure']}")
+        if "atr" in ind:
+            parts.append(f"ATR {ind['atr']:.2f}")
+        if "adx" in ind:
+            parts.append(f"ADX {ind['adx']:.1f}")
+        indicator_line = " | ".join(parts) if parts else "ICT/SMC context"
+    else:
+        indicator_line = (
+            f"EMA9 {ind.get('ema9', 0):.2f} | EMA21 {ind.get('ema21', 0):.2f} | "
+            f"RSI {ind.get('rsi', 0):.1f} | MACD {ind.get('macd_hist', 0):.4f}"
+        )
     if report.kind == "rejected":
         header = (
             f"<b>REJECTED {html.escape(report.symbol)}</b>"
             f" ({html.escape(report.timeframe)})"
         )
         trade_line = (
-            f"{html.escape(report.direction.upper())} candidate"
+            f"{html.escape((report.direction or '').upper())} candidate"
             f" @ {report.entry:g} | SL {report.stop_loss:g}"
             f" | TP {report.take_profit:g}\n"
             f"Confidence {report.confidence}%"
@@ -83,7 +93,7 @@ def format_outcome_alert(signal_row: dict, outcome: str) -> str:
     move = (exit_price - entry) / entry * 100
     if signal_row["direction"] == "short":
         move = -move
-    header = "\U0001F3AF TP HIT" if is_tp else "\U0001F6D1 SL HIT"
+    header = "TP HIT" if is_tp else "SL HIT"
     return (
         f"<b>{header} {html.escape(signal_row['symbol'])}</b>"
         f" — {html.escape(signal_row['direction'].upper())} {move:+.2f}%\n"

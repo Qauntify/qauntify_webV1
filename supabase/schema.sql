@@ -111,12 +111,8 @@ alter table public.bot_settings enable row level security;
 insert into public.bot_settings (id) values (1)
     on conflict (id) do nothing;
 
--- Keep existing installs aligned with the four live markets.
-update public.bot_settings
-set
-    symbols = '["BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT"]'::jsonb,
-    updated_at = now()
-where id = 1;
+-- Do not UPDATE symbols here — re-running schema.sql must not wipe admin
+-- edits. New installs get defaults from the column default / INSERT above.
 
 -- AI event log: stores all SEA-LION responses (confirm/reject/no-setup explanations)
 -- for audit + admin dashboard visibility. RLS enabled with no policies so only

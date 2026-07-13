@@ -11,21 +11,41 @@ SYSTEM_PROMPT = (
     "You are a disciplined trading-signal reviewer. You receive a candidate "
     "trade setup derived from technical rules, plus recent news "
     "headlines. Decide whether the setup is worth taking.\n"
+    "Checklist before confirming:\n"
+    "1) Does news conflict with the trade direction?\n"
+    "2) Is risk/reward still sensible given the levels?\n"
+    "3) Does the timeframe context (scalp vs swing) support acting now?\n"
+    "4) If ADX/HTF trend is provided, does it agree?\n"
     "Respond with ONLY a JSON object, no other text:\n"
     '{"verdict": "confirm" or "reject", "confidence": <integer 0-100>, '
     '"rationale": "<one short paragraph explaining your decision>"}'
 )
 
-NO_SETUP_PROMPTS = {
-    "ema_cross": (
-        "The rules engine found no valid trade setup (no EMA 9/21 crossover "
-        "with aligned RSI and MACD filters on the last few hourly bars)."
-    ),
-    "ict_smc": (
-        "The rules engine found no valid ICT/SMC setup (no recent liquidity "
-        "sweep followed by a structure shift / CHoCH on the hourly chart)."
-    ),
-}
+
+def _no_setup_reason(strategy: str, timeframe: str) -> str:
+    chart = f"{timeframe} chart" if timeframe else "chart"
+    if strategy == "ict_smc":
+        return (
+            f"The rules engine found no valid ICT/SMC setup (no recent "
+            f"liquidity sweep followed by a structure shift / CHoCH on the "
+            f"{chart})."
+        )
+    return (
+        f"The rules engine found no valid trade setup (no EMA 9/21 crossover "
+        f"with aligned RSI and MACD filters on the last few {timeframe or 'hourly'} "
+        f"bars)."
+    )
+
+
+def no_setup_rationale(symbol: str, timeframe: str, indicators: dict,
+                       strategy: str = DEFAULT_SIGNAL_STRATEGY) -> str:
+    """Deterministic no-setup copy — avoids burning an LLM call every quiet scan."""
+    reason = _no_setup_reason(strategy, timeframe)
+    context = _format_indicators(strategy, indicators)
+    return (
+        f"{symbol} {timeframe}: {reason} "
+        f"Current readings: {context}."
+    )
 
 
 def _format_indicators(strategy: str, indicators: dict) -> str:
@@ -39,6 +59,8 @@ def _format_indicators(strategy: str, indicators: dict) -> str:
             ("sweep_low", "sweep low"),
             ("sweep_high", "sweep high"),
             ("atr", "ATR"),
+            ("adx", "ADX"),
+            ("htf_trend", "HTF trend"),
         ):
             if key in indicators:
                 value = indicators[key]
@@ -67,7 +89,8 @@ def _format_indicators(strategy: str, indicators: dict) -> str:
 
 
 def build_messages(setup: CandidateSetup, headlines: list,
-                   strategy: str = DEFAULT_SIGNAL_STRATEGY) -> list:
+                   strategy: str = DEFAULT_SIGNAL_STRATEGY,
+                   timeframe: str = "1h") -> list:
     if headlines:
         news_block = "\n".join(f"- {h}" for h in headlines)
     else:
@@ -79,10 +102,12 @@ def build_messages(setup: CandidateSetup, headlines: list,
         if active == "ict_smc"
         else "- Strategy: EMA 9/21 crossover with RSI + MACD filters\n"
     )
+    session_hint = "scalp" if timeframe in ("5m", "15m") else "swing"
     user_content = (
         f"Candidate setup:\n"
         f"{strategy_line}"
         f"- Symbol: {setup.symbol}\n"
+        f"- Timeframe: {timeframe} ({session_hint})\n"
         f"- Direction: {setup.direction}\n"
         f"- Entry: {setup.entry}\n"
         f"- Stop loss: {setup.stop_loss}\n"
@@ -117,16 +142,20 @@ def parse_confirmation(text: str) -> Confirmation:
 
 
 def confirm_setup(setup: CandidateSetup, headlines: list, llm,
-                  strategy: str = DEFAULT_SIGNAL_STRATEGY) -> Confirmation:
+                  strategy: str = DEFAULT_SIGNAL_STRATEGY,
+                  timeframe: str = "1h") -> Confirmation:
     try:
-        reply = llm.chat(build_messages(setup, headlines, strategy=strategy))
+        reply = llm.chat(
+            build_messages(setup, headlines, strategy=strategy, timeframe=timeframe),
+        )
         return parse_confirmation(reply)
     except Exception as exc:
         return Confirmation("reject", 0, f"LLM call failed: {exc}")
 
 
-def no_setup_system_prompt(strategy: str = DEFAULT_SIGNAL_STRATEGY) -> str:
-    reason = NO_SETUP_PROMPTS.get(strategy, NO_SETUP_PROMPTS["ema_cross"])
+def no_setup_system_prompt(strategy: str = DEFAULT_SIGNAL_STRATEGY,
+                           timeframe: str = "1h") -> str:
+    reason = _no_setup_reason(strategy, timeframe)
     return (
         "You are a disciplined trading analyst. You receive the current "
         "technical readings for a market pair (crypto, gold, or forex) and "
@@ -155,7 +184,7 @@ def build_no_setup_messages(symbol, timeframe, indicators, headlines,
         f"Recent news headlines:\n{news_block}"
     )
     return [
-        {"role": "system", "content": no_setup_system_prompt(strategy)},
+        {"role": "system", "content": no_setup_system_prompt(strategy, timeframe)},
         {"role": "user", "content": user_content},
     ]
 
@@ -176,6 +205,7 @@ def parse_rationale(text: str) -> str:
 
 def explain_no_setup(symbol, timeframe, indicators, headlines, llm,
                      strategy: str = DEFAULT_SIGNAL_STRATEGY) -> str:
+    """Legacy LLM path kept for tests; production uses no_setup_rationale."""
     try:
         reply = llm.chat(build_no_setup_messages(
             symbol, timeframe, indicators, headlines, strategy=strategy,

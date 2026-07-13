@@ -115,7 +115,7 @@ def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
     assert result.signal is None
     assert result.no_signal is not None
     assert result.no_signal.kind == "no_setup"
-    assert result.no_signal.rationale == "No EMA crossover yet."
+    assert "no valid trade setup" in result.no_signal.rationale.lower()
     assert saved == []
     assert len(events) == 1
 
@@ -320,13 +320,15 @@ def test_fetch_htf_trend_down_when_fast_ema_below_slow(monkeypatch):
     assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) == "down"
 
 
-def test_fetch_htf_trend_none_on_fetch_failure(monkeypatch):
+def test_fetch_htf_trend_raises_on_fetch_failure(monkeypatch):
     def boom(symbol, interval, limit, session=None):
         raise RuntimeError("binance down")
 
     monkeypatch.setattr(run_module, "fetch_candles", boom)
     monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
-    assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) is None
+    import pytest
+    with pytest.raises(RuntimeError):
+        run_module._fetch_htf_trend("BTCUSDT", "1h", _config())
 
 
 def test_fetch_htf_trend_none_during_warmup(monkeypatch):
@@ -455,6 +457,8 @@ def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
                         lambda url, key, session=None: settings)
     monkeypatch.setattr(run_module, "fetch_feed_titles",
                         lambda session=None: [])
+    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
     monkeypatch.setattr(run_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
 
@@ -466,7 +470,8 @@ def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
 
     def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
                   session=None, recent_events=None, recent_signals=None,
-                  confluence_timeframe=None):
+                  open_symbols=None, confluence_timeframe=None,
+                  min_store_confidence=0):
         # Every scan in a session's batch must be in flight before any
         # finishes — proves the loop is parallel, not sequential.
         started.wait()
@@ -495,11 +500,13 @@ def test_main_reports_expired_signals_in_run_summary(monkeypatch):
                         lambda url, key, session=None: settings)
     monkeypatch.setattr(run_module, "fetch_feed_titles",
                         lambda session=None: [])
+    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
     monkeypatch.setattr(
         run_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
         session=None, recent_events=None, recent_signals=None,
-        confluence_timeframe=None:
+        open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
         run_module.ScanResult())
 
     expired_row = {"symbol": "ETHUSDT", "direction": "long", "entry": 100.0}
@@ -525,11 +532,13 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
                         lambda url, key, session=None: settings)
     monkeypatch.setattr(run_module, "fetch_feed_titles",
                         lambda session=None: [])
+    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
     monkeypatch.setattr(
         run_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
         session=None, recent_events=None, recent_signals=None,
-        confluence_timeframe=None:
+        open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
         run_module.ScanResult(candles=candles))
 
     seen = {}
@@ -658,13 +667,15 @@ def test_main_prefetches_recent_maps_once_per_session_not_per_symbol(monkeypatch
                         lambda url, key, session=None: settings)
     monkeypatch.setattr(run_module, "fetch_feed_titles",
                         lambda session=None: [])
+    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
     monkeypatch.setattr(run_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
     monkeypatch.setattr(
         run_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
         session=None, recent_events=None, recent_signals=None,
-        confluence_timeframe=None:
+        open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
         run_module.ScanResult())
     monkeypatch.setattr(run_module, "save_engine_run",
                         lambda run, url, key, session=None: None)
@@ -701,6 +712,8 @@ def test_main_passes_prefetched_maps_into_scan_symbol(monkeypatch):
                         lambda url, key, session=None: settings)
     monkeypatch.setattr(run_module, "fetch_feed_titles",
                         lambda session=None: [])
+    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
     monkeypatch.setattr(run_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
     monkeypatch.setattr(run_module, "save_engine_run",
@@ -716,8 +729,9 @@ def test_main_passes_prefetched_maps_into_scan_symbol(monkeypatch):
     seen = []
 
     def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
-                 session=None, recent_events=None, recent_signals=None,
-                 confluence_timeframe=None):
+                  session=None, recent_events=None, recent_signals=None,
+                  open_symbols=None, confluence_timeframe=None,
+                  min_store_confidence=0):
         seen.append((recent_events, recent_signals))
         return run_module.ScanResult()
 
@@ -735,6 +749,8 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
                         lambda url, key, session=None: settings)
     monkeypatch.setattr(run_module, "fetch_feed_titles",
                         lambda session=None: [])
+    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
     monkeypatch.setattr(run_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
 
@@ -742,7 +758,8 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
 
     def fake_scan(symbol, cfg, llm, *, strategy, timeframe,
                   feed_titles=None, session=None, recent_events=None,
-                  recent_signals=None, confluence_timeframe=None):
+                  recent_signals=None, open_symbols=None,
+                  confluence_timeframe=None, min_store_confidence=0):
         scanned.append((symbol, timeframe))
         return run_module.ScanResult()
 
@@ -771,6 +788,8 @@ def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypat
                         lambda url, key, session=None: settings)
     monkeypatch.setattr(run_module, "fetch_feed_titles",
                         lambda session=None: [])
+    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
     monkeypatch.setattr(run_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
     monkeypatch.setattr(run_module, "save_engine_run",
@@ -779,8 +798,9 @@ def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypat
     seen = []
 
     def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
-                 session=None, recent_events=None, recent_signals=None,
-                 confluence_timeframe=None):
+                  session=None, recent_events=None, recent_signals=None,
+                  open_symbols=None, confluence_timeframe=None,
+                  min_store_confidence=0):
         seen.append((timeframe, confluence_timeframe))
         return run_module.ScanResult()
 
@@ -799,11 +819,13 @@ def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
                         lambda url, key, session=None: settings)
     monkeypatch.setattr(run_module, "fetch_feed_titles",
                         lambda session=None: [])
+    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
     monkeypatch.setattr(
         run_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
         session=None, recent_events=None, recent_signals=None,
-        confluence_timeframe=None:
+        open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
         run_module.ScanResult(candles=candles))
 
     seen = {}
@@ -879,7 +901,7 @@ def test_scan_symbol_runs_when_never_evaluated_before(monkeypatch):
     assert result.no_signal is not None
 
 
-def test_scan_symbol_proceeds_when_throttle_lookup_fails(monkeypatch):
+def test_scan_symbol_skips_when_throttle_lookup_fails(monkeypatch):
     def boom(symbol, timeframe, url, key, session=None):
         raise RuntimeError("db down")
 
@@ -894,7 +916,9 @@ def test_scan_symbol_proceeds_when_throttle_lookup_fails(monkeypatch):
     result = scan_symbol("BTCUSDT", _config(), FakeLLM(reply='{"rationale": "flat"}'),
                          timeframe="1h")
 
-    assert result.no_signal is not None  # fail open — evaluate rather than go silent
+    # Fail closed: skip evaluation when recency cannot be verified.
+    assert result.signal is None
+    assert result.no_signal is None
 
 
 def test_scan_symbol_scalp_throttle_is_shorter_than_swing(monkeypatch):

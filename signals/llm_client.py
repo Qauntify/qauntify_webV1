@@ -14,15 +14,28 @@ class SeaLionClient:
         self._session = session or requests.Session()
 
     def chat(self, messages, temperature=0.2):
+        payload = {
+            "model": self._model,
+            "messages": messages,
+            "temperature": temperature,
+            # Prefer structured JSON when the gateway supports it; ignored
+            # by models that don't — parse_confirmation still fail-closes.
+            "response_format": {"type": "json_object"},
+        }
         response = self._session.post(
             f"{self._base_url}/chat/completions",
             headers={"Authorization": f"Bearer {self._api_key}"},
-            json={
-                "model": self._model,
-                "messages": messages,
-                "temperature": temperature,
-            },
+            json=payload,
             timeout=60,
         )
+        # Some SEA-LION deployments reject response_format — retry plain.
+        if response.status_code >= 400 and "response_format" in (getattr(response, "text", "") or ""):
+            payload.pop("response_format", None)
+            response = self._session.post(
+                f"{self._base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                json=payload,
+                timeout=60,
+            )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]

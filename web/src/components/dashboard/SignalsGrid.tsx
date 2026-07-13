@@ -12,6 +12,41 @@ function riskReward(signal: Signal): string {
   return `${(reward / risk).toFixed(1)}R`;
 }
 
+function fmtNum(value: number | undefined, digits: number): string | null {
+  if (value === undefined) return null;
+  return value.toFixed(digits);
+}
+
+function indicatorRows(signal: Signal): { label: string; value: string }[] {
+  const ind = signal.indicators;
+  const rows: { label: string; value: string }[] = [];
+  if (ind.strategy === "ict_smc" || ind.structure) {
+    if (ind.structure) rows.push({ label: "Structure", value: ind.structure });
+    const sweep = fmtNum(ind.sweepLevel, 2);
+    if (sweep) rows.push({ label: "Sweep", value: sweep });
+    const choch = fmtNum(ind.chochLevel, 2);
+    if (choch) rows.push({ label: "CHoCH", value: choch });
+    const atr = fmtNum(ind.atr, 4);
+    if (atr) rows.push({ label: "ATR", value: atr });
+    const adx = fmtNum(ind.adx, 1);
+    if (adx) rows.push({ label: "ADX", value: adx });
+    if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
+    return rows.length > 0 ? rows : [{ label: "Strategy", value: "ICT / SMC" }];
+  }
+  const ema9 = fmtNum(ind.ema9, 2);
+  const ema21 = fmtNum(ind.ema21, 2);
+  const rsi = fmtNum(ind.rsi, 1);
+  const macd = fmtNum(ind.macdHist, 4);
+  if (ema9) rows.push({ label: "EMA 9", value: ema9 });
+  if (ema21) rows.push({ label: "EMA 21", value: ema21 });
+  if (rsi) rows.push({ label: "RSI", value: rsi });
+  if (macd) rows.push({ label: "MACD hist", value: macd });
+  const adx = fmtNum(ind.adx, 1);
+  if (adx) rows.push({ label: "ADX", value: adx });
+  if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
+  return rows.length > 0 ? rows : [{ label: "Indicators", value: "—" }];
+}
+
 function DirectionPill({ direction }: { direction: Signal["direction"] }) {
   const isLong = direction === "long";
   return (
@@ -271,10 +306,9 @@ function SignalDetailModal({
               Indicators
             </p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <DetailRow label="EMA 9" value={signal.indicators.ema9.toFixed(2)} />
-              <DetailRow label="EMA 21" value={signal.indicators.ema21.toFixed(2)} />
-              <DetailRow label="RSI" value={signal.indicators.rsi.toFixed(1)} />
-              <DetailRow label="MACD hist" value={signal.indicators.macdHist.toFixed(4)} />
+              {indicatorRows(signal).map((row) => (
+                <DetailRow key={row.label} label={row.label} value={row.value} />
+              ))}
             </div>
           </div>
 

@@ -40,6 +40,9 @@ def _bucket_stats(rows: list) -> dict:
     losses = sum(1 for r in rows if r["status"] == "sl_hit")
     expired = sum(1 for r in rows if r["status"] == "expired")
     decided = wins + losses
+    # Expired rows have unknown P&L — exclude them from avg_r so expiry
+    # rate cannot dilute expectancy toward zero.
+    decided_rows = [r for r in rows if r["status"] in ("tp_hit", "sl_hit")]
     return {
         "count": len(rows),
         "wins": wins,
@@ -48,7 +51,10 @@ def _bucket_stats(rows: list) -> dict:
         # Expired rows are neither a win nor a loss, so they're excluded
         # from the win-rate denominator rather than counted against it.
         "win_rate": wins / decided if decided else None,
-        "avg_r": sum(_r_multiple(r) for r in rows) / len(rows) if rows else None,
+        "avg_r": (
+            sum(_r_multiple(r) for r in decided_rows) / len(decided_rows)
+            if decided_rows else None
+        ),
     }
 
 

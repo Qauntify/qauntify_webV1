@@ -9,10 +9,7 @@ function authorized(request: Request): boolean {
   if (!secret) return false;
 
   const header = request.headers.get("authorization");
-  if (header === `Bearer ${secret}`) return true;
-
-  const url = new URL(request.url);
-  return url.searchParams.get("secret") === secret;
+  return header === `Bearer ${secret}`;
 }
 
 export async function GET(request: Request) {

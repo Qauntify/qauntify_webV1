@@ -11,28 +11,45 @@ RSI_OVERSOLD = 30.0
 # where EMA crossovers whipsaw most. 20 is the standard Wilder threshold
 # separating trending from ranging conditions.
 ADX_TREND_MIN = 20.0
+# Cap stop distance so late entries cannot invent oversized 2R targets.
+MAX_STOP_ATR = 2.5
+# If price has already traveled this many ATRs from the cross-bar close,
+# the setup is too late for a market entry at the latest close.
+MAX_ENTRY_DRIFT_ATR = 1.0
 
 
 def crossed_above_within(fast, slow, lookback=CROSS_LOOKBACK):
     """True if `fast` crossed above `slow` on any of the last `lookback` bars."""
-    n = len(fast)
-    for i in range(max(1, n - lookback), n):
-        if None in (fast[i - 1], slow[i - 1], fast[i], slow[i]):
-            continue
-        if fast[i - 1] <= slow[i - 1] and fast[i] > slow[i]:
-            return True
-    return False
+    return _latest_cross_index(fast, slow, lookback, above=True) is not None
 
 
 def crossed_below_within(fast, slow, lookback=CROSS_LOOKBACK):
     """True if `fast` crossed below `slow` on any of the last `lookback` bars."""
+    return _latest_cross_index(fast, slow, lookback, above=False) is not None
+
+
+def _latest_cross_index(fast, slow, lookback, *, above: bool) -> int | None:
     n = len(fast)
-    for i in range(max(1, n - lookback), n):
+    for i in range(n - 1, max(0, n - lookback) - 1, -1):
         if None in (fast[i - 1], slow[i - 1], fast[i], slow[i]):
             continue
-        if fast[i - 1] >= slow[i - 1] and fast[i] < slow[i]:
-            return True
-    return False
+        if above and fast[i - 1] <= slow[i - 1] and fast[i] > slow[i]:
+            return i
+        if not above and fast[i - 1] >= slow[i - 1] and fast[i] < slow[i]:
+            return i
+    return None
+
+
+def _risk_ok(entry: float, stop: float, atr_value: float) -> bool:
+    if atr_value <= 0:
+        return False
+    return abs(entry - stop) / atr_value <= MAX_STOP_ATR
+
+
+def _entry_still_near_cross(entry: float, cross_close: float, atr_value: float) -> bool:
+    if atr_value <= 0:
+        return False
+    return abs(entry - cross_close) / atr_value <= MAX_ENTRY_DRIFT_ATR
 
 
 def detect_setup(symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
@@ -51,6 +68,7 @@ def detect_setup(symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
     if adx14 is not None and adx14[-1] is not None and adx14[-1] < ADX_TREND_MIN:
         return None
     entry = candles[-1].close
+    atr_value = atr14[-1]
     indicators = {
         "ema9": ema9[-1],
         "ema21": ema21[-1],
@@ -65,26 +83,30 @@ def detect_setup(symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
 
     # A cross within the lookback only counts while it still holds on the
     # current bar — a cross that already reversed has no trend to trade.
-    if (crossed_above_within(ema9, ema21)
+    cross_up = _latest_cross_index(ema9, ema21, CROSS_LOOKBACK, above=True)
+    if (cross_up is not None
             and ema9[-1] > ema21[-1]
             and rsi14[-1] < RSI_OVERBOUGHT
             and macd_hist[-1] > 0
-            and htf_trend != "down"):
+            and htf_trend != "down"
+            and _entry_still_near_cross(entry, candles[cross_up].close, atr_value)):
         swing_low = min(c.low for c in recent)
-        stop = swing_low - ATR_STOP_BUFFER * atr14[-1]
-        if stop >= entry:
+        stop = swing_low - ATR_STOP_BUFFER * atr_value
+        if stop >= entry or not _risk_ok(entry, stop, atr_value):
             return None
         take_profit = entry + RISK_REWARD * (entry - stop)
         return CandidateSetup(symbol, "long", entry, stop, take_profit, indicators)
 
-    if (crossed_below_within(ema9, ema21)
+    cross_down = _latest_cross_index(ema9, ema21, CROSS_LOOKBACK, above=False)
+    if (cross_down is not None
             and ema9[-1] < ema21[-1]
             and rsi14[-1] > RSI_OVERSOLD
             and macd_hist[-1] < 0
-            and htf_trend != "up"):
+            and htf_trend != "up"
+            and _entry_still_near_cross(entry, candles[cross_down].close, atr_value)):
         swing_high = max(c.high for c in recent)
-        stop = swing_high + ATR_STOP_BUFFER * atr14[-1]
-        if stop <= entry:
+        stop = swing_high + ATR_STOP_BUFFER * atr_value
+        if stop <= entry or not _risk_ok(entry, stop, atr_value):
             return None
         take_profit = entry - RISK_REWARD * (stop - entry)
         return CandidateSetup(symbol, "short", entry, stop, take_profit, indicators)

@@ -115,10 +115,13 @@ def test_fetch_headlines_raises_when_all_feeds_fail():
         fetch_headlines("BTCUSDT", session=session)
 
 
-def test_fetch_headlines_unknown_symbol_returns_empty_without_network():
-    session = FakeSession({})
-    assert fetch_headlines("DOGEUSDT", session=session) == []
-    assert session.requested == []
+def test_fetch_headlines_unknown_symbol_derives_base_asset_keywords():
+    session = FakeSession({
+        FEED_URLS[0]: _rss("Dogecoin spikes after meme rally", "Solana hits new high"),
+    })
+    assert fetch_headlines("DOGEUSDT", session=session) == [
+        "Dogecoin spikes after meme rally",
+    ]
 
 
 def test_fetch_feed_titles_collects_all_feeds_once():

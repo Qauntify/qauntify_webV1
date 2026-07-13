@@ -79,7 +79,7 @@ TRADING_SESSIONS = (
 class BotSettings:
     """Engine behavior controlled from the /admin page (bot_settings table)."""
     symbols: tuple = ("BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT")
-    min_alert_confidence: int = 0  # gates Telegram alerts only, not storage
+    min_alert_confidence: int = 0  # gates storage + Telegram alerts
     signal_strategy: str = DEFAULT_SIGNAL_STRATEGY
 
 

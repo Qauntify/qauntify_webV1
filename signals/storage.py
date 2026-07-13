@@ -63,13 +63,49 @@ def save_engine_run(run: dict, supabase_url: str, service_key: str,
 
 def list_open_signals(supabase_url: str, service_key: str, session=None):
     """All signals with status 'open' (oldest first) as raw dicts.
-    Raises on any failure — including the status column not existing yet."""
+    Paginates past PostgREST default row caps. Raises on any failure —
+    including the status column not existing yet."""
     session = session or requests.Session()
+    page_size = 1000
+    offset = 0
+    rows: list = []
+    while True:
+        response = session.get(
+            f"{supabase_url}/rest/v1/signals"
+            "?status=eq.open"
+            "&select=id,symbol,timeframe,direction,entry,stop_loss,take_profit,created_at"
+            "&order=created_at.asc",
+            headers={
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}",
+                "Range": f"{offset}-{offset + page_size - 1}",
+                "Prefer": "count=exact",
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        batch = response.json()
+        if not isinstance(batch, list):
+            break
+        rows.extend(batch)
+        if len(batch) < page_size:
+            break
+        offset += page_size
+    return rows
+
+
+def open_symbols_for_timeframe(symbols, timeframe: str, supabase_url: str,
+                               service_key: str, session=None) -> set:
+    """Symbols in `symbols` that already have an open signal on `timeframe`.
+    Raises on any failure so callers can fail closed."""
+    if not symbols:
+        return set()
+    session = session or requests.Session()
+    symbols_filter = ",".join(symbols)
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
-        "?status=eq.open"
-        "&select=id,symbol,timeframe,direction,entry,stop_loss,take_profit,created_at"
-        "&order=created_at.asc",
+        f"?status=eq.open&timeframe=eq.{timeframe}"
+        f"&symbol=in.({symbols_filter})&select=symbol",
         headers={
             "apikey": service_key,
             "Authorization": f"Bearer {service_key}",
@@ -77,7 +113,7 @@ def list_open_signals(supabase_url: str, service_key: str, session=None):
         timeout=15,
     )
     response.raise_for_status()
-    return response.json()
+    return {row["symbol"] for row in response.json()}
 
 
 def close_signal(signal_id: str, status: str, closed_at: str,

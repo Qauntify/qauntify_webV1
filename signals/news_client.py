@@ -23,6 +23,23 @@ SYMBOL_KEYWORDS = {
 }
 
 
+def keywords_for_symbol(symbol: str) -> tuple[str, ...]:
+    """Keyword set for headline filtering; derives a base-asset token for
+    unknown symbols so admin-added markets are not permanently news-blind."""
+    known = SYMBOL_KEYWORDS.get(symbol)
+    if known is not None:
+        return known
+    base = symbol.upper()
+    for quote in ("USDT", "USD", "BUSD", "USDC"):
+        if base.endswith(quote) and len(base) > len(quote):
+            base = base[: -len(quote)]
+            break
+    base = base.lower()
+    if len(base) < 2:
+        return ()
+    return (base,)
+
+
 def _titles_from_feed(content: bytes) -> list:
     root = ET.fromstring(content)
     titles = []
@@ -34,12 +51,14 @@ def _titles_from_feed(content: bytes) -> list:
     return titles
 
 
-def _matches(title: str, keywords: tuple) -> bool:
-    # Word boundaries so "eth" doesn't match "together".
-    return any(
-        re.search(rf"\b{re.escape(keyword)}\b", title, re.IGNORECASE)
-        for keyword in keywords
-    )
+def _matches(title: str, keywords: tuple, *, prefix_ok: bool = False) -> bool:
+    # Word boundaries so "eth" doesn't match "together". Derived unknown-symbol
+    # keywords also allow a prefix match so "doge" hits "Dogecoin".
+    for keyword in keywords:
+        pattern = rf"\b{re.escape(keyword)}" + (r"" if prefix_ok else r"\b")
+        if re.search(pattern, title, re.IGNORECASE):
+            return True
+    return False
 
 
 def fetch_feed_titles(session=None) -> list:
@@ -61,13 +80,14 @@ def fetch_feed_titles(session=None) -> list:
 
 
 def filter_headlines(titles, symbol, limit=10) -> list:
-    """Titles relevant to `symbol` (deduped, first `limit`); [] for unknown symbols."""
-    keywords = SYMBOL_KEYWORDS.get(symbol)
-    if keywords is None:
+    """Titles relevant to `symbol` (deduped, first `limit`); [] when no keywords."""
+    keywords = keywords_for_symbol(symbol)
+    if not keywords:
         return []
+    loose = symbol not in SYMBOL_KEYWORDS
     headlines = []
     for title in titles:
-        if _matches(title, keywords) and title not in headlines:
+        if _matches(title, keywords, prefix_ok=loose) and title not in headlines:
             headlines.append(title)
     return headlines[:limit]
 
@@ -75,6 +95,6 @@ def filter_headlines(titles, symbol, limit=10) -> list:
 def fetch_headlines(symbol, limit=10, session=None):
     """Fetch + filter in one call. Prefer fetch_feed_titles once per run and
     filter_headlines per symbol when scanning multiple symbols."""
-    if symbol not in SYMBOL_KEYWORDS:
+    if not keywords_for_symbol(symbol):
         return []
     return filter_headlines(fetch_feed_titles(session=session), symbol, limit)

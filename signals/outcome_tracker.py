@@ -21,13 +21,20 @@ _DEFAULT_MAX_OPEN_DAYS = next(
 HISTORY_LIMIT = 1000
 
 
-def check_outcome(signal_row: dict, candles: list) -> str | None:
+def _candle_closed_at(candle) -> str:
+    return datetime.fromtimestamp(
+        candle.open_time / 1000, tz=timezone.utc,
+    ).isoformat()
+
+
+def check_outcome(signal_row: dict, candles: list) -> tuple[str, str] | None:
     """First outcome reached by candles fully after the signal's creation:
-    'tp_hit', 'sl_hit', or None while still open.
+    ('tp_hit'|'sl_hit', closed_at_iso), or None while still open.
 
     Only candles that OPENED at/after created_at count, so price movement
     from before the signal existed can never close it. When one candle
-    spans both levels, the stop wins — the conservative read.
+    spans both levels, the stop wins — the conservative read. closed_at is
+    the hitting candle's open time, not the engine's wall clock.
     """
     created_ms = datetime.fromisoformat(signal_row["created_at"]).timestamp() * 1000
     is_long = signal_row["direction"] == "long"
@@ -38,14 +45,14 @@ def check_outcome(signal_row: dict, candles: list) -> str | None:
             continue
         if is_long:
             if candle.low <= stop:
-                return "sl_hit"
+                return "sl_hit", _candle_closed_at(candle)
             if candle.high >= target:
-                return "tp_hit"
+                return "tp_hit", _candle_closed_at(candle)
         else:
             if candle.high >= stop:
-                return "sl_hit"
+                return "sl_hit", _candle_closed_at(candle)
             if candle.low <= target:
-                return "tp_hit"
+                return "tp_hit", _candle_closed_at(candle)
     return None
 
 
@@ -107,13 +114,14 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
         # Hits only count inside the expiry window: a level touched weeks
         # later is not the trade the engine proposed.
         expiry_ms = expires_at.timestamp() * 1000
-        outcome = check_outcome(
+        hit = check_outcome(
             row, [c for c in candles if c.open_time < expiry_ms])
-        if outcome is None and now >= expires_at:
-            outcome = "expired"
-        if outcome is None:
+        if hit is not None:
+            outcome, closed_at = hit
+        elif now >= expires_at:
+            outcome, closed_at = "expired", now.isoformat()
+        else:
             continue
-        closed_at = now.isoformat()
         try:
             close_signal(row["id"], outcome, closed_at,
                          cfg.supabase_url, cfg.supabase_service_key,
