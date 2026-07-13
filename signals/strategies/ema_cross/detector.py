@@ -1,10 +1,9 @@
 """EMA 9/21 crossover with RSI, MACD, ADX regime, and HTF-trend filters."""
-from signals.models import CandidateSetup
+from signals.models import CandidateSetup, take_profits_from_risk
 
 CROSS_LOOKBACK = 3
 SWING_WINDOW = 10
 ATR_STOP_BUFFER = 0.5
-RISK_REWARD = 2.0
 RSI_OVERBOUGHT = 70.0
 RSI_OVERSOLD = 30.0
 # Below this, ADX marks a non-trending/ranging market — the exact regime
@@ -94,8 +93,11 @@ def detect_setup(symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
         stop = swing_low - ATR_STOP_BUFFER * atr_value
         if stop >= entry or not _risk_ok(entry, stop, atr_value):
             return None
-        take_profit = entry + RISK_REWARD * (entry - stop)
-        return CandidateSetup(symbol, "long", entry, stop, take_profit, indicators)
+        tp1, tp2, tp3 = take_profits_from_risk(entry, stop, "long")
+        return CandidateSetup(
+            symbol, "long", entry, stop, tp1, indicators,
+            take_profit_2=tp2, take_profit_3=tp3,
+        )
 
     cross_down = _latest_cross_index(ema9, ema21, CROSS_LOOKBACK, above=False)
     if (cross_down is not None
@@ -108,7 +110,10 @@ def detect_setup(symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
         stop = swing_high + ATR_STOP_BUFFER * atr_value
         if stop <= entry or not _risk_ok(entry, stop, atr_value):
             return None
-        take_profit = entry - RISK_REWARD * (stop - entry)
-        return CandidateSetup(symbol, "short", entry, stop, take_profit, indicators)
+        tp1, tp2, tp3 = take_profits_from_risk(entry, stop, "short")
+        return CandidateSetup(
+            symbol, "short", entry, stop, tp1, indicators,
+            take_profit_2=tp2, take_profit_3=tp3,
+        )
 
     return None

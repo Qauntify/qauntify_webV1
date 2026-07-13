@@ -11,6 +11,10 @@ def save_signal(signal: Signal, supabase_url: str, service_key: str,
                 session=None) -> None:
     """Insert one signal row; raises on any failure so the caller can retry."""
     session = session or requests.Session()
+    payload = asdict(signal)
+    # Mirror TP1 into take_profit_1 for the multi-TP schema while keeping
+    # legacy `take_profit` populated for older readers.
+    payload["take_profit_1"] = signal.take_profit
     response = session.post(
         f"{supabase_url}/rest/v1/signals",
         headers={
@@ -19,7 +23,7 @@ def save_signal(signal: Signal, supabase_url: str, service_key: str,
             "Content-Type": "application/json",
             "Prefer": "return=minimal",
         },
-        json=asdict(signal),
+        json=payload,
         timeout=15,
     )
     response.raise_for_status()
@@ -62,9 +66,7 @@ def save_engine_run(run: dict, supabase_url: str, service_key: str,
 
 
 def list_open_signals(supabase_url: str, service_key: str, session=None):
-    """All signals with status 'open' (oldest first) as raw dicts.
-    Paginates past PostgREST default row caps. Raises on any failure —
-    including the status column not existing yet."""
+    """Signals still needing outcome polling (open / tp1 / tp2), oldest first."""
     session = session or requests.Session()
     page_size = 1000
     offset = 0
@@ -72,8 +74,10 @@ def list_open_signals(supabase_url: str, service_key: str, session=None):
     while True:
         response = session.get(
             f"{supabase_url}/rest/v1/signals"
-            "?status=eq.open"
-            "&select=id,symbol,timeframe,direction,entry,stop_loss,take_profit,created_at"
+            "?status=in.(open,tp1_hit,tp2_hit)"
+            "&select=id,symbol,timeframe,direction,entry,stop_loss,"
+            "take_profit,take_profit_1,take_profit_2,take_profit_3,"
+            "tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at"
             "&order=created_at.asc",
             headers={
                 "apikey": service_key,
@@ -96,15 +100,14 @@ def list_open_signals(supabase_url: str, service_key: str, session=None):
 
 def open_symbols_for_timeframe(symbols, timeframe: str, supabase_url: str,
                                service_key: str, session=None) -> set:
-    """Symbols in `symbols` that already have an open signal on `timeframe`.
-    Raises on any failure so callers can fail closed."""
+    """Symbols that already have a non-terminal signal on `timeframe`."""
     if not symbols:
         return set()
     session = session or requests.Session()
     symbols_filter = ",".join(symbols)
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
-        f"?status=eq.open&timeframe=eq.{timeframe}"
+        f"?status=in.(open,tp1_hit,tp2_hit)&timeframe=eq.{timeframe}"
         f"&symbol=in.({symbols_filter})&select=symbol",
         headers={
             "apikey": service_key,
@@ -118,8 +121,29 @@ def open_symbols_for_timeframe(symbols, timeframe: str, supabase_url: str,
 
 def close_signal(signal_id: str, status: str, closed_at: str,
                  supabase_url: str, service_key: str, session=None) -> None:
-    """Mark one signal tp_hit/sl_hit; raises on failure so callers can retry."""
+    """Mark one signal terminal (tp_hit/tp3_hit/sl_hit/expired)."""
+    update_signal_outcome(
+        signal_id, status, closed_at, supabase_url, service_key,
+        terminal=True, session=session,
+    )
+
+
+def update_signal_outcome(signal_id: str, status: str, at: str,
+                          supabase_url: str, service_key: str, *,
+                          terminal: bool, session=None) -> None:
+    """PATCH status (+ optional tpN_hit_at / closed_at)."""
     session = session or requests.Session()
+    payload: dict = {"status": status}
+    if status == "tp1_hit":
+        payload["tp1_hit_at"] = at
+    elif status == "tp2_hit":
+        payload["tp2_hit_at"] = at
+    elif status in ("tp3_hit", "tp_hit"):
+        payload["tp3_hit_at"] = at
+        # Legacy tp_hit also stamps closed_at.
+        terminal = True
+    if terminal:
+        payload["closed_at"] = at
     response = session.patch(
         f"{supabase_url}/rest/v1/signals?id=eq.{signal_id}",
         headers={
@@ -128,7 +152,7 @@ def close_signal(signal_id: str, status: str, closed_at: str,
             "Content-Type": "application/json",
             "Prefer": "return=minimal",
         },
-        json={"status": status, "closed_at": closed_at},
+        json=payload,
         timeout=15,
     )
     response.raise_for_status()
@@ -248,9 +272,10 @@ def list_closed_signals(supabase_url: str, service_key: str, session=None):
     session = session or requests.Session()
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
-        "?status=in.(tp_hit,sl_hit,expired)"
+        "?status=in.(tp_hit,tp3_hit,sl_hit,expired)"
         "&select=symbol,timeframe,direction,entry,stop_loss,take_profit,"
-        "confidence,status,indicators,created_at,closed_at"
+        "take_profit_1,take_profit_2,take_profit_3,confidence,indicators,"
+        "status,created_at,closed_at"
         "&order=created_at.asc",
         headers={
             "apikey": service_key,

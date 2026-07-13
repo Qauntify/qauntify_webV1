@@ -1,5 +1,5 @@
 """ICT / SMC: liquidity sweep followed by structure shift (CHoCH)."""
-from signals.models import Candle, CandidateSetup
+from signals.models import Candle, CandidateSetup, take_profits_from_risk
 
 PIVOT_LEFT = 2
 PIVOT_RIGHT = 2
@@ -11,9 +11,8 @@ CHOCH_LOOKBACK = 5
 # otherwise the setup is stale relative to a market-order entry.
 MAX_BARS_SINCE_CHOCH = 3
 ATR_STOP_BUFFER = 0.5
-RISK_REWARD = 2.0
 # Reject setups whose stop is farther than this many ATRs from entry —
-# otherwise 2R targets become unrealistic for a late market entry.
+# otherwise multi-R targets become unrealistic for a late market entry.
 MAX_STOP_ATR = 2.0
 ADX_TREND_MIN = 20.0
 # A tight PIVOT_LEFT/RIGHT window flags almost any small wick past a prior
@@ -122,7 +121,7 @@ def detect_setup(symbol, candles, atr14, adx14=None, htf_trend=None):
         stop = bar.low - ATR_STOP_BUFFER * atr_value
         if stop >= entry or not _risk_ok(entry, stop, atr_value):
             continue
-        take_profit = entry + RISK_REWARD * (entry - stop)
+        tp1, tp2, tp3 = take_profits_from_risk(entry, stop, "long")
         indicators = {
             "strategy": "ict_smc",
             "structure": "bullish_choch",
@@ -136,7 +135,8 @@ def detect_setup(symbol, candles, atr14, adx14=None, htf_trend=None):
         if htf_trend is not None:
             indicators["htf_trend"] = htf_trend
         return CandidateSetup(
-            symbol, "long", entry, stop, take_profit, indicators,
+            symbol, "long", entry, stop, tp1, indicators,
+            take_profit_2=tp2, take_profit_3=tp3,
         )
 
     for sweep_i in range(len(window) - 2, sweep_start - 1, -1):
@@ -170,7 +170,7 @@ def detect_setup(symbol, candles, atr14, adx14=None, htf_trend=None):
         stop = bar.high + ATR_STOP_BUFFER * atr_value
         if stop <= entry or not _risk_ok(entry, stop, atr_value):
             continue
-        take_profit = entry - RISK_REWARD * (stop - entry)
+        tp1, tp2, tp3 = take_profits_from_risk(entry, stop, "short")
         indicators = {
             "strategy": "ict_smc",
             "structure": "bearish_choch",
@@ -184,7 +184,8 @@ def detect_setup(symbol, candles, atr14, adx14=None, htf_trend=None):
         if htf_trend is not None:
             indicators["htf_trend"] = htf_trend
         return CandidateSetup(
-            symbol, "short", entry, stop, take_profit, indicators,
+            symbol, "short", entry, stop, tp1, indicators,
+            take_profit_2=tp2, take_profit_3=tp3,
         )
 
     return None

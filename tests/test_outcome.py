@@ -109,7 +109,7 @@ def test_list_open_signals_queries_open_only():
     session = FakeSession(payload=[_row()])
     rows = list_open_signals("https://abc.supabase.co", "key", session=session)
     assert rows == [_row()]
-    assert "status=eq.open" in session.last_url
+    assert "status=in.(open,tp1_hit,tp2_hit)" in session.last_url
 
 
 def test_close_signal_patches_status_and_closed_at():
@@ -120,6 +120,7 @@ def test_close_signal_patches_status_and_closed_at():
     assert "id=eq.sig-1" in session.last_url
     assert session.last_json == {
         "status": "tp_hit",
+        "tp3_hit_at": "2026-07-07T13:00:00+00:00",
         "closed_at": "2026-07-07T13:00:00+00:00",
     }
 
@@ -181,8 +182,8 @@ def _track(monkeypatch, rows, cfg=None, prefetched=None,
 
     monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
     monkeypatch.setattr(
-        outcome_tracker, "close_signal",
-        lambda sig_id, status, closed_at, url, key, session=None:
+        outcome_tracker, "update_signal_outcome",
+        lambda sig_id, status, closed_at, url, key, session=None, terminal=True:
         closes.append((sig_id, status)))
     monkeypatch.setattr(
         outcome_tracker, "send_outcome_alert",
@@ -262,7 +263,9 @@ def test_track_prefers_real_outcome_over_expiry(monkeypatch):
         fetched_candles=hit_early)
 
     assert closes == [(row["id"], "tp_hit")]
-    assert alerts == [(row, "tp_hit")]
+    assert len(alerts) == 1
+    assert alerts[0][0]["id"] == row["id"]
+    assert alerts[0][1] == "tp_hit"
 
 
 def test_track_ignores_hits_after_expiry_window(monkeypatch):
@@ -310,8 +313,8 @@ def test_track_fetches_candles_in_the_rows_own_timeframe(monkeypatch):
     monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
     closes = []
     monkeypatch.setattr(
-        outcome_tracker, "close_signal",
-        lambda sig_id, status, closed_at, url, key, session=None:
+        outcome_tracker, "update_signal_outcome",
+        lambda sig_id, status, closed_at, url, key, session=None, terminal=True:
         closes.append((sig_id, status)))
 
     track_open_signals(_config())

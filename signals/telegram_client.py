@@ -12,7 +12,9 @@ def format_alert(signal: Signal) -> str:
         f"<b>{signal.direction.upper()} {html.escape(signal.symbol)}</b>"
         f" ({html.escape(signal.timeframe)})\n"
         f"Entry {signal.entry:g} | SL {signal.stop_loss:g}"
-        f" | TP {signal.take_profit:g}\n"
+        f" | TP1 {signal.take_profit:g}"
+        f" | TP2 {(signal.take_profit_2 or signal.take_profit):g}"
+        f" | TP3 {(signal.take_profit_3 or signal.take_profit):g}\n"
         f"Confidence {signal.confidence}%\n"
         f"{html.escape(signal.rationale)}"
     )
@@ -97,18 +99,46 @@ def send_no_signal_alert(report: NoSignalReport, bot_token: str, chat_id: str,
 
 
 def format_outcome_alert(signal_row: dict, outcome: str) -> str:
-    """Telegram HTML-mode message for a signal that hit its TP or SL."""
+    """Telegram HTML-mode message for TP1/TP2/TP3 or SL hits."""
     entry = signal_row["entry"]
-    is_tp = outcome == "tp_hit"
-    exit_price = signal_row["take_profit"] if is_tp else signal_row["stop_loss"]
-    move = (exit_price - entry) / entry * 100
+    direction = html.escape(signal_row["direction"].upper())
+    symbol = html.escape(signal_row["symbol"])
+    if outcome == "sl_hit":
+        exit_price = signal_row["stop_loss"]
+        move = (exit_price - entry) / entry * 100
+        if signal_row["direction"] == "short":
+            move = -move
+        return (
+            f"<b>SL HIT {symbol}</b> — {direction} {move:+.2f}%\n"
+            f"Entry {entry:g} → {exit_price:g}"
+        )
+    # Resolve TP price for this level.
+    tp_map = {
+        "tp1_hit": signal_row.get("take_profit_1", signal_row.get("take_profit")),
+        "tp2_hit": signal_row.get("take_profit_2"),
+        "tp3_hit": signal_row.get("take_profit_3"),
+        "tp_hit": signal_row.get("take_profit_3") or signal_row.get("take_profit"),
+    }
+    exit_price = tp_map.get(outcome) or signal_row.get("take_profit")
+    move = (float(exit_price) - entry) / entry * 100
     if signal_row["direction"] == "short":
         move = -move
-    header = "TP HIT" if is_tp else "SL HIT"
+    labels = {
+        "tp1_hit": "TP1 HIT",
+        "tp2_hit": "TP2 HIT",
+        "tp3_hit": "TP3 HIT",
+        "tp_hit": "TP HIT",
+    }
+    header = labels.get(outcome, outcome.upper().replace("_", " "))
+    next_hint = {
+        "tp1_hit": " — running to TP2",
+        "tp2_hit": " — running to TP3",
+        "tp3_hit": "",
+        "tp_hit": "",
+    }.get(outcome, "")
     return (
-        f"<b>{header} {html.escape(signal_row['symbol'])}</b>"
-        f" — {html.escape(signal_row['direction'].upper())} {move:+.2f}%\n"
-        f"Entry {entry:g} → {exit_price:g}"
+        f"<b>{header} {symbol}</b> — {direction} {move:+.2f}%{next_hint}\n"
+        f"Entry {entry:g} → {float(exit_price):g}"
     )
 
 

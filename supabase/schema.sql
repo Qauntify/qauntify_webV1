@@ -9,6 +9,9 @@ create table if not exists public.signals (
     entry double precision not null,
     stop_loss double precision not null,
     take_profit double precision not null,
+    take_profit_1 double precision,
+    take_profit_2 double precision,
+    take_profit_3 double precision,
     confidence integer not null check (confidence between 0 and 100),
     rationale text not null,
     indicators jsonb not null,
@@ -20,22 +23,38 @@ create index if not exists signals_created_at_idx
     on public.signals (created_at desc);
 
 -- Outcome tracking: signals stay in the table forever; the engine flips
--- status to tp_hit/sl_hit when price reaches the target or the stop, or to
--- expired when a signal stays open past the engine's MAX_OPEN_DAYS window.
+-- status through the TP ladder (tp1→tp2→tp3) or to sl_hit/expired.
 alter table public.signals
-    add column if not exists status text not null default 'open'
-        check (status in ('open', 'tp_hit', 'sl_hit'));
+    add column if not exists status text not null default 'open';
 alter table public.signals
     add column if not exists closed_at timestamptz;
 
--- Existing installs: widen the status check to allow 'expired'.
 alter table public.signals drop constraint if exists signals_status_check;
 alter table public.signals add constraint signals_status_check
-    check (status in ('open', 'tp_hit', 'sl_hit', 'expired'));
+    check (status in (
+        'open', 'tp1_hit', 'tp2_hit', 'tp3_hit', 'tp_hit', 'sl_hit', 'expired'
+    ));
 
+-- Multi-level take profits (TP1=1R, TP2=2R, TP3=3R). Legacy `take_profit`
+-- remains as TP1 for older readers; new writers also fill take_profit_1/2/3.
+alter table public.signals add column if not exists take_profit_1 double precision;
+alter table public.signals add column if not exists take_profit_2 double precision;
+alter table public.signals add column if not exists take_profit_3 double precision;
+alter table public.signals add column if not exists tp1_hit_at timestamptz;
+alter table public.signals add column if not exists tp2_hit_at timestamptz;
+alter table public.signals add column if not exists tp3_hit_at timestamptz;
+
+update public.signals
+set
+    take_profit_1 = coalesce(take_profit_1, take_profit),
+    take_profit_2 = coalesce(take_profit_2, take_profit),
+    take_profit_3 = coalesce(take_profit_3, take_profit)
+where take_profit_1 is null or take_profit_2 is null or take_profit_3 is null;
+
+drop index if exists signals_status_idx;
 create index if not exists signals_status_idx
     on public.signals (status)
-    where status = 'open';
+    where status in ('open', 'tp1_hit', 'tp2_hit');
 
 -- Freemium gate, enforced at the database:
 --   anon (logged out)        → only signals from the last 24 hours (preview)
@@ -81,7 +100,7 @@ as $$
         coalesce(round(avg(confidence)), 0)::int as avg_confidence,
         count(*) filter (where direction = 'long')::int as longs,
         count(*) filter (where direction = 'short')::int as shorts,
-        count(*) filter (where status = 'tp_hit')::int as tp_hits,
+        count(*) filter (where status in ('tp_hit', 'tp3_hit'))::int as tp_hits,
         count(*) filter (where status = 'sl_hit')::int as sl_hits
     from public.signals
     where p_timeframe is null or timeframe = p_timeframe;

@@ -17,6 +17,8 @@ const CLOSED: Signal = {
   entry: 100,
   stopLoss: 95,
   takeProfit: 110,
+  takeProfit2: null,
+  takeProfit3: null,
   confidence: 80,
   rationale: "Closed winner.",
   indicators: { ema9: 1, ema21: 1, rsi: 50, macdHist: 0.1 },

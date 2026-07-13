@@ -54,6 +54,8 @@ describe("getSignals", () => {
     expect(s.direction).toBe("long");
     expect(s.stopLoss).toBe(106900.0);
     expect(s.takeProfit).toBe(110920.0);
+    expect(s.takeProfit2).toBeNull();
+    expect(s.takeProfit3).toBeNull();
     expect(s.indicators.macdHist).toBe(12.4);
     expect(s.newsHeadlines).toEqual(["ETF inflows surge"]);
   });
@@ -175,7 +177,7 @@ describe("getClosedOutcomeSignals", () => {
     const fetchFn = mockFetch([]);
     await getClosedOutcomeSignals();
     const [url] = fetchFn.mock.calls[0];
-    expect(url).toContain("status=in.(tp_hit,sl_hit)");
+    expect(url).toContain("status=in.(tp_hit,tp3_hit,sl_hit)");
     expect(url).toContain("order=closed_at.desc.nullslast");
     expect(url).not.toContain("timeframe=eq.");
   });
@@ -185,7 +187,7 @@ describe("getClosedOutcomeSignals", () => {
     await getClosedOutcomeSignals(undefined, "15m");
     const [url] = fetchFn.mock.calls[0];
     expect(url).toContain("timeframe=eq.15m");
-    expect(url).toContain("status=in.(tp_hit,sl_hit)");
+    expect(url).toContain("status=in.(tp_hit,tp3_hit,sl_hit)");
   });
 
   it("maps closed_at and keeps only TP/SL statuses", async () => {

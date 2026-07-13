@@ -57,7 +57,9 @@ def test_detect_setup_long():
     # swing low = 99.0 (price 100 - low_offset 1), stop = 99 - 0.5*2 = 98
     assert setup.stop_loss == 98.0
     # risk = 2.0 → TP = 100 + 2*2 = 104
-    assert setup.take_profit == 104.0
+    assert setup.take_profit == 102.0
+    assert setup.take_profit_2 == 104.0
+    assert setup.take_profit_3 == 106.0
     assert setup.indicators["rsi"] == 55.0
 
 
@@ -97,7 +99,9 @@ def test_detect_setup_short():
     assert setup.entry == 100.0
     # swing high = 101.0, stop = 101 + 0.5*2 = 102, risk = 2 → TP = 96
     assert setup.stop_loss == 102.0
-    assert setup.take_profit == 96.0
+    assert setup.take_profit == 98.0
+    assert setup.take_profit_2 == 96.0
+    assert setup.take_profit_3 == 94.0
 
 
 def test_detect_setup_short_blocked_by_oversold_rsi():

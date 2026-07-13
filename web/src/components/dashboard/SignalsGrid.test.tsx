@@ -12,6 +12,8 @@ const SIGNAL: Signal = {
   entry: 108240,
   stopLoss: 106900,
   takeProfit: 110920,
+  takeProfit2: null,
+  takeProfit3: null,
   confidence: 82,
   rationale: "Momentum aligns with news flow.",
   indicators: { ema9: 1, ema21: 1, rsi: 55, macdHist: 0.5 },

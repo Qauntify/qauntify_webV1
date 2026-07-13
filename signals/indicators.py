@@ -145,3 +145,57 @@ def atr(highs, lows, closes, period=14):
         prev = (prev * (period - 1) + true_ranges[i]) / period
         out.append(prev)
     return out
+
+
+def lwma(values, period):
+    """Linear Weighted Moving Average — newer bars weigh more (period, …, 1)."""
+    if period <= 0:
+        raise ValueError("period must be positive")
+    n = len(values)
+    if n < period:
+        return [None] * n
+    weights = list(range(1, period + 1))
+    weight_sum = period * (period + 1) / 2.0
+    out = [None] * (period - 1)
+    for i in range(period - 1, n):
+        window = values[i - period + 1:i + 1]
+        out.append(sum(v * w for v, w in zip(window, weights)) / weight_sum)
+    return out
+
+
+def chandelier_exit(highs, lows, closes, period=22, multiplier=4.5,
+                    lookback=None):
+    """Chandelier Exit trails + direction (TradingView-style).
+
+    Returns (long_stop, short_stop, direction) lists aligned with input.
+    direction is 1 (long), -1 (short), or None during warm-up.
+    Active trail for a bar is long_stop when direction==1 else short_stop.
+    """
+    n = len(closes)
+    lb = lookback if lookback is not None else period
+    atr_vals = atr(highs, lows, closes, period)
+    long_stop = [None] * n
+    short_stop = [None] * n
+    direction = [None] * n
+    warm = max(period, lb)
+    if n < warm + 1:
+        return long_stop, short_stop, direction
+
+    prev_dir = None
+    for i in range(warm - 1, n):
+        if atr_vals[i] is None:
+            continue
+        hh = max(highs[i - lb + 1:i + 1])
+        ll = min(lows[i - lb + 1:i + 1])
+        long_stop[i] = hh - multiplier * atr_vals[i]
+        short_stop[i] = ll + multiplier * atr_vals[i]
+        if prev_dir is None:
+            # Seed: close relative to the mid of the two trails.
+            mid = (long_stop[i] + short_stop[i]) / 2.0
+            prev_dir = 1 if closes[i] >= mid else -1
+        elif prev_dir == 1 and closes[i] < long_stop[i]:
+            prev_dir = -1
+        elif prev_dir == -1 and closes[i] > short_stop[i]:
+            prev_dir = 1
+        direction[i] = prev_dir
+    return long_stop, short_stop, direction

@@ -244,7 +244,7 @@ def test_list_closed_signals_filters_terminal_statuses():
         {"symbol": "BTCUSDT", "status": "tp_hit"},
         {"symbol": "ETHUSDT", "status": "sl_hit"},
     ]
-    assert "status=in.(tp_hit,sl_hit,expired)" in session.last_url
+    assert "status=in.(tp_hit,tp3_hit,sl_hit,expired)" in session.last_url
     assert session.last_headers["apikey"] == "key"
 
 

@@ -1,24 +1,24 @@
 """Checks open signals against fresh candles and closes TP/SL hits.
 
-Signals are never deleted: a hit flips status to tp_hit/sl_hit and stamps
-closed_at; a signal open past its session's max_open_days is closed as
-expired so stale setups stop counting as live. Runs as part of every engine
-run, after scanning both sessions.
+Signals are never deleted. Multi-TP ladder:
+  open → tp1_hit → tp2_hit → tp3_hit (terminal win)
+  sl_hit / expired can end the trade from any non-terminal state.
+Telegram fires once per newly crossed level.
 """
 from datetime import datetime, timedelta, timezone
 
 from signals.binance_client import fetch_candles
-from signals.models import TRADING_SESSIONS
-from signals.storage import close_signal, list_open_signals
+from signals.models import OPEN_POLL_STATUSES, TRADING_SESSIONS
+from signals.storage import list_open_signals, update_signal_outcome
 from signals.telegram_client import send_outcome_alert
 
-# Rows stored before the timeframe column existed default to the swing
-# session's window, matching this engine's original (1h-only) behavior.
 _SESSION_BY_TIMEFRAME = {s.timeframe: s for s in TRADING_SESSIONS}
 _DEFAULT_MAX_OPEN_DAYS = next(
     s.max_open_days for s in TRADING_SESSIONS if s.timeframe == "1h")
-# Enough candles to cover the longest session's expiry window in one fetch.
 HISTORY_LIMIT = 1000
+
+_TP_ORDER = ("tp1_hit", "tp2_hit", "tp3_hit")
+_TERMINAL = frozenset({"tp3_hit", "sl_hit", "expired", "tp_hit"})
 
 
 def _candle_closed_at(candle) -> str:
@@ -27,43 +27,90 @@ def _candle_closed_at(candle) -> str:
     ).isoformat()
 
 
-def check_outcome(signal_row: dict, candles: list) -> tuple[str, str] | None:
-    """First outcome reached by candles fully after the signal's creation:
-    ('tp_hit'|'sl_hit', closed_at_iso), or None while still open.
+def _targets(signal_row: dict) -> list[float]:
+    """TP1/TP2/TP3 prices — fall back to single take_profit for legacy rows."""
+    tp1 = signal_row.get("take_profit_1", signal_row.get("take_profit"))
+    tp2 = signal_row.get("take_profit_2")
+    tp3 = signal_row.get("take_profit_3")
+    if tp2 is None or tp3 is None:
+        # Legacy single-TP row: treat take_profit as the only (final) target.
+        return [float(tp1)] if tp1 is not None else []
+    return [float(tp1), float(tp2), float(tp3)]
 
-    Only candles that OPENED at/after created_at count, so price movement
-    from before the signal existed can never close it. When one candle
-    spans both levels, the stop wins — the conservative read. closed_at is
-    the hitting candle's open time, not the engine's wall clock.
+
+def _already_hit(signal_row: dict) -> set[str]:
+    status = signal_row.get("status") or "open"
+    hit = set()
+    if status in ("tp1_hit", "tp2_hit", "tp3_hit", "tp_hit"):
+        hit.add("tp1_hit")
+    if status in ("tp2_hit", "tp3_hit"):
+        hit.add("tp2_hit")
+    if status in ("tp3_hit", "tp_hit"):
+        hit.add("tp3_hit")
+    # Prefer explicit timestamps when present.
+    for level, col in (
+        ("tp1_hit", "tp1_hit_at"),
+        ("tp2_hit", "tp2_hit_at"),
+        ("tp3_hit", "tp3_hit_at"),
+    ):
+        if signal_row.get(col):
+            hit.add(level)
+    return hit
+
+
+def check_outcome_events(signal_row: dict, candles: list) -> list[tuple[str, str]]:
+    """Ordered new events for this run: (status, closed_at_iso).
+
+    Stop wins on a same-candle tie with any TP. A fast move can cross
+    multiple unhit TPs in one candle — all are returned in order.
     """
     created_ms = datetime.fromisoformat(signal_row["created_at"]).timestamp() * 1000
     is_long = signal_row["direction"] == "long"
-    stop = signal_row["stop_loss"]
-    target = signal_row["take_profit"]
+    stop = float(signal_row["stop_loss"])
+    targets = _targets(signal_row)
+    already = _already_hit(signal_row)
+    events: list[tuple[str, str]] = []
+
+    # Map target index → status name. Legacy single target closes as tp_hit
+    # (and tp3_hit alias) for stats compatibility.
+    if len(targets) == 1:
+        level_names = ["tp_hit"]
+    else:
+        level_names = list(_TP_ORDER[:len(targets)])
+
     for candle in candles:
         if candle.open_time < created_ms:
             continue
+        stamp = _candle_closed_at(candle)
         if is_long:
             if candle.low <= stop:
-                return "sl_hit", _candle_closed_at(candle)
-            if candle.high >= target:
-                return "tp_hit", _candle_closed_at(candle)
+                events.append(("sl_hit", stamp))
+                break
+            for target, name in zip(targets, level_names):
+                if name in already or any(e[0] == name for e in events):
+                    continue
+                if candle.high >= target:
+                    events.append((name, stamp))
         else:
             if candle.high >= stop:
-                return "sl_hit", _candle_closed_at(candle)
-            if candle.low <= target:
-                return "tp_hit", _candle_closed_at(candle)
-    return None
+                events.append(("sl_hit", stamp))
+                break
+            for target, name in zip(targets, level_names):
+                if name in already or any(e[0] == name for e in events):
+                    continue
+                if candle.low <= target:
+                    events.append((name, stamp))
+    return events
+
+
+def check_outcome(signal_row: dict, candles: list) -> tuple[str, str] | None:
+    """Backward-compatible: first new event only (used by older tests)."""
+    events = check_outcome_events(signal_row, candles)
+    return events[0] if events else None
 
 
 def track_open_signals(cfg, prefetched=None, session=None) -> list:
-    """Close every open signal whose TP or SL has been reached, and expire
-    signals open past MAX_OPEN_DAYS; returns the closed rows as (row, status)
-    pairs. Never raises — outcome tracking must not break a scan run.
-
-    `prefetched` maps (symbol, timeframe) -> closed candles already fetched
-    by the scan; a signal's history is refetched from its created_at only
-    when the scan candles don't reach back that far."""
+    """Advance every open/partially-hit signal; return (row, latest_status) pairs."""
     try:
         open_rows = list_open_signals(cfg.supabase_url,
                                       cfg.supabase_service_key,
@@ -79,15 +126,12 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
     fetch_cache: dict = {}
 
     def candles_covering(symbol, timeframe, created_ms):
-        """Closed candles spanning the signal's life, or None when market
-        data is unavailable (skip the row and retry next run)."""
         pre = prefetched.get((symbol, timeframe))
         if pre and pre[0].open_time <= created_ms:
             return pre
         key = (symbol, timeframe, created_ms)
         if key not in fetch_cache:
             try:
-                # Drop the still-forming candle: only closed bars decide hits.
                 fetch_cache[key] = fetch_candles(
                     symbol, timeframe, HISTORY_LIMIT,
                     start_time=int(created_ms), session=session,
@@ -111,36 +155,40 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
         candles = candles_covering(symbol, timeframe, created_ms)
         if candles is None:
             continue
-        # Hits only count inside the expiry window: a level touched weeks
-        # later is not the trade the engine proposed.
         expiry_ms = expires_at.timestamp() * 1000
-        hit = check_outcome(
-            row, [c for c in candles if c.open_time < expiry_ms])
-        if hit is not None:
-            outcome, closed_at = hit
-        elif now >= expires_at:
-            outcome, closed_at = "expired", now.isoformat()
-        else:
+        window = [c for c in candles if c.open_time < expiry_ms]
+        events = check_outcome_events(row, window)
+        if not events and now >= expires_at:
+            events = [("expired", now.isoformat())]
+        if not events:
             continue
-        try:
-            close_signal(row["id"], outcome, closed_at,
-                         cfg.supabase_url, cfg.supabase_service_key,
-                         session=session)
-        except Exception as exc:
-            print(f"[{symbol}] failed to mark {outcome} "
-                  f"({type(exc).__name__}), will retry next run")
-            continue
-        print(f"[{symbol}] {outcome.upper().replace('_', ' ')} — "
-              f"{row['direction']} from {row['entry']}")
-        closed.append((row, outcome))
-        # Expiry is bookkeeping, not a tradeable outcome — no alert.
-        if (outcome in ("tp_hit", "sl_hit")
-                and cfg.telegram_bot_token and cfg.telegram_channel_id):
+
+        latest = None
+        for outcome, closed_at in events:
+            terminal = outcome in _TERMINAL
             try:
-                send_outcome_alert(row, outcome, cfg.telegram_bot_token,
-                                   cfg.telegram_channel_id)
-                print(f"[{symbol}] Telegram outcome alert sent")
+                update_signal_outcome(
+                    row["id"], outcome, closed_at,
+                    cfg.supabase_url, cfg.supabase_service_key,
+                    terminal=terminal, session=session,
+                )
             except Exception as exc:
-                print(f"[{symbol}] Telegram outcome alert failed "
-                      f"({type(exc).__name__}: {exc}), continuing")
+                print(f"[{symbol}] failed to mark {outcome} "
+                      f"({type(exc).__name__}), will retry next run")
+                break
+            print(f"[{symbol}] {outcome.upper().replace('_', ' ')} — "
+                  f"{row['direction']} from {row['entry']}")
+            latest = outcome
+            row = {**row, "status": outcome}
+            if (outcome in ("tp1_hit", "tp2_hit", "tp3_hit", "tp_hit", "sl_hit")
+                    and cfg.telegram_bot_token and cfg.telegram_channel_id):
+                try:
+                    send_outcome_alert(row, outcome, cfg.telegram_bot_token,
+                                       cfg.telegram_channel_id)
+                    print(f"[{symbol}] Telegram outcome alert sent ({outcome})")
+                except Exception as exc:
+                    print(f"[{symbol}] Telegram outcome alert failed "
+                          f"({type(exc).__name__}: {exc}), continuing")
+        if latest is not None:
+            closed.append((row, latest))
     return closed

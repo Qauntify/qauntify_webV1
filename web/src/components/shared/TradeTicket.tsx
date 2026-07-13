@@ -23,14 +23,21 @@ function StatusBadge({ status }: { status: Signal["status"] }) {
       </span>
     );
   }
-  const isWin = status === "tp_hit";
+  if (status === "tp1_hit" || status === "tp2_hit") {
+    return (
+      <span className="inline-flex items-center rounded-md bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-accent">
+        {status === "tp1_hit" ? "TP1 hit" : "TP2 hit"}
+      </span>
+    );
+  }
+  const isWin = status === "tp_hit" || status === "tp3_hit";
   return (
     <span
       className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide ${
         isWin ? "bg-long-soft text-long" : "bg-short-soft text-short"
       }`}
     >
-      {isWin ? "TP hit" : "SL hit"}
+      {isWin ? (status === "tp3_hit" ? "TP3 hit" : "TP hit") : "SL hit"}
     </span>
   );
 }
@@ -100,10 +107,15 @@ export function TradeTicket({
         <ConfidenceGauge value={signal.confidence} />
       </div>
 
-      <div className="grid grid-cols-3 gap-4 px-5 py-5">
+      <div className="grid grid-cols-2 gap-4 px-5 py-5 sm:grid-cols-4">
         <PriceCell label="Entry" value={signal.entry} />
         <PriceCell label="Stop loss" value={signal.stopLoss} tone="short" />
-        <PriceCell label="Take profit" value={signal.takeProfit} tone="long" />
+        <PriceCell label="TP1" value={signal.takeProfit} tone="long" />
+        <PriceCell
+          label="TP3"
+          value={signal.takeProfit3 ?? signal.takeProfit}
+          tone="long"
+        />
       </div>
 
       {showRationale && signal.rationale && (

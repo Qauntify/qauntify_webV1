@@ -20,15 +20,16 @@ def _confidence_bucket(confidence) -> str:
 
 
 def _r_multiple(row: dict) -> float:
-    """Realized R-multiple for one closed signal: +reward/risk on tp_hit,
-    -1 on sl_hit, 0 (unknown/neutral) on expired — outcome_tracker records
-    no exit price for expired signals, so their true P&L is unknown."""
+    """Realized R-multiple for one closed signal: +reward/risk on full TP,
+    -1 on sl_hit, 0 on expired. Partial TP1/TP2 rows are still open and
+    should not appear in closed-row calibration inputs."""
     status = row["status"]
     if status == "sl_hit":
         return -1.0
     if status == "expired":
         return 0.0
-    entry, stop, target = row["entry"], row["stop_loss"], row["take_profit"]
+    entry, stop = row["entry"], row["stop_loss"]
+    target = row.get("take_profit_3") or row.get("take_profit")
     risk = abs(entry - stop)
     if risk == 0:
         return 0.0
@@ -36,20 +37,18 @@ def _r_multiple(row: dict) -> float:
 
 
 def _bucket_stats(rows: list) -> dict:
-    wins = sum(1 for r in rows if r["status"] == "tp_hit")
+    wins = sum(1 for r in rows if r["status"] in ("tp_hit", "tp3_hit"))
     losses = sum(1 for r in rows if r["status"] == "sl_hit")
     expired = sum(1 for r in rows if r["status"] == "expired")
     decided = wins + losses
-    # Expired rows have unknown P&L — exclude them from avg_r so expiry
-    # rate cannot dilute expectancy toward zero.
-    decided_rows = [r for r in rows if r["status"] in ("tp_hit", "sl_hit")]
+    decided_rows = [
+        r for r in rows if r["status"] in ("tp_hit", "tp3_hit", "sl_hit")
+    ]
     return {
         "count": len(rows),
         "wins": wins,
         "losses": losses,
         "expired": expired,
-        # Expired rows are neither a win nor a loss, so they're excluded
-        # from the win-rate denominator rather than counted against it.
         "win_rate": wins / decided if decided else None,
         "avg_r": (
             sum(_r_multiple(r) for r in decided_rows) / len(decided_rows)

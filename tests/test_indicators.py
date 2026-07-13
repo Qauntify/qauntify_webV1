@@ -123,3 +123,43 @@ def test_adx_choppy_series_is_low():
         closes.append(base)
     result = adx(highs, lows, closes, 14)
     assert result[-1] < 20.0
+
+
+def test_lwma_weights_recent_bars_more():
+    from signals.indicators import lwma
+
+    # Rising series: LWMA sits above SMA of the same window.
+    values = [float(i) for i in range(1, 11)]
+    result = lwma(values, 5)
+    assert result[:4] == [None, None, None, None]
+    window = values[-5:]
+    sma = sum(window) / 5
+    assert result[-1] > sma
+
+
+def test_lwma_too_short_is_all_none():
+    from signals.indicators import lwma
+
+    assert lwma([1.0, 2.0], 5) == [None, None]
+
+
+def test_chandelier_exit_flips_on_close_through_trail():
+    from signals.indicators import chandelier_exit
+
+    # Strong uptrend then a sharp break below the long trail.
+    n = 60
+    highs = [100.0 + i for i in range(n)]
+    lows = [99.0 + i for i in range(n)]
+    closes = [99.5 + i for i in range(n)]
+    # Crash the last few closes well below recent range.
+    for j in range(5):
+        idx = n - 5 + j
+        highs[idx] = 100.0
+        lows[idx] = 50.0
+        closes[idx] = 55.0
+    _long, _short, direction = chandelier_exit(
+        highs, lows, closes, period=22, multiplier=4.5, lookback=22,
+    )
+    assert direction[-1] == -1
+    # There was a bullish stretch before the crash.
+    assert any(d == 1 for d in direction if d is not None)

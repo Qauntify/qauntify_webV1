@@ -30,6 +30,12 @@ def _no_setup_reason(strategy: str, timeframe: str) -> str:
             f"liquidity sweep followed by a structure shift / CHoCH on the "
             f"{chart})."
         )
+    if strategy == "ce_lwma":
+        return (
+            f"The rules engine found no valid CE+LWMA setup (no fresh H1 "
+            f"Chandelier Exit flip into the matching discount/premium zone "
+            f"on the {chart})."
+        )
     return (
         f"The rules engine found no valid trade setup (no EMA 9/21 crossover "
         f"with aligned RSI and MACD filters on the last few {timeframe or 'hourly'} "
@@ -50,6 +56,21 @@ def no_setup_rationale(symbol: str, timeframe: str, indicators: dict,
 
 def _format_indicators(strategy: str, indicators: dict) -> str:
     active = indicators.get("strategy", strategy)
+    if active == "ce_lwma":
+        parts = []
+        for key, label in (
+            ("ce_trail", "CE trail"),
+            ("ce_direction", "CE dir"),
+            ("lwma200", "LWMA200"),
+            ("zone", "zone"),
+        ):
+            if key in indicators:
+                value = indicators[key]
+                if isinstance(value, float):
+                    parts.append(f"{label}={value:.4f}")
+                else:
+                    parts.append(f"{label}={value}")
+        return ", ".join(parts) if parts else "no CE/LWMA reading"
     if active == "ict_smc":
         parts = []
         for key, label in (
@@ -97,11 +118,20 @@ def build_messages(setup: CandidateSetup, headlines: list,
         news_block = "No recent headlines available."
     ind = setup.indicators
     active = ind.get("strategy", strategy)
-    strategy_line = (
-        f"- Strategy: ICT/SMC (liquidity sweep + structure shift)\n"
-        if active == "ict_smc"
-        else "- Strategy: EMA 9/21 crossover with RSI + MACD filters\n"
-    )
+    if active == "ict_smc":
+        strategy_line = (
+            "- Strategy: ICT/SMC (liquidity sweep + structure shift)\n"
+        )
+    elif active == "ce_lwma":
+        strategy_line = (
+            "- Strategy: H1 Chandelier Exit flip + M15 LWMA200 zone "
+            "(discount/premium)\n"
+        )
+    else:
+        strategy_line = (
+            "- Strategy: EMA 9/21 crossover with RSI + MACD filters\n"
+        )
+    tp1, tp2, tp3 = setup.resolved_take_profits()
     session_hint = "scalp" if timeframe in ("5m", "15m") else "swing"
     user_content = (
         f"Candidate setup:\n"
@@ -111,7 +141,9 @@ def build_messages(setup: CandidateSetup, headlines: list,
         f"- Direction: {setup.direction}\n"
         f"- Entry: {setup.entry}\n"
         f"- Stop loss: {setup.stop_loss}\n"
-        f"- Take profit: {setup.take_profit}\n"
+        f"- Take profit 1 (1R): {tp1}\n"
+        f"- Take profit 2 (2R): {tp2}\n"
+        f"- Take profit 3 (3R): {tp3}\n"
         f"- Context: {_format_indicators(strategy, ind)}\n\n"
         f"Recent news headlines:\n{news_block}"
     )

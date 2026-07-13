@@ -4,6 +4,29 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
+# Staged take-profit R-multiples off |entry - stop|.
+TP1_R = 1.0
+TP2_R = 2.0
+TP3_R = 3.0
+
+
+def take_profits_from_risk(entry: float, stop: float, direction: str
+                           ) -> tuple[float, float, float]:
+    """TP1/TP2/TP3 prices for a long or short given entry and stop."""
+    risk = abs(entry - stop)
+    if direction == "long":
+        return (
+            entry + TP1_R * risk,
+            entry + TP2_R * risk,
+            entry + TP3_R * risk,
+        )
+    return (
+        entry - TP1_R * risk,
+        entry - TP2_R * risk,
+        entry - TP3_R * risk,
+    )
+
+
 @dataclass(frozen=True)
 class Candle:
     open_time: int  # epoch milliseconds
@@ -20,8 +43,27 @@ class CandidateSetup:
     direction: str  # "long" | "short"
     entry: float
     stop_loss: float
-    take_profit: float
-    indicators: dict  # {"ema9":, "ema21":, "rsi":, "macd_hist":}
+    take_profit: float  # TP1 — kept name for call-site compatibility
+    indicators: dict
+    take_profit_2: float | None = None
+    take_profit_3: float | None = None
+
+    @property
+    def take_profit_1(self) -> float:
+        return self.take_profit
+
+    def resolved_take_profits(self) -> tuple[float, float, float]:
+        """Fill missing TP2/TP3 from R-multiples when a detector only set TP1."""
+        if self.take_profit_2 is not None and self.take_profit_3 is not None:
+            return self.take_profit, self.take_profit_2, self.take_profit_3
+        tp1, tp2, tp3 = take_profits_from_risk(
+            self.entry, self.stop_loss, self.direction,
+        )
+        return (
+            self.take_profit,
+            self.take_profit_2 if self.take_profit_2 is not None else tp2,
+            self.take_profit_3 if self.take_profit_3 is not None else tp3,
+        )
 
 
 @dataclass(frozen=True)
@@ -43,13 +85,20 @@ class NoSignalReport:
     entry: float | None = None
     stop_loss: float | None = None
     take_profit: float | None = None
+    take_profit_2: float | None = None
+    take_profit_3: float | None = None
     confidence: int | None = None
 
 
-SIGNAL_STRATEGIES = ("ema_cross", "ict_smc")
+SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma")
 DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
 TIMEFRAME_MINUTES = {"15m": 15, "1h": 60}
+
+# Terminal win statuses (legacy tp_hit + multi-TP final).
+WIN_STATUSES = frozenset({"tp_hit", "tp3_hit"})
+# Still polled by the outcome tracker.
+OPEN_POLL_STATUSES = frozenset({"open", "tp1_hit", "tp2_hit"})
 
 
 @dataclass(frozen=True)
@@ -64,13 +113,16 @@ class TradingSession:
     # session confirming against a slower one, to cut whipsaws that go
     # against the larger trend. None skips the check (no slower reference).
     confluence_timeframe: str | None = None
+    # When set, this session always uses this strategy (ignores admin toggle).
+    strategy: str | None = None
 
 
-# Every engine run scans each session; signals carry their session's
-# timeframe so streams never collide (dedup, outcomes, dashboard).
+# Scalp is hardcoded to CE+LWMA; swing uses admin bot_settings.signal_strategy.
 TRADING_SESSIONS = (
-    TradingSession(name="scalp", timeframe="15m", max_open_days=2,
-                   confluence_timeframe="1h"),
+    TradingSession(
+        name="scalp", timeframe="15m", max_open_days=2,
+        confluence_timeframe=None, strategy="ce_lwma",
+    ),
     TradingSession(name="swing", timeframe="1h", max_open_days=14),
 )
 
@@ -91,12 +143,18 @@ class Signal:
     direction: str
     entry: float
     stop_loss: float
-    take_profit: float
+    take_profit: float  # TP1 (also written as take_profit for legacy column)
     confidence: int
     rationale: str
     indicators: dict
     news_headlines: list
     created_at: str
+    take_profit_2: float | None = None
+    take_profit_3: float | None = None
+
+    @property
+    def take_profit_1(self) -> float:
+        return self.take_profit
 
 
 @dataclass(frozen=True)
@@ -110,6 +168,7 @@ class ScanResult:
 
 def make_signal(setup: CandidateSetup, confirmation: Confirmation,
                 headlines: list, timeframe: str = "1h") -> Signal:
+    tp1, tp2, tp3 = setup.resolved_take_profits()
     return Signal(
         id=str(uuid.uuid4()),
         symbol=setup.symbol,
@@ -117,7 +176,9 @@ def make_signal(setup: CandidateSetup, confirmation: Confirmation,
         direction=setup.direction,
         entry=setup.entry,
         stop_loss=setup.stop_loss,
-        take_profit=setup.take_profit,
+        take_profit=tp1,
+        take_profit_2=tp2,
+        take_profit_3=tp3,
         confidence=confirmation.confidence,
         rationale=confirmation.rationale,
         indicators=setup.indicators,

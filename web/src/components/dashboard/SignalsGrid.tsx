@@ -8,7 +8,8 @@ import { formatDateTime, formatPrice, formatRelativeTime } from "@/lib/format";
 function riskReward(signal: Signal): string {
   const risk = Math.abs(signal.entry - signal.stopLoss);
   if (risk === 0) return "—";
-  const reward = Math.abs(signal.takeProfit - signal.entry);
+  const target = signal.takeProfit3 ?? signal.takeProfit;
+  const reward = Math.abs(target - signal.entry);
   return `${(reward / risk).toFixed(1)}R`;
 }
 
@@ -20,6 +21,15 @@ function fmtNum(value: number | undefined, digits: number): string | null {
 function indicatorRows(signal: Signal): { label: string; value: string }[] {
   const ind = signal.indicators;
   const rows: { label: string; value: string }[] = [];
+  if (ind.strategy === "ce_lwma" || ind.ceTrail !== undefined || ind.lwma200 !== undefined) {
+    const trail = fmtNum(ind.ceTrail, 4);
+    if (trail) rows.push({ label: "CE trail", value: trail });
+    if (ind.ceDirection) rows.push({ label: "CE dir", value: ind.ceDirection });
+    const lwma = fmtNum(ind.lwma200, 4);
+    if (lwma) rows.push({ label: "LWMA 200", value: lwma });
+    if (ind.zone) rows.push({ label: "Zone", value: ind.zone });
+    return rows.length > 0 ? rows : [{ label: "Strategy", value: "CE + LWMA" }];
+  }
   if (ind.strategy === "ict_smc" || ind.structure) {
     if (ind.structure) rows.push({ label: "Structure", value: ind.structure });
     const sweep = fmtNum(ind.sweepLevel, 2);
@@ -75,14 +85,21 @@ function StatusPill({ status }: { status: Signal["status"] }) {
       </span>
     );
   }
-  const isWin = status === "tp_hit";
+  if (status === "tp1_hit" || status === "tp2_hit") {
+    return (
+      <span className="inline-flex items-center rounded-md bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-accent">
+        {status === "tp1_hit" ? "TP1 hit" : "TP2 hit"}
+      </span>
+    );
+  }
+  const isWin = status === "tp_hit" || status === "tp3_hit";
   return (
     <span
       className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide ${
         isWin ? "bg-long-soft text-long" : "bg-short-soft text-short"
       }`}
     >
-      {isWin ? "TP hit" : "SL hit"}
+      {isWin ? (status === "tp3_hit" ? "TP3 hit" : "TP hit") : "SL hit"}
     </span>
   );
 }
@@ -161,9 +178,11 @@ export function SignalCard({
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">Target</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">TP1 / TP2 / TP3</p>
           <p className="font-mono text-sm font-bold text-long drop-shadow-sm">
             {formatPrice(signal.takeProfit)}
+            {signal.takeProfit2 != null ? ` / ${formatPrice(signal.takeProfit2)}` : ""}
+            {signal.takeProfit3 != null ? ` / ${formatPrice(signal.takeProfit3)}` : ""}
           </p>
         </div>
       </div>
@@ -290,7 +309,13 @@ function SignalDetailModal({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <DetailRow label="Entry" value={formatPrice(signal.entry)} />
             <DetailRow label="Stop loss" value={formatPrice(signal.stopLoss)} tone="short" />
-            <DetailRow label="Take profit" value={formatPrice(signal.takeProfit)} tone="long" />
+            <DetailRow label="Take profit 1" value={formatPrice(signal.takeProfit)} tone="long" />
+            {signal.takeProfit2 != null ? (
+              <DetailRow label="Take profit 2" value={formatPrice(signal.takeProfit2)} tone="long" />
+            ) : null}
+            {signal.takeProfit3 != null ? (
+              <DetailRow label="Take profit 3" value={formatPrice(signal.takeProfit3)} tone="long" />
+            ) : null}
             <DetailRow label="Risk / reward" value={riskReward(signal)} tone="accent" />
           </div>
 

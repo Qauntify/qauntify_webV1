@@ -1,4 +1,11 @@
-export type SignalStatus = "open" | "tp_hit" | "sl_hit" | "expired";
+export type SignalStatus =
+  | "open"
+  | "tp1_hit"
+  | "tp2_hit"
+  | "tp3_hit"
+  | "tp_hit"
+  | "sl_hit"
+  | "expired";
 
 export type SignalIndicators = {
   strategy?: string;
@@ -14,6 +21,10 @@ export type SignalIndicators = {
   sweepLow?: number;
   sweepHigh?: number;
   atr?: number;
+  ceTrail?: number;
+  ceDirection?: string;
+  lwma200?: number;
+  zone?: string;
 };
 
 export type Signal = {
@@ -24,6 +35,8 @@ export type Signal = {
   entry: number;
   stopLoss: number;
   takeProfit: number;
+  takeProfit2: number | null;
+  takeProfit3: number | null;
   confidence: number;
   rationale: string;
   indicators: SignalIndicators;
@@ -52,18 +65,27 @@ type SignalRow = {
   entry: number;
   stop_loss: number;
   take_profit: number;
+  take_profit_1?: number | null;
+  take_profit_2?: number | null;
+  take_profit_3?: number | null;
   confidence: number;
   rationale: string;
   indicators: Record<string, unknown>;
   news_headlines: unknown;
   created_at: string;
   closed_at?: string | null;
-  // Absent until supabase/schema.sql adds the column; treated as "open".
   status?: string;
 };
 
 function parseStatus(value: string | undefined): SignalStatus {
-  if (value === "tp_hit" || value === "sl_hit" || value === "expired") {
+  if (
+    value === "tp_hit" ||
+    value === "tp1_hit" ||
+    value === "tp2_hit" ||
+    value === "tp3_hit" ||
+    value === "sl_hit" ||
+    value === "expired"
+  ) {
     return value;
   }
   return "open";
@@ -187,6 +209,10 @@ function parseIndicators(raw: Record<string, unknown>): SignalIndicators {
     sweepLow: num(raw.sweep_low),
     sweepHigh: num(raw.sweep_high),
     atr: num(raw.atr),
+    ceTrail: num(raw.ce_trail),
+    ceDirection: str(raw.ce_direction),
+    lwma200: num(raw.lwma200),
+    zone: str(raw.zone),
   };
 }
 
@@ -194,6 +220,7 @@ function parseRow(row: SignalRow): Signal | null {
   if (row.direction !== "long" && row.direction !== "short") return null;
   if (!Array.isArray(row.news_headlines)) return null;
   if (typeof row.indicators !== "object" || row.indicators === null) return null;
+  const tp1 = row.take_profit_1 ?? row.take_profit;
   return {
     id: row.id,
     symbol: row.symbol,
@@ -201,7 +228,9 @@ function parseRow(row: SignalRow): Signal | null {
     direction: row.direction,
     entry: row.entry,
     stopLoss: row.stop_loss,
-    takeProfit: row.take_profit,
+    takeProfit: tp1,
+    takeProfit2: typeof row.take_profit_2 === "number" ? row.take_profit_2 : null,
+    takeProfit3: typeof row.take_profit_3 === "number" ? row.take_profit_3 : null,
     confidence: row.confidence,
     rationale: row.rationale,
     indicators: parseIndicators(row.indicators),
@@ -310,14 +339,14 @@ export async function getClosedOutcomeSignals(
   const timeframeFilter = timeframe ? `&timeframe=eq.${timeframe}` : "";
   const rows = await fetchRows(
     `select=*${timeframeFilter}` +
-      `&status=in.(tp_hit,sl_hit)&order=closed_at.desc.nullslast`,
+      `&status=in.(tp_hit,tp3_hit,sl_hit)&order=closed_at.desc.nullslast`,
     accessToken,
   );
   if (!rows) return [];
   return rows
     .map(parseRow)
     .filter((s): s is Signal => s !== null)
-    .filter((s) => s.status === "tp_hit" || s.status === "sl_hit");
+    .filter((s) => s.status === "tp_hit" || s.status === "tp3_hit" || s.status === "sl_hit");
 }
 
 export type DailyPnL = {
@@ -337,7 +366,7 @@ export async function getDailyPnLStats(
   
   const query =
     `select=created_at,closed_at,status` +
-    `&status=in.(tp_hit,sl_hit)` +
+    `&status=in.(tp_hit,tp3_hit,sl_hit)` +
     `&created_at=gte.${cutoff.toISOString()}` +
     `&order=created_at.desc`;
   const rows = await fetchRows(query, accessToken);
@@ -348,7 +377,7 @@ export async function getDailyPnLStats(
 
   for (const r of rows) {
     const status = parseStatus(r.status);
-    if (status !== "tp_hit" && status !== "sl_hit") continue;
+    if (status !== "tp_hit" && status !== "tp3_hit" && status !== "sl_hit") continue;
     
     // Prefer closed day when available — that's when the outcome landed.
     const stamp = typeof r.closed_at === "string" ? r.closed_at : r.created_at;
@@ -359,7 +388,7 @@ export async function getDailyPnLStats(
     }
     
     const stats = dailyMap.get(dateStr)!;
-    if (status === "tp_hit") stats.wins++;
+    if (status === "tp_hit" || status === "tp3_hit") stats.wins++;
     if (status === "sl_hit") stats.losses++;
   }
 

@@ -56,7 +56,7 @@ def test_format_alert_contains_trade_details():
     text = format_alert(_signal())
     assert "<b>LONG BTCUSDT</b>" in text
     assert "(1h)" in text
-    assert "Entry 108240 | SL 106900 | TP 110920" in text
+    assert "Entry 108240 | SL 106900 | TP1" in text
     assert "Confidence 80%" in text
     assert "Looks good." in text
     assert text.startswith("<b>")

@@ -343,7 +343,7 @@ def test_scan_symbol_computes_and_passes_adx_to_detect_setup(monkeypatch):
     seen = {}
 
     def capture_detect(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
-                       atr14, adx14=None, htf_trend=None):
+                       atr14, adx14=None, htf_trend=None, h1_candles=None):
         seen["adx14"] = adx14
         return None
 
@@ -367,7 +367,7 @@ def test_scan_symbol_passes_htf_trend_when_confluence_timeframe_given(monkeypatc
     seen = {}
 
     def capture_detect(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
-                       atr14, adx14=None, htf_trend=None):
+                       atr14, adx14=None, htf_trend=None, h1_candles=None):
         seen["htf_trend"] = htf_trend
         return None
 
@@ -392,7 +392,7 @@ def test_scan_symbol_skips_htf_fetch_without_confluence_timeframe(monkeypatch):
     seen = {}
 
     def capture_detect(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
-                       atr14, adx14=None, htf_trend=None):
+                       atr14, adx14=None, htf_trend=None, h1_candles=None):
         seen["htf_trend"] = htf_trend
         return None
 
@@ -569,10 +569,11 @@ def test_trading_sessions_define_scalp_and_swing():
     # Scalp must expire much faster than swing: a 15m setup that sat open
     # for two weeks is meaningless.
     assert by_name["scalp"].max_open_days < by_name["swing"].max_open_days
-    # Scalp setups must agree with the swing session's own timeframe trend
-    # before firing; swing has no faster reference session to confirm against.
-    assert by_name["scalp"].confluence_timeframe == "1h"
+    # Scalp is hardcoded to CE+LWMA (no EMA HTF confluence gate).
+    assert by_name["scalp"].strategy == "ce_lwma"
+    assert by_name["scalp"].confluence_timeframe is None
     assert by_name["swing"].confluence_timeframe is None
+    assert by_name["swing"].strategy is None
 
 
 def test_scan_symbol_uses_the_session_timeframe(monkeypatch):
@@ -808,7 +809,7 @@ def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypat
 
     run_module.main()
 
-    assert sorted(seen) == [("15m", "1h"), ("1h", None)]
+    assert sorted(seen) == [("15m", None), ("1h", None)]
 
 
 def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):

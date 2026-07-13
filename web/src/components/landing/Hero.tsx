@@ -11,6 +11,8 @@ const SAMPLE_SIGNAL: Signal = {
   entry: 108240,
   stopLoss: 106900,
   takeProfit: 110920,
+  takeProfit2: null,
+  takeProfit3: null,
   confidence: 82,
   rationale:
     "EMA crossover with positive momentum; recent ETF inflow headlines support the move.",

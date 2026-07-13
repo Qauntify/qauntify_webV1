@@ -294,9 +294,11 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         print(f"[{symbol}] {timeframe} evaluated recently, skipping this run")
         return ScanResult()
 
+    # CE+LWMA needs 200 M15 bars for LWMA warm-up; other strategies use cfg.
+    candle_limit = max(cfg.candle_limit, 220) if strategy == "ce_lwma" else cfg.candle_limit
     try:
         candles = with_retry(
-            lambda: fetch_candles(symbol, timeframe, cfg.candle_limit,
+            lambda: fetch_candles(symbol, timeframe, candle_limit,
                                   session=session)
         )
     except Exception as exc:
@@ -322,7 +324,19 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     atr14 = atr(highs, lows, closes, 14)
     adx14 = adx(highs, lows, closes, 14)
     htf_trend = None
-    if confluence_timeframe:
+    h1_candles = None
+    if strategy == "ce_lwma":
+        try:
+            h1_raw = with_retry(
+                lambda: fetch_candles(symbol, "1h", max(cfg.candle_limit, 80),
+                                      session=session)
+            )
+            h1_candles = h1_raw[:-1]
+        except Exception as exc:
+            print(f"[{symbol}] H1 CE data unavailable ({type(exc).__name__}), "
+                  "skipping")
+            return ScanResult(candles=candles)
+    elif confluence_timeframe:
         try:
             htf_trend = _fetch_htf_trend(symbol, confluence_timeframe, cfg,
                                          session=session)
@@ -333,7 +347,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
 
     setup = detect_setup(
         strategy, symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
-        adx14=adx14, htf_trend=htf_trend,
+        adx14=adx14, htf_trend=htf_trend, h1_candles=h1_candles,
     )
     if setup is None:
         print(f"[{symbol}] no setup found ({strategy})")
@@ -351,6 +365,8 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
                 indicators["adx"] = adx14[-1]
             if htf_trend is not None:
                 indicators["htf_trend"] = htf_trend
+        elif strategy == "ce_lwma":
+            indicators = {"strategy": "ce_lwma"}
         elif indicators is None:
             return ScanResult(candles=candles)
         headlines = headlines_for_symbol()
@@ -376,8 +392,9 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             indicators=indicators,
         ), candles=candles)
 
+    tp1, tp2, tp3 = setup.resolved_take_profits()
     print(f"[{symbol}] candidate {setup.direction}: entry={setup.entry} "
-          f"SL={setup.stop_loss} TP={setup.take_profit}")
+          f"SL={setup.stop_loss} TP1={tp1} TP2={tp2} TP3={tp3}")
 
     if already_signaled(setup, cfg, timeframe=timeframe, session=session,
                         recent_signals=recent_signals,
@@ -528,7 +545,14 @@ def maybe_send_run_summary(run_id: str, timeframe: str, outcomes: list[dict], cf
     return
 
 
-OUTCOME_LABELS = {"tp_hit": "TP HIT", "sl_hit": "SL HIT", "expired": "EXPIRED"}
+OUTCOME_LABELS = {
+    "tp_hit": "TP HIT",
+    "tp1_hit": "TP1 HIT",
+    "tp2_hit": "TP2 HIT",
+    "tp3_hit": "TP3 HIT",
+    "sl_hit": "SL HIT",
+    "expired": "EXPIRED",
+}
 
 
 def main():
@@ -541,7 +565,8 @@ def main():
     session_label = "+".join(s.timeframe for s in TRADING_SESSIONS)
     print(f"Using {len(keys)} SEA-LION API key(s) across "
           f"{len(settings.symbols)} symbol(s) in {len(TRADING_SESSIONS)} "
-          f"session(s) ({session_label}), strategy={settings.signal_strategy}.")
+          f"session(s) ({session_label}), "
+          f"swing_strategy={settings.signal_strategy}, scalp=ce_lwma.")
     # RSS feeds change slower than a run: fetch them once, filter per symbol.
     feed_titles = _fetch_feed_titles_safe(session=requests.Session())
 
@@ -557,9 +582,12 @@ def main():
             model=cfg.sealion_model,
             base_url=cfg.sealion_base_url,
         )
+        session_strategy = (
+            trading_session.strategy or settings.signal_strategy
+        )
         try:
             return scan_symbol(
-                symbol, cfg, llm, strategy=settings.signal_strategy,
+                symbol, cfg, llm, strategy=session_strategy,
                 timeframe=trading_session.timeframe,
                 feed_titles=feed_titles, session=requests.Session(),
                 recent_events=recent_events, recent_signals=recent_signals,
