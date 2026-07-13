@@ -92,7 +92,8 @@ async function fetchRows(
           // the anon key alone only sees the 24-hour preview.
           Authorization: `Bearer ${accessToken ?? config.anonKey}`,
         },
-        cache: "no-store", // signals change whenever the engine runs
+        cache: "force-cache",
+        next: { revalidate: 30 },
       },
     );
     if (!response.ok) return null;
@@ -121,7 +122,8 @@ async function callRpc<T>(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(params),
-      cache: "no-store", // signals change whenever the engine runs
+      cache: "force-cache",
+      next: { revalidate: 30 },
     });
     if (!response.ok) return null;
     return (await response.json()) as T;
@@ -150,7 +152,8 @@ async function fetchRowsPaginated(
           Range: `${offset}-${rangeEnd}`,
           Prefer: "count=exact",
         },
-        cache: "no-store",
+        cache: "force-cache",
+        next: { revalidate: 30 },
       },
     );
     if (!response.ok) return null;
@@ -335,7 +338,11 @@ export async function getDailyPnLStats(
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   
-  const query = `select=created_at,status&created_at=gte.${cutoff.toISOString()}&order=created_at.desc`;
+  const query =
+    `select=created_at,closed_at,status` +
+    `&status=in.(tp_hit,sl_hit)` +
+    `&created_at=gte.${cutoff.toISOString()}` +
+    `&order=created_at.desc`;
   const rows = await fetchRows(query, accessToken);
   
   if (!rows || rows.length === 0) return [];
@@ -346,8 +353,9 @@ export async function getDailyPnLStats(
     const status = parseStatus(r.status);
     if (status !== "tp_hit" && status !== "sl_hit") continue;
     
-    // Get YYYY-MM-DD
-    const dateStr = new Date(r.created_at).toISOString().split("T")[0];
+    // Prefer closed day when available — that's when the outcome landed.
+    const stamp = typeof r.closed_at === "string" ? r.closed_at : r.created_at;
+    const dateStr = new Date(stamp).toISOString().split("T")[0];
     
     if (!dailyMap.has(dateStr)) {
       dailyMap.set(dateStr, { wins: 0, losses: 0 });

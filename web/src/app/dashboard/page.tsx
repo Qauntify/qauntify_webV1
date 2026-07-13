@@ -12,7 +12,7 @@ export const metadata = {
   title: "Dashboard — Qauntify",
 };
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 const SESSIONS = [
   {

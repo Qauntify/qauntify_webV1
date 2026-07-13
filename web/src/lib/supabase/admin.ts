@@ -88,6 +88,8 @@ function headers(serviceKey: string): HeadersInit {
   };
 }
 
+const READ_CACHE = { cache: "force-cache" as const, next: { revalidate: 30 } };
+
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   const admins = (process.env.ADMIN_EMAILS ?? "")
@@ -103,7 +105,7 @@ export async function listUsers(): Promise<AdminUser[] | null> {
   try {
     const response = await fetch(
       `${cfg.url}/auth/v1/admin/users?per_page=200`,
-      { headers: headers(cfg.serviceKey), cache: "no-store" },
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
     );
     if (!response.ok) return null;
     const body = await response.json();
@@ -132,7 +134,7 @@ export async function getUserEmail(id: string): Promise<string | null> {
   try {
     const response = await fetch(`${cfg.url}/auth/v1/admin/users/${id}`, {
       headers: headers(cfg.serviceKey),
-      cache: "no-store",
+      ...READ_CACHE,
     });
     if (!response.ok) return null;
     const body = await response.json();
@@ -168,7 +170,7 @@ export async function getBotSettings(): Promise<BotSettings | null> {
   try {
     const response = await fetch(
       `${cfg.url}/rest/v1/bot_settings?id=eq.1&select=symbols,min_alert_confidence,signal_strategy`,
-      { headers: headers(cfg.serviceKey), cache: "no-store" },
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
     );
     if (!response.ok) return null;
     const rows = await response.json();
@@ -265,7 +267,7 @@ export async function listAiEventsPage(
           Range: `${offset}-${rangeEnd}`,
           Prefer: "count=exact",
         },
-        cache: "no-store",
+        ...READ_CACHE,
       },
     );
     if (!response.ok) return null;
@@ -317,7 +319,7 @@ export async function latestEngineRun(): Promise<EngineRun | null> {
     const response = await fetch(
       `${cfg.url}/rest/v1/engine_runs?select=*` +
         `&order=finished_at.desc&limit=1`,
-      { headers: headers(cfg.serviceKey), cache: "no-store" },
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
     );
     if (!response.ok) return null;
     const rows = (await response.json()) as EngineRunRow[];
@@ -360,7 +362,7 @@ export async function getEngineStatus(): Promise<EngineStatus | null> {
   try {
     const response = await fetch(`${cfg.url}/rest/v1/engine_status?select=*`, {
       headers: headers(cfg.serviceKey),
-      cache: "no-store",
+      ...READ_CACHE,
     });
     if (!response.ok) return null;
     const rows = (await response.json()) as EngineStatusRow[];

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: "Admin · Users — Qauntify",
 };
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function AdminUsers({
   searchParams,

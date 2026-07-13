@@ -4,16 +4,16 @@ import { signout } from "@/app/auth/actions";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { Logo } from "@/components/shared/Logo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminPage } from "@/lib/admin-guard";
 
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const email = user?.email ?? "";
+  // Shared across this layout + the page segment in the same request via
+  // React.cache — one session read, not a second Auth network hop.
+  const email = await requireAdminPage();
 
   return (
     <div className="flex min-h-screen flex-1">
@@ -48,9 +48,7 @@ export default async function AdminLayout({
           <div className="lg:hidden">
             <Logo suffix="admin" />
           </div>
-          <div className="hidden lg:block">
-            {/* Desktop header left area */}
-          </div>
+          <div className="hidden lg:block" />
           <div className="flex items-center gap-3 lg:hidden">
             <Link href="/dashboard" className="text-xs text-slate hover:text-ink">
               Dashboard

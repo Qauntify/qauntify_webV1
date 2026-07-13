@@ -10,7 +10,7 @@ import { Nav } from "@/components/shared/Nav";
 import { getSignals, getStats } from "@/lib/signals";
 
 // Signals change whenever the engine runs — read the DB on every request.
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export default async function Home() {
   const signals = await getSignals(3);

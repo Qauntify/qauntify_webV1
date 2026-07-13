@@ -96,5 +96,9 @@ export async function removeSignal(formData: FormData) {
   const ok = await deleteSignal(id);
   if (ok) {
     revalidatePath("/admin", "layout");
+    revalidatePath("/admin/calendar");
+    revalidatePath("/admin/signals");
+    revalidatePath("/dashboard");
+
   }
 }

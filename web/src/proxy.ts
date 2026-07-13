@@ -1,8 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+import { isAdminEmail } from "@/lib/supabase/admin";
+
 // Refreshes the Supabase session cookie on every page request so Server
-// Components always see a valid (non-expired) access token.
+// Components always see a valid (non-expired) access token. Also gates
+// /admin so pages do not need a second Auth API round-trip.
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -28,7 +31,19 @@ export async function proxy(request: NextRequest) {
   });
 
   // Triggers a token refresh if the access token has expired.
-  await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const path = request.nextUrl.pathname;
+  if (path === "/admin" || path.startsWith("/admin/")) {
+    if (!user?.email) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    if (!isAdminEmail(user.email)) {
+      const denied = new URL("/dashboard", request.url);
+      denied.searchParams.set("admin", "denied");
+      return NextResponse.redirect(denied);
+    }
+  }
 
   return response;
 }

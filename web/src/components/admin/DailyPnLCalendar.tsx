@@ -105,13 +105,10 @@ export function DailyPnLCalendar({ data }: { data: DailyPnL[] }) {
   }, [year, month, data]);
 
   return (
-    <div className="card-surface p-6 border border-line rounded-xl mt-8">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-ink">Calendar</h2>
-        <p className="text-sm text-slate mt-1">
-          See at one glance how many days you are making or losing money.
-        </p>
-      </div>
+    <div className="card-surface rounded-xl border border-line p-6">
+      <p className="mb-6 text-sm text-slate">
+        Closed TP/SL hits by day — green days net wins, red days net losses.
+      </p>
 
       {/* Year Tabs */}
       <div className="flex justify-center mb-6">
