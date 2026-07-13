@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { DeleteSignalButton } from "@/components/admin/DeleteSignalButton";
+import { ExportSignalsMenu } from "@/components/admin/ExportSignalsMenu";
 import { SignalCard } from "@/components/dashboard/SignalsGrid";
 import { Pagination } from "@/components/shared/Pagination";
 import { requireAdminPage } from "@/lib/admin-guard";
-import { getSignalsPaginated } from "@/lib/signals";
+import { getSignalsPaginated, getStats } from "@/lib/signals";
 import { serviceRoleToken } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
@@ -27,18 +28,25 @@ export default async function AdminSignals({
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
 
   const token = serviceRoleToken();
-  const { signals, total, totalPages, pageSize } = await getSignalsPaginated(page, token, timeframe);
+  const [{ signals, total, totalPages, pageSize }, stats] = await Promise.all([
+    getSignalsPaginated(page, token, timeframe),
+    getStats(token, timeframe),
+  ]);
+  const exportableCount = stats.tpHits + stats.slHits;
 
   // Extra params to preserve the active tab when paginating
   const extraParams: Record<string, string> = currentTab !== "all" ? { tab: currentTab } : {};
 
   return (
     <>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Signals</h1>
-        <p className="mt-1 text-sm text-slate">
-          Manage and view all stored signals.
-        </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Signals</h1>
+          <p className="mt-1 text-sm text-slate">
+            Manage and view all stored signals. Export includes TP/SL hits only.
+          </p>
+        </div>
+        <ExportSignalsMenu tab={currentTab} disabled={exportableCount === 0} />
       </div>
 
       <nav className="flex gap-2 border-b border-line pb-4 mb-6 overflow-x-auto">

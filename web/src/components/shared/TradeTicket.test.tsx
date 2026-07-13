@@ -17,6 +17,7 @@ const SIGNAL: Signal = {
   indicators: { ema9: 1, ema21: 1, rsi: 55, macdHist: 0.5 },
   newsHeadlines: ["ETF inflows surge"],
   createdAt: new Date().toISOString(),
+  closedAt: null,
   status: "open",
 };
 

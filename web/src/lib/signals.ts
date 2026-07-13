@@ -13,6 +13,7 @@ export type Signal = {
   indicators: { ema9: number; ema21: number; rsi: number; macdHist: number };
   newsHeadlines: string[];
   createdAt: string;
+  closedAt: string | null;
   status: SignalStatus;
 };
 
@@ -40,6 +41,7 @@ type SignalRow = {
   indicators: { ema9: number; ema21: number; rsi: number; macd_hist: number };
   news_headlines: unknown;
   created_at: string;
+  closed_at?: string | null;
   // Absent until supabase/schema.sql adds the column; treated as "open".
   status?: string;
 };
@@ -168,6 +170,7 @@ function parseRow(row: SignalRow): Signal | null {
     },
     newsHeadlines: row.news_headlines as string[],
     createdAt: row.created_at,
+    closedAt: typeof row.closed_at === "string" ? row.closed_at : null,
     status: parseStatus(row.status),
   };
 }
@@ -260,6 +263,24 @@ export async function getSignalsPaginated(
     total: result.total,
     totalPages,
   };
+}
+
+/** Closed TP/SL outcomes only — open and expired are excluded from exports. */
+export async function getClosedOutcomeSignals(
+  accessToken?: string,
+  timeframe?: string,
+): Promise<Signal[]> {
+  const timeframeFilter = timeframe ? `&timeframe=eq.${timeframe}` : "";
+  const rows = await fetchRows(
+    `select=*${timeframeFilter}` +
+      `&status=in.(tp_hit,sl_hit)&order=closed_at.desc.nullslast`,
+    accessToken,
+  );
+  if (!rows) return [];
+  return rows
+    .map(parseRow)
+    .filter((s): s is Signal => s !== null)
+    .filter((s) => s.status === "tp_hit" || s.status === "sl_hit");
 }
 
 export type DailyPnL = {

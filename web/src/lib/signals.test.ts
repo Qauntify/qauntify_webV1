@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getSignals, getStats } from "./signals";
+import { getClosedOutcomeSignals, getSignals, getStats } from "./signals";
 
 const ROW = {
   id: "abc-123",
@@ -167,5 +167,36 @@ describe("getStats", () => {
   it("degrades to zero stats when fetch itself rejects", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
     expect(await getStats()).toEqual(ZERO_STATS);
+  });
+});
+
+describe("getClosedOutcomeSignals", () => {
+  it("requests only tp_hit and sl_hit rows", async () => {
+    const fetchFn = mockFetch([]);
+    await getClosedOutcomeSignals();
+    const [url] = fetchFn.mock.calls[0];
+    expect(url).toContain("status=in.(tp_hit,sl_hit)");
+    expect(url).toContain("order=closed_at.desc.nullslast");
+    expect(url).not.toContain("timeframe=eq.");
+  });
+
+  it("applies the current tab timeframe filter", async () => {
+    const fetchFn = mockFetch([]);
+    await getClosedOutcomeSignals(undefined, "15m");
+    const [url] = fetchFn.mock.calls[0];
+    expect(url).toContain("timeframe=eq.15m");
+    expect(url).toContain("status=in.(tp_hit,sl_hit)");
+  });
+
+  it("maps closed_at and keeps only TP/SL statuses", async () => {
+    mockFetch([
+      { ...ROW, status: "tp_hit", closed_at: "2026-07-07T10:00:00+00:00" },
+      { ...ROW, id: "open-1", status: "open" },
+      { ...ROW, id: "exp-1", status: "expired" },
+    ]);
+    const signals = await getClosedOutcomeSignals();
+    expect(signals).toHaveLength(1);
+    expect(signals[0].status).toBe("tp_hit");
+    expect(signals[0].closedAt).toBe("2026-07-07T10:00:00+00:00");
   });
 });
