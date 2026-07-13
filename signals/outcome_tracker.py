@@ -142,5 +142,5 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
                 print(f"[{symbol}] Telegram outcome alert sent")
             except Exception as exc:
                 print(f"[{symbol}] Telegram outcome alert failed "
-                      f"({type(exc).__name__}), continuing")
+                      f"({type(exc).__name__}: {exc}), continuing")
     return closed

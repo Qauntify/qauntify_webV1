@@ -24,8 +24,15 @@ def _signal(direction="long", confidence=80, rationale="Looks good."):
 
 
 class FakeResponse:
-    def __init__(self, status=200):
+    def __init__(self, status=200, description=""):
         self.status_code = status
+        self._description = description
+        self.text = description
+
+    def json(self):
+        if self._description:
+            return {"ok": False, "description": self._description}
+        return {"ok": True}
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -33,15 +40,16 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, status=200):
+    def __init__(self, status=200, description=""):
         self._status = status
+        self._description = description
         self.last_url = None
         self.last_json = None
 
     def post(self, url, headers=None, json=None, timeout=None):
         self.last_url = url
         self.last_json = json
-        return FakeResponse(self._status)
+        return FakeResponse(self._status, self._description)
 
 
 def test_format_alert_contains_trade_details():
@@ -71,8 +79,16 @@ def test_send_alert_posts_to_bot_api():
 
 
 def test_send_alert_raises_on_http_error():
-    with pytest.raises(RuntimeError):
-        send_alert(_signal(), "t", "c", session=FakeSession(status=401))
+    import requests
+
+    with pytest.raises(requests.HTTPError, match="need administrator"):
+        send_alert(
+            _signal(), "t", "c",
+            session=FakeSession(
+                status=400,
+                description="Bad Request: need administrator rights in the channel chat",
+            ),
+        )
 
 
 def _cfg(token="bot-token", chat="chat-42"):

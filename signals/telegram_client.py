@@ -69,6 +69,17 @@ def send_message(text: str, bot_token: str, chat_id: str,
         },
         timeout=15,
     )
+    if response.status_code >= 400:
+        detail = ""
+        try:
+            detail = (response.json() or {}).get("description") or ""
+        except Exception:
+            detail = (response.text or "")[:200]
+        raise requests.HTTPError(
+            f"{response.status_code} Telegram send failed"
+            + (f": {detail}" if detail else ""),
+            response=response,
+        )
     response.raise_for_status()
 
 

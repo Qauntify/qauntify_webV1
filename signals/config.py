@@ -71,6 +71,10 @@ def load_config() -> Config:
         sealion_api_keys=keys,
         supabase_url=supabase_url.rstrip("/"),
         supabase_service_key=supabase_service_key,
-        telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", ""),
-        telegram_channel_id=os.environ.get("TELEGRAM_CHANNEL_ID", ""),
+        telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", "").strip(),
+        # Prefer CHANNEL_ID; fall back to legacy CHAT_ID if unset.
+        telegram_channel_id=(
+            os.environ.get("TELEGRAM_CHANNEL_ID", "").strip()
+            or os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+        ),
     )
