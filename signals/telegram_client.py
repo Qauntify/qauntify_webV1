@@ -1,4 +1,4 @@
-"""Sends signal and no-signal alerts to Telegram (Bot API sendMessage)."""
+"""Sends confirmed-signal and SL/TP outcome alerts to Telegram."""
 import html
 
 import requests

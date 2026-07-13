@@ -230,42 +230,41 @@ def test_send_run_summary_posts_to_bot_api():
 
 def test_maybe_send_no_signal_alert_skips_without_telegram_config(monkeypatch):
     calls = []
-    monkeypatch.setattr("signals.run.send_no_signal_alert",
+    monkeypatch.setattr("signals.telegram_client.send_no_signal_alert",
                         lambda *a, **k: calls.append(a))
     maybe_send_no_signal_alert(_no_signal_report(), _cfg(token=""))
     assert calls == []
 
 
-def test_maybe_send_no_signal_alert_sends_when_configured(monkeypatch):
+def test_maybe_send_no_signal_alert_does_not_push(monkeypatch):
+    """No-signal / rejected scans must not hit Telegram."""
     calls = []
-    monkeypatch.setattr("signals.run.send_no_signal_alert",
+    monkeypatch.setattr("signals.telegram_client.send_no_signal_alert",
                         lambda *a, **k: calls.append(a))
     maybe_send_no_signal_alert(_no_signal_report(), _cfg())
-    assert len(calls) == 1
+    assert calls == []
 
 
 def test_maybe_send_no_signal_alert_swallows_send_failure(monkeypatch):
-    def boom(*a, **k):
-        raise RuntimeError("telegram down")
-    monkeypatch.setattr("signals.run.send_no_signal_alert", boom)
-    monkeypatch.setattr("signals.run.RETRY_DELAY", 0)
-    maybe_send_no_signal_alert(_no_signal_report(), _cfg())  # must not raise
+    # Kept as a no-op safety net — must never raise regardless of config.
+    maybe_send_no_signal_alert(_no_signal_report(), _cfg())
 
 
 def test_maybe_send_run_summary_skips_without_telegram_config(monkeypatch):
     calls = []
-    monkeypatch.setattr("signals.run.send_run_summary",
+    monkeypatch.setattr("signals.telegram_client.send_run_summary",
                         lambda *a, **k: calls.append(a))
     maybe_send_run_summary("run-1", "1h", [], _cfg(token=""))
     assert calls == []
 
 
-def test_maybe_send_run_summary_sends_when_configured(monkeypatch):
+def test_maybe_send_run_summary_does_not_push(monkeypatch):
+    """Per-run summaries are stored/logged only — not pushed."""
     calls = []
-    monkeypatch.setattr("signals.run.send_run_summary",
+    monkeypatch.setattr("signals.telegram_client.send_run_summary",
                         lambda *a, **k: calls.append(a))
     maybe_send_run_summary("run-1", "1h", [{"symbol": "BTCUSDT", "status": "NO SIGNAL"}], _cfg())
-    assert len(calls) == 1
+    assert calls == []
 
 
 def test_format_run_summary_tags_lines_with_timeframe():

@@ -35,7 +35,7 @@ from signals.storage import (
     save_engine_run,
     save_signal,
 )
-from signals.telegram_client import send_alert, send_no_signal_alert, send_run_summary
+from signals.telegram_client import send_alert
 
 RETRY_DELAY = 2.0
 
@@ -446,34 +446,15 @@ def maybe_send_alert(signal, settings, cfg):
 
 
 def maybe_send_no_signal_alert(report, cfg):
-    """Telegram alert explaining why no signal was stored; never raises."""
-    if not cfg.telegram_bot_token or not cfg.telegram_channel_id:
-        return
-    try:
-        with_retry(lambda: send_no_signal_alert(
-            report, cfg.telegram_bot_token, cfg.telegram_channel_id,
-        ))
-        print(f"[{report.symbol}] Telegram no-signal alert sent")
-    except Exception as exc:
-        print(f"[{report.symbol}] Telegram no-signal alert failed "
-              f"({type(exc).__name__}), continuing")
+    """Intentionally a no-op: no-signal / rejected scans are not pushed.
+    Confirmed signals and SL/TP hits are the only Telegram alerts."""
+    return
 
 
 def maybe_send_run_summary(run_id: str, timeframe: str, outcomes: list[dict], cfg) -> None:
-    """Telegram per-run summary; never raises."""
-    if not cfg.telegram_bot_token or not cfg.telegram_channel_id:
-        return
-    try:
-        with_retry(lambda: send_run_summary(
-            run_id,
-            timeframe,
-            outcomes,
-            cfg.telegram_bot_token,
-            cfg.telegram_channel_id,
-        ))
-        print("Telegram run summary sent")
-    except Exception as exc:
-        print(f"Telegram run summary failed ({type(exc).__name__}), continuing")
+    """Intentionally a no-op: per-run summaries are logged/stored only,
+    not pushed to Telegram."""
+    return
 
 
 OUTCOME_LABELS = {"tp_hit": "TP HIT", "sl_hit": "SL HIT", "expired": "EXPIRED"}
@@ -561,7 +542,8 @@ def main():
                     "extra": f"{result.signal.direction.upper()} {result.signal.confidence}%",
                 })
             elif result.no_signal is not None:
-                maybe_send_no_signal_alert(result.no_signal, cfg)
+                # No Telegram for no-setup / rejected — only confirmed
+                # signals and SL/TP hits get pushed.
                 if result.no_signal.kind == "rejected":
                     outcomes.append({
                         "symbol": symbol,
@@ -613,7 +595,7 @@ def main():
         ))
     except Exception as exc:
         print(f"Failed to store engine run heartbeat ({type(exc).__name__}), continuing")
-    maybe_send_run_summary(run_id, session_label, outcomes, cfg)
+    # Run summary stays in Supabase / logs only — not pushed to Telegram.
     print(f"Done. {stored} signal(s) stored in Supabase.")
 
 
