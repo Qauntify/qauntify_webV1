@@ -1,9 +1,8 @@
 name: Deploy web to Vercel
 
-# Backup auto-deploy when the Vercel GitHub App is not linked.
-# Preferred path: connect the repo in Vercel Project Settings → Git
-# (Root Directory must be `web`). This workflow still works with a
-# durable token from https://vercel.com/account/tokens.
+# Auto-deploys the Next.js app on pushes that touch web/.
+# Requires secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+# Project Root Directory on Vercel must be `web`.
 
 on:
   push:
@@ -21,17 +20,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: web
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
 
       - name: Install Vercel CLI
         run: npm install --global vercel@50
