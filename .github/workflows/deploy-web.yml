@@ -3,6 +3,10 @@ name: Deploy web to Vercel
 # Auto-deploys the Next.js app on pushes that touch web/.
 # Requires secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
 # Project Root Directory on Vercel must be `web`.
+#
+# Build on Vercel (not --prebuilt): production env vars marked Sensitive
+# are unavailable to `vercel build` in CI, which emptied NEXT_PUBLIC_* and
+# took the site down with "URL and Key are required".
 
 on:
   push:
@@ -26,20 +30,8 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@50
 
-      - name: Pull Vercel env
-        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Build
-        run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Deploy
-        run: vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"
+      - name: Deploy to Vercel (cloud build)
+        run: vercel deploy --prod --yes --token="${{ secrets.VERCEL_TOKEN }}"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

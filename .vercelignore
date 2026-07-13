@@ -1,0 +1,14 @@
+signals/
+.claude/
+**/node_modules
+**/.next
+**/.git
+**/__pycache__
+**/.venv
+**/venv
+web/node_modules
+web/.next
+*.pyc
+.env
+.env.*
+!.env.example
