@@ -92,8 +92,7 @@ async function fetchRows(
           // the anon key alone only sees the 24-hour preview.
           Authorization: `Bearer ${accessToken ?? config.anonKey}`,
         },
-        cache: "force-cache",
-        next: { revalidate: 30 },
+        cache: "no-store",
       },
     );
     if (!response.ok) return null;
@@ -122,8 +121,7 @@ async function callRpc<T>(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(params),
-      cache: "force-cache",
-      next: { revalidate: 30 },
+      cache: "no-store",
     });
     if (!response.ok) return null;
     return (await response.json()) as T;
@@ -152,8 +150,7 @@ async function fetchRowsPaginated(
           Range: `${offset}-${rangeEnd}`,
           Prefer: "count=exact",
         },
-        cache: "force-cache",
-        next: { revalidate: 30 },
+        cache: "no-store",
       },
     );
     if (!response.ok) return null;

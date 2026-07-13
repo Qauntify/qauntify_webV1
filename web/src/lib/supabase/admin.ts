@@ -88,16 +88,9 @@ function headers(serviceKey: string): HeadersInit {
   };
 }
 
-const READ_CACHE = { cache: "force-cache" as const, next: { revalidate: 30 } };
+const READ_CACHE = { cache: "no-store" as const };
 
-export function isAdminEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  const admins = (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  return admins.includes(email.toLowerCase());
-}
+export { isAdminEmail } from "@/lib/admin-emails";
 
 export async function listUsers(): Promise<AdminUser[] | null> {
   const cfg = config();

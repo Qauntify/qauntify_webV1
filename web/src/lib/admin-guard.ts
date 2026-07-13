@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 
-import { isAdminEmail } from "@/lib/supabase/admin";
+import { isAdminEmail } from "@/lib/admin-emails";
 import { createClient } from "@/lib/supabase/server";
 
 /**

@@ -67,8 +67,7 @@ describe("getSignals", () => {
     );
     expect(options.headers.apikey).toBe("anon-key");
     expect(options.headers.Authorization).toBe("Bearer anon-key");
-    expect(options.cache).toBe("force-cache");
-    expect(options.next).toEqual({ revalidate: 30 });
+    expect(options.cache).toBe("no-store");
   });
 
   it("filters by timeframe when a session is requested", async () => {
