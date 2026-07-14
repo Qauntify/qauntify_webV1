@@ -110,12 +110,16 @@ export function TradeTicket({
       <div className="grid grid-cols-2 gap-4 px-5 py-5 sm:grid-cols-4">
         <PriceCell label="Entry" value={signal.entry} />
         <PriceCell label="Stop loss" value={signal.stopLoss} tone="short" />
-        <PriceCell label="TP1" value={signal.takeProfit} tone="long" />
         <PriceCell
-          label="TP3"
-          value={signal.takeProfit3 ?? signal.takeProfit}
+          label={signal.takeProfit2 != null || signal.takeProfit3 != null ? "TP1" : "Take profit"}
+          value={signal.takeProfit}
           tone="long"
         />
+        {signal.takeProfit3 != null ? (
+          <PriceCell label="TP3" value={signal.takeProfit3} tone="long" />
+        ) : signal.takeProfit2 != null ? (
+          <PriceCell label="TP2" value={signal.takeProfit2} tone="long" />
+        ) : null}
       </div>
 
       {showRationale && signal.rationale && (
