@@ -35,9 +35,13 @@ export function Features() {
           eyebrow="Features"
           title="A signal is a checklist, not a hunch."
         />
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="stat-tile">
+        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((f, i) => (
+            <div 
+              key={f.title} 
+              className="stat-tile animate-fade-up"
+              style={{ animationDelay: `${i * 100}ms` }}
+            >
               <h3 className="font-semibold text-ink">{f.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-slate">{f.body}</p>
             </div>

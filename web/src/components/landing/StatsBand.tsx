@@ -14,10 +14,14 @@ export function StatsBand({ stats }: { stats: Stats }) {
     },
   ];
   return (
-    <section className="section-block border-line bg-card">
+    <section className="section-block border-line bg-card/40 backdrop-blur-md">
       <div className="page-container grid grid-cols-1 divide-y divide-line py-2 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        {items.map((item) => (
-          <div key={item.label} className="px-4 py-8 text-center sm:py-10">
+        {items.map((item, i) => (
+          <div 
+            key={item.label} 
+            className="px-4 py-8 text-center sm:py-10 animate-fade-up"
+            style={{ animationDelay: `${i * 150}ms` }}
+          >
             <p
               className={`font-mono text-3xl font-bold ${
                 item.tone === "long" ? "text-long" : "text-ink"

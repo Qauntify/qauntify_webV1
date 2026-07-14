@@ -2,43 +2,43 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* TradeZella-inspired: violet accent, clean cards, green/red P&L */
+/* Modern, Premium Variables */
 :root {
-  --paper: #f7f8fc;
-  --card: #ffffff;
-  --ink: #111827;
-  --slate: #6b7280;
-  --line: #e5e7eb;
-  --accent: #745ff2;
-  --accent-hover: #6349e8;
-  --accent-soft: #f3f0ff;
-  --accent-glow: rgba(116, 95, 242, 0.12);
-  --sidebar: #ffffff;
-  --long: #16a34a;
-  --long-soft: #ecfdf3;
-  --short: #dc2626;
-  --short-soft: #fef2f2;
-  --shadow-card: 0 1px 3px rgba(17, 24, 39, 0.06);
-  --shadow-card-hover: 0 4px 16px rgba(17, 24, 39, 0.08);
+  --paper: #f8fafc;
+  --card: rgba(255, 255, 255, 0.7);
+  --ink: #0f172a;
+  --slate: #64748b;
+  --line: rgba(226, 232, 240, 0.8);
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-soft: rgba(99, 102, 241, 0.1);
+  --accent-glow: rgba(99, 102, 241, 0.15);
+  --sidebar: rgba(255, 255, 255, 0.8);
+  --long: #10b981;
+  --long-soft: rgba(16, 185, 129, 0.1);
+  --short: #ef4444;
+  --short-soft: rgba(239, 68, 68, 0.1);
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05), 0 0 0 1px var(--accent-soft);
 }
 
 .dark {
-  --paper: #0d0f14;
-  --card: #161922;
-  --ink: #f3f4f6;
-  --slate: #9ca3af;
-  --line: #252a36;
-  --accent: #8b7cf8;
-  --accent-hover: #9d8efa;
-  --accent-soft: #1e1a2e;
-  --accent-glow: rgba(139, 124, 248, 0.15);
-  --sidebar: #111318;
-  --long: #4ade80;
-  --long-soft: #14291d;
+  --paper: #09090b;
+  --card: rgba(24, 24, 27, 0.6);
+  --ink: #f8fafc;
+  --slate: #94a3b8;
+  --line: rgba(63, 63, 70, 0.5);
+  --accent: #818cf8;
+  --accent-hover: #a5b4fc;
+  --accent-soft: rgba(129, 140, 248, 0.15);
+  --accent-glow: rgba(129, 140, 248, 0.25);
+  --sidebar: rgba(9, 9, 11, 0.8);
+  --long: #34d399;
+  --long-soft: rgba(52, 211, 153, 0.15);
   --short: #f87171;
-  --short-soft: #2a1515;
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --short-soft: rgba(248, 113, 113, 0.15);
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  --shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--accent-soft);
 }
 
 @theme inline {
@@ -48,7 +48,9 @@
   --color-slate: var(--slate);
   --color-line: var(--line);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-glow: var(--accent-glow);
   --color-sidebar: var(--sidebar);
   --color-long: var(--long);
   --color-long-soft: var(--long-soft);
@@ -63,6 +65,7 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-jakarta), system-ui, sans-serif;
+  overflow-x: hidden;
 }
 
 ::selection {
@@ -96,39 +99,52 @@ body {
 
 .section-eyebrow {
   font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
 }
 
+/* Glassmorphism Card Base */
 .card-surface {
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: 1rem;
   background: var(--card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   box-shadow: var(--shadow-card);
-  transition: box-shadow 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .card-surface:hover {
   box-shadow: var(--shadow-card-hover);
+  border-color: var(--accent-soft);
+  transform: translateY(-2px);
 }
 
+/* Enhanced Buttons */
 .btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   background: var(--accent);
-  padding: 0.625rem 1.125rem;
+  padding: 0.75rem 1.5rem;
   font-size: 0.875rem;
   font-weight: 600;
   color: #fff;
-  transition: background 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 14px 0 var(--accent-glow);
 }
 
 .btn-primary:hover {
   background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px 0 var(--accent-glow);
+}
+
+.btn-primary:active {
+  transform: translateY(1px);
 }
 
 .btn-primary-sm {
@@ -141,30 +157,39 @@ body {
   font-size: 0.8125rem;
   font-weight: 600;
   color: #fff;
-  transition: background 0.15s ease;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px 0 var(--accent-glow);
 }
 
 .btn-primary-sm:hover {
   background: var(--accent-hover);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--line);
   background: var(--card);
-  padding: 0.625rem 1.125rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 0.75rem 1.5rem;
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--ink);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-secondary:hover {
   border-color: var(--accent);
   background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active {
+  transform: translateY(1px);
 }
 
 .btn-ghost {
@@ -182,20 +207,34 @@ body {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.2s ease;
+}
+
+.link-arrow::after {
+  content: "→";
+  transition: transform 0.2s ease;
 }
 
 .link-arrow:hover {
   color: var(--accent-hover);
 }
 
+.link-arrow:hover::after {
+  transform: translateX(4px);
+}
+
 .input-field {
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--line);
   background: var(--card);
-  padding: 0.625rem 0.875rem;
+  backdrop-filter: blur(8px);
+  padding: 0.75rem 1rem;
   font-size: 0.875rem;
   color: var(--ink);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: all 0.2s ease;
 }
 
 .input-field:focus {
@@ -208,19 +247,46 @@ body {
   color: var(--slate);
 }
 
+/* Enhanced Hero Mesh */
 .hero-mesh {
+  position: relative;
   background-color: var(--paper);
-  background-image:
-    radial-gradient(ellipse 60% 50% at 20% 0%, var(--accent-glow), transparent 60%),
-    radial-gradient(ellipse 40% 30% at 80% 20%, color-mix(in srgb, var(--long) 6%, transparent), transparent 50%);
 }
 
-/* TradeZella-style widget stat */
+.hero-mesh::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(ellipse 70% 60% at 10% 10%, var(--accent-glow), transparent 70%),
+    radial-gradient(ellipse 50% 50% at 90% 90%, color-mix(in srgb, var(--long) 10%, transparent), transparent 70%);
+  z-index: 0;
+  pointer-events: none;
+  animation: pulse-mesh 10s ease-in-out infinite alternate;
+}
+
+.hero-mesh > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes pulse-mesh {
+  0% { opacity: 0.7; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1.05); }
+}
+
 .stat-tile {
   border: 1px solid var(--line);
   border-radius: 0.75rem;
   background: var(--card);
+  backdrop-filter: blur(8px);
   padding: 1.125rem 1.25rem;
+  transition: all 0.2s ease;
+}
+
+.stat-tile:hover {
+  border-color: var(--accent-soft);
+  background: color-mix(in srgb, var(--card) 95%, var(--accent));
 }
 
 .stat-tile-label {
@@ -238,17 +304,16 @@ body {
   color: var(--ink);
 }
 
-/* Sidebar nav item (TradeZella pattern) */
 .nav-item {
   display: flex;
   align-items: center;
   gap: 0.625rem;
   border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.875rem;
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--slate);
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: all 0.2s ease;
 }
 
 .nav-item:hover {
@@ -262,24 +327,42 @@ body {
   font-weight: 600;
 }
 
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.delay-150 { animation-delay: 150ms; }
+.delay-300 { animation-delay: 300ms; }
+
+/* Smoother Scroll Reveal */
 @keyframes reveal-up {
   from {
     opacity: 0;
-    translate: 0 40px;
-    scale: 0.98;
+    transform: translateY(40px);
   }
   to {
     opacity: 1;
-    translate: 0 0;
-    scale: 1;
+    transform: translateY(0);
   }
 }
 
 @supports ((animation-timeline: view()) and (animation-range: 0% 100%)) {
   .scroll-reveal {
-    animation: reveal-up linear both;
+    animation: reveal-up cubic-bezier(0.4, 0, 0.2, 1) both;
     animation-timeline: view();
-    animation-range: entry 5% cover 25%;
+    animation-range: entry 10% cover 30%;
   }
 }
 

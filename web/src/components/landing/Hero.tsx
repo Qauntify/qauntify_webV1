@@ -30,18 +30,19 @@ export function Hero({ latestSignal }: { latestSignal: Signal | null }) {
       <div className="page-container grid w-full items-center gap-12 py-10 md:grid-cols-2 md:py-12">
         <div>
           <p className="section-eyebrow">AI-confirmed signals</p>
-          <h1 className="mt-3 text-4xl font-extrabold leading-tight tracking-tight md:text-5xl lg:text-6xl">
+          <h1 className="mt-3 text-4xl font-extrabold leading-tight tracking-tight md:text-5xl lg:text-7xl animate-fade-up">
             Trade with clarity.
             <br />
-            <span className="text-accent">Not guesswork.</span>
+            <span className="text-accent drop-shadow-md">Not guesswork.</span>
           </h1>
-          <p className="mt-5 max-w-md text-base leading-relaxed text-slate md:text-lg">
+          <p className="mt-6 max-w-lg text-base leading-relaxed text-slate md:text-lg animate-fade-up delay-150">
             Every setup is scanned by rules, confirmed by AI, and logged with
             entry, stop loss, take profit, and a plain-language rationale.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link href="/dashboard" className="btn-primary">
+          <div className="mt-10 flex flex-wrap items-center gap-4 animate-fade-up delay-300">
+            <Link href="/dashboard" className="btn-primary group">
               Open dashboard
+              <span className="ml-2 inline-block transition-transform group-hover:translate-x-1">→</span>
             </Link>
             <Link href="/signup" className="btn-secondary">
               Create free account

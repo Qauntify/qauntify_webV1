@@ -25,8 +25,8 @@ export async function DashboardShell({
 
   return (
     <div className="flex min-h-screen flex-1">
-      <aside className="hidden w-56 flex-col border-r border-line bg-sidebar lg:flex fixed inset-y-0 left-0 z-40">
-        <div className="flex h-14 items-center border-b border-line px-4">
+      <aside className="hidden w-56 flex-col border-r border-line bg-sidebar backdrop-blur-xl lg:flex fixed inset-y-0 left-0 z-40">
+        <div className="flex h-16 items-center border-b border-line px-4">
           <Logo />
         </div>
         <nav className="flex flex-col gap-1 p-3">
@@ -58,7 +58,7 @@ export async function DashboardShell({
         </div>
       </aside>
       <div className="flex flex-1 flex-col lg:ml-56">
-        <header className="flex h-14 items-center justify-between border-b border-line bg-card px-4 lg:px-8">
+        <header className="flex h-16 items-center justify-between border-b border-line bg-card/80 backdrop-blur-xl px-4 lg:px-8 sticky top-0 z-30 transition-all duration-300">
           <div className="lg:hidden">
             <Logo />
           </div>
