@@ -15,6 +15,7 @@ from signals.calendar_client import (
     fetch_calendar_events,
 )
 from signals.composer import confirm_setup, no_setup_rationale
+from signals.rag import retrieve_context
 from signals.config import load_config
 from signals.indicators import adx, atr, ema, macd_histogram, rsi
 from signals.llm_client import SeaLionClient
@@ -448,10 +449,20 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         return ScanResult(candles=candles)
 
     headlines = headlines_for_symbol()
+    rag_block = retrieve_context(
+        setup,
+        strategy=strategy,
+        timeframe=timeframe,
+        supabase_url=cfg.supabase_url,
+        service_key=cfg.supabase_service_key,
+        llm=llm,
+        session=session,
+    )
     confirmation = confirm_setup(
         setup, headlines, llm, strategy=strategy, timeframe=timeframe,
         session_context=describe_market_session(),
         calendar_block=calendar_context_for_symbol(),
+        rag_block=rag_block or None,
     )
     if confirmation.verdict != "confirm":
         _log_ai_event(

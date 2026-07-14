@@ -3,6 +3,14 @@ from signals.config import Config
 from signals.models import BotSettings, Candle, CandidateSetup
 from signals.run import scan_symbol, with_retry
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _stub_rag(monkeypatch):
+    """Pipeline unit tests do not hit Supabase for RAG."""
+    monkeypatch.setattr(run_module, "retrieve_context", lambda *a, **k: "")
+
 
 def _flat_candles(n=200, price=100.0):
     return [
