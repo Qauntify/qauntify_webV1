@@ -10,6 +10,10 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from signals.binance_client import fetch_candles
+from signals.calendar_client import (
+    calendar_block_for_symbol,
+    fetch_calendar_events,
+)
 from signals.composer import confirm_setup, no_setup_rationale
 from signals.config import load_config
 from signals.indicators import adx, atr, ema, macd_histogram, rsi
@@ -24,6 +28,7 @@ from signals.models import (
 )
 from signals.news_client import fetch_feed_titles, fetch_headlines, filter_headlines
 from signals.outcome_tracker import track_open_signals
+from signals.session_clock import describe_market_session
 from signals.strategies import detect_setup
 from signals.storage import (
     fetch_bot_settings,
@@ -215,6 +220,15 @@ def _fetch_feed_titles_safe(session=None):
         return []
 
 
+def _fetch_calendar_events_safe(session=None):
+    """This week's economic calendar; [] when the free feed is down."""
+    try:
+        return with_retry(lambda: fetch_calendar_events(session=session))
+    except Exception as exc:
+        print(f"economic calendar unavailable ({type(exc).__name__}), proceeding without")
+        return []
+
+
 # Just enough candles for EMA21 to warm up plus a little history — this is
 # only a trend-direction read, not a full setup scan.
 HTF_TREND_CANDLE_LIMIT = 30
@@ -269,7 +283,8 @@ def _log_ai_event(kind: str, symbol: str, cfg, *, timeframe: str,
 
 
 def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
-                timeframe=None, feed_titles=None, session=None,
+                timeframe=None, feed_titles=None, calendar_events=None,
+                session=None,
                 recent_events=None, recent_signals=None,
                 open_symbols=None, confluence_timeframe=None,
                 min_store_confidence=0):
@@ -280,6 +295,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     defaults to cfg.timeframe for single-session callers. `feed_titles`
     holds this run's already-fetched RSS titles; when None the symbol's
     headlines are fetched directly (single-symbol / legacy use).
+    `calendar_events` is this run's economic calendar prefetch (may be []).
     `recent_events`/`recent_signals`/`open_symbols` are this session's
     prefetched maps; when None each check falls back to its own
     per-symbol query. `confluence_timeframe`, when given, requires a
@@ -313,6 +329,10 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         if feed_titles is not None:
             return filter_headlines(feed_titles, symbol)
         return _fetch_headlines_safe(symbol, session=session)
+
+    def calendar_context_for_symbol():
+        events = calendar_events if calendar_events is not None else []
+        return calendar_block_for_symbol(events, symbol)
 
     closes = [c.close for c in candles]
     highs = [c.high for c in candles]
@@ -405,6 +425,8 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     headlines = headlines_for_symbol()
     confirmation = confirm_setup(
         setup, headlines, llm, strategy=strategy, timeframe=timeframe,
+        session_context=describe_market_session(),
+        calendar_block=calendar_context_for_symbol(),
     )
     if confirmation.verdict != "confirm":
         _log_ai_event(
@@ -569,6 +591,7 @@ def main():
           f"swing_strategy={settings.signal_strategy}, scalp=ce_lwma.")
     # RSS feeds change slower than a run: fetch them once, filter per symbol.
     feed_titles = _fetch_feed_titles_safe(session=requests.Session())
+    calendar_events = _fetch_calendar_events_safe(session=requests.Session())
 
     def scan_one(item):
         """(index, symbol, TradingSession, recent_events, recent_signals, open_symbols)
@@ -589,7 +612,8 @@ def main():
             return scan_symbol(
                 symbol, cfg, llm, strategy=session_strategy,
                 timeframe=trading_session.timeframe,
-                feed_titles=feed_titles, session=requests.Session(),
+                feed_titles=feed_titles, calendar_events=calendar_events,
+                session=requests.Session(),
                 recent_events=recent_events, recent_signals=recent_signals,
                 open_symbols=open_symbols,
                 confluence_timeframe=trading_session.confluence_timeframe,

@@ -9,13 +9,20 @@ from signals.models import DEFAULT_SIGNAL_STRATEGY, CandidateSetup, Confirmation
 
 SYSTEM_PROMPT = (
     "You are a disciplined trading-signal reviewer. You receive a candidate "
-    "trade setup derived from technical rules, plus recent news "
-    "headlines. Decide whether the setup is worth taking.\n"
+    "trade setup derived from technical rules, recent news headlines, the "
+    "current FX market session (Asia / London / New York), and nearby "
+    "economic-calendar events. Decide whether the setup is worth taking.\n"
+    "You MAY confirm trades during news if headlines and the calendar "
+    "support or do not materially conflict with the direction — explain "
+    "how the release or headline could impact this market.\n"
     "Checklist before confirming:\n"
-    "1) Does news conflict with the trade direction?\n"
-    "2) Is risk/reward still sensible given the levels?\n"
-    "3) Does the timeframe context (scalp vs swing) support acting now?\n"
-    "4) If ADX/HTF trend is provided, does it agree?\n"
+    "1) Do headlines conflict with the trade direction?\n"
+    "2) Do nearby calendar events (impact, currency, forecast vs previous) "
+    "argue for, against, or for waiting on this trade?\n"
+    "3) Does the current session (Asia / London / New York / overlap) fit "
+    "the timeframe (scalp vs swing) and liquidity needs?\n"
+    "4) Is risk/reward still sensible given the levels?\n"
+    "5) If ADX/HTF trend is provided, does it agree?\n"
     "Respond with ONLY a JSON object, no other text:\n"
     '{"verdict": "confirm" or "reject", "confidence": <integer 0-100>, '
     '"rationale": "<one short paragraph explaining your decision>"}'
@@ -111,7 +118,10 @@ def _format_indicators(strategy: str, indicators: dict) -> str:
 
 def build_messages(setup: CandidateSetup, headlines: list,
                    strategy: str = DEFAULT_SIGNAL_STRATEGY,
-                   timeframe: str = "1h") -> list:
+                   timeframe: str = "1h",
+                   *,
+                   session_context: str | None = None,
+                   calendar_block: str | None = None) -> list:
     if headlines:
         news_block = "\n".join(f"- {h}" for h in headlines)
     else:
@@ -133,6 +143,11 @@ def build_messages(setup: CandidateSetup, headlines: list,
         )
     tp1, tp2, tp3 = setup.resolved_take_profits()
     session_hint = "scalp" if timeframe in ("5m", "15m") else "swing"
+    session_line = session_context or "Market session: unavailable"
+    cal_block = calendar_block or (
+        "No nearby high/medium-impact economic events for this symbol's "
+        "currencies in the next 24h / past 6h."
+    )
     user_content = (
         f"Candidate setup:\n"
         f"{strategy_line}"
@@ -145,6 +160,8 @@ def build_messages(setup: CandidateSetup, headlines: list,
         f"- Take profit 2 (2R): {tp2}\n"
         f"- Take profit 3 (3R): {tp3}\n"
         f"- Context: {_format_indicators(strategy, ind)}\n\n"
+        f"{session_line}\n\n"
+        f"Economic calendar (nearby High/Medium):\n{cal_block}\n\n"
         f"Recent news headlines:\n{news_block}"
     )
     return [
@@ -175,10 +192,17 @@ def parse_confirmation(text: str) -> Confirmation:
 
 def confirm_setup(setup: CandidateSetup, headlines: list, llm,
                   strategy: str = DEFAULT_SIGNAL_STRATEGY,
-                  timeframe: str = "1h") -> Confirmation:
+                  timeframe: str = "1h",
+                  *,
+                  session_context: str | None = None,
+                  calendar_block: str | None = None) -> Confirmation:
     try:
         reply = llm.chat(
-            build_messages(setup, headlines, strategy=strategy, timeframe=timeframe),
+            build_messages(
+                setup, headlines, strategy=strategy, timeframe=timeframe,
+                session_context=session_context,
+                calendar_block=calendar_block,
+            ),
         )
         return parse_confirmation(reply)
     except Exception as exc:

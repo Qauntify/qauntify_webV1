@@ -177,7 +177,13 @@ create index if not exists engine_runs_finished_at_idx
 alter table public.engine_runs enable row level security;
 
 -- Derived engine status (computed using DB time, so the UI stays pure).
-create or replace view public.engine_status as
+-- security_invoker=on: run as the querying role so engine_runs RLS still
+-- applies (service role only; anon/authenticated see nothing). Without this,
+-- Postgres defaults to SECURITY DEFINER and Supabase Security Advisor errors.
+drop view if exists public.engine_status;
+create view public.engine_status
+with (security_invoker = on)
+as
 select
     r.id,
     r.run_id,

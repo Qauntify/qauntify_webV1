@@ -468,7 +468,7 @@ def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
     started = threading.Barrier(3, timeout=5)
     scanned = []
 
-    def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+    def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
                   session=None, recent_events=None, recent_signals=None,
                   open_symbols=None, confluence_timeframe=None,
                   min_store_confidence=0):
@@ -504,7 +504,7 @@ def test_main_reports_expired_signals_in_run_summary(monkeypatch):
                         lambda *a, **k: set())
     monkeypatch.setattr(
         run_module, "scan_symbol",
-        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
         session=None, recent_events=None, recent_signals=None,
         open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
         run_module.ScanResult())
@@ -536,7 +536,7 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
                         lambda *a, **k: set())
     monkeypatch.setattr(
         run_module, "scan_symbol",
-        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
         session=None, recent_events=None, recent_signals=None,
         open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
         run_module.ScanResult(candles=candles))
@@ -674,7 +674,7 @@ def test_main_prefetches_recent_maps_once_per_session_not_per_symbol(monkeypatch
                         lambda cfg, prefetched=None, session=None: [])
     monkeypatch.setattr(
         run_module, "scan_symbol",
-        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
         session=None, recent_events=None, recent_signals=None,
         open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
         run_module.ScanResult())
@@ -729,7 +729,7 @@ def test_main_passes_prefetched_maps_into_scan_symbol(monkeypatch):
 
     seen = []
 
-    def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+    def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
                   session=None, recent_events=None, recent_signals=None,
                   open_symbols=None, confluence_timeframe=None,
                   min_store_confidence=0):
@@ -758,7 +758,7 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
     scanned = []
 
     def fake_scan(symbol, cfg, llm, *, strategy, timeframe,
-                  feed_titles=None, session=None, recent_events=None,
+                  feed_titles=None, calendar_events=None, session=None, recent_events=None,
                   recent_signals=None, open_symbols=None,
                   confluence_timeframe=None, min_store_confidence=0):
         scanned.append((symbol, timeframe))
@@ -798,7 +798,7 @@ def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypat
 
     seen = []
 
-    def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+    def fake_scan(symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
                   session=None, recent_events=None, recent_signals=None,
                   open_symbols=None, confluence_timeframe=None,
                   min_store_confidence=0):
@@ -824,7 +824,7 @@ def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
                         lambda *a, **k: set())
     monkeypatch.setattr(
         run_module, "scan_symbol",
-        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None,
+        lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
         session=None, recent_events=None, recent_signals=None,
         open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
         run_module.ScanResult(candles=candles))
