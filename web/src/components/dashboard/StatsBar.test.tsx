@@ -17,7 +17,7 @@ describe("StatsBar", () => {
     expect(screen.getByText("76%")).toBeDefined();
     expect(screen.getByText("8L / 4S")).toBeDefined();
     expect(screen.getByText("75%")).toBeDefined();
-    expect(screen.getByText("3W / 1L")).toBeDefined();
+    expect(screen.getByText("3 full / 0 partial / 1L")).toBeDefined();
   });
 
   it("shows dashes when there are no signals or closed outcomes", () => {
