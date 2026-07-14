@@ -16,7 +16,7 @@ export function StatsBar({ stats }: { stats: Stats }) {
           : "—",
       detail:
         stats.winRate !== null
-          ? `${stats.tpHits}W / ${stats.slHits}L`
+          ? `${stats.tpHits} full / ${stats.partialWins} partial / ${stats.slHits}L`
           : undefined,
     },
   ];

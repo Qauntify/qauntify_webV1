@@ -2,6 +2,7 @@
 from signals.models import DEFAULT_SIGNAL_STRATEGY
 from signals.strategies.ce_lwma import detect_setup as detect_ce_setup
 from signals.strategies.ema_cross import detect_setup as detect_ema_setup
+from signals.strategies.ict_fvg import detect_setup as detect_ict_fvg_setup
 from signals.strategies.ict_smc import detect_setup as detect_ict_setup
 
 
@@ -16,6 +17,10 @@ def detect_setup(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
         if not h1_candles:
             return None
         return detect_ce_setup(symbol, candles, h1_candles)
+    if strategy == "ict_fvg":
+        return detect_ict_fvg_setup(
+            symbol, candles, atr14, htf_trend=htf_trend,
+        )
     if strategy == "ict_smc":
         return detect_ict_setup(
             symbol, candles, atr14, adx14=adx14, htf_trend=htf_trend,

@@ -45,10 +45,10 @@ function StatusBadge({ status }: { status: Signal["status"] }) {
 function ConfidenceGauge({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-2" title={`Confidence ${value}/100`}>
-      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-line">
+      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-line shadow-inner">
         <div
-          className="h-full rounded-full bg-accent transition-all"
-          style={{ width: `${value}%` }}
+          className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
+          style={{ width: `${value}%`, boxShadow: "0 0 8px var(--accent-glow)" }}
         />
       </div>
       <span className="font-mono text-xs font-medium text-slate">{value}%</span>
@@ -107,7 +107,7 @@ export function TradeTicket({
         <ConfidenceGauge value={signal.confidence} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 px-5 py-5 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 px-5 py-5 sm:grid-cols-3 lg:grid-cols-5">
         <PriceCell label="Entry" value={signal.entry} />
         <PriceCell label="Stop loss" value={signal.stopLoss} tone="short" />
         <PriceCell
@@ -115,10 +115,11 @@ export function TradeTicket({
           value={signal.takeProfit}
           tone="long"
         />
+        {signal.takeProfit2 != null ? (
+          <PriceCell label="TP2" value={signal.takeProfit2} tone="long" />
+        ) : null}
         {signal.takeProfit3 != null ? (
           <PriceCell label="TP3" value={signal.takeProfit3} tone="long" />
-        ) : signal.takeProfit2 != null ? (
-          <PriceCell label="TP2" value={signal.takeProfit2} tone="long" />
         ) : null}
       </div>
 

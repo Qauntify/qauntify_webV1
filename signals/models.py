@@ -8,22 +8,33 @@ from datetime import datetime, timezone
 TP1_R = 1.0
 TP2_R = 2.0
 TP3_R = 3.0
+# Super-scalp (5m ICT+FVG): shorter targets for quicker exits.
+SUPER_SCALP_TP1_R = 0.5
+SUPER_SCALP_TP2_R = 1.0
+SUPER_SCALP_TP3_R = 1.5
 
 
-def take_profits_from_risk(entry: float, stop: float, direction: str
-                           ) -> tuple[float, float, float]:
+def take_profits_from_risk(
+    entry: float,
+    stop: float,
+    direction: str,
+    *,
+    r1: float = TP1_R,
+    r2: float = TP2_R,
+    r3: float = TP3_R,
+) -> tuple[float, float, float]:
     """TP1/TP2/TP3 prices for a long or short given entry and stop."""
     risk = abs(entry - stop)
     if direction == "long":
         return (
-            entry + TP1_R * risk,
-            entry + TP2_R * risk,
-            entry + TP3_R * risk,
+            entry + r1 * risk,
+            entry + r2 * risk,
+            entry + r3 * risk,
         )
     return (
-        entry - TP1_R * risk,
-        entry - TP2_R * risk,
-        entry - TP3_R * risk,
+        entry - r1 * risk,
+        entry - r2 * risk,
+        entry - r3 * risk,
     )
 
 
@@ -90,10 +101,10 @@ class NoSignalReport:
     confidence: int | None = None
 
 
-SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma")
+SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg")
 DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
-TIMEFRAME_MINUTES = {"15m": 15, "1h": 60}
+TIMEFRAME_MINUTES = {"5m": 5, "15m": 15, "1h": 60}
 
 # Terminal win statuses (legacy tp_hit + multi-TP final).
 WIN_STATUSES = frozenset({"tp_hit", "tp3_hit"})
@@ -117,13 +128,20 @@ class TradingSession:
     strategy: str | None = None
 
 
-# Scalp is hardcoded to CE+LWMA; swing uses admin bot_settings.signal_strategy.
+# Super scalp = 5m ICT+FVG (tight R); scalp = 15m CE+LWMA; swing = admin strategy.
 TRADING_SESSIONS = (
+    TradingSession(
+        name="super_scalp", timeframe="5m", max_open_days=1,
+        confluence_timeframe="15m", strategy="ict_fvg",
+    ),
     TradingSession(
         name="scalp", timeframe="15m", max_open_days=2,
         confluence_timeframe=None, strategy="ce_lwma",
     ),
-    TradingSession(name="swing", timeframe="1h", max_open_days=14),
+    TradingSession(
+        name="swing", timeframe="1h", max_open_days=14,
+        confluence_timeframe="4h",
+    ),
 )
 
 
@@ -131,7 +149,8 @@ TRADING_SESSIONS = (
 class BotSettings:
     """Engine behavior controlled from the /admin page (bot_settings table)."""
     symbols: tuple = ("BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT")
-    min_alert_confidence: int = 0  # gates storage + Telegram alerts
+    min_alert_confidence: int = 0  # Telegram floor only
+    min_store_confidence: int = 0  # storage floor for LLM confirms
     signal_strategy: str = DEFAULT_SIGNAL_STRATEGY
 
 

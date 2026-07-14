@@ -84,14 +84,31 @@ export default async function AdminAiSettings({
 
             <section className="card-surface p-5">
               <h2 className="text-lg font-semibold">
-                Telegram alerts
+                Quality gates
               </h2>
               <p className="mt-1 text-sm text-slate">
-                Filter which confirmed signals trigger a Telegram message. All
-                signals are still stored in the dashboard.
+                Separate floors for storing confirms in the dashboard versus
+                sending Telegram alerts.
               </p>
               <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium">
-                Min confidence for alerts
+                Min confidence to store
+                <input
+                  type="number"
+                  name="minStoreConfidence"
+                  required
+                  min={0}
+                  max={100}
+                  step={1}
+                  defaultValue={settings.minStoreConfidence}
+                  className="input-field w-full max-w-[8rem]"
+                />
+                <span className="text-xs font-normal text-slate">
+                  Confirms below this are rejected and not stored. 0 = store all
+                  confirms.
+                </span>
+              </label>
+              <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium">
+                Min confidence for Telegram alerts
                 <input
                   type="number"
                   name="minAlertConfidence"
@@ -103,7 +120,7 @@ export default async function AdminAiSettings({
                   className="input-field w-full max-w-[8rem]"
                 />
                 <span className="text-xs font-normal text-slate">
-                  0 = alert on every confirmed signal
+                  Only stored signals at or above this get pushed to Telegram.
                 </span>
               </label>
             </section>

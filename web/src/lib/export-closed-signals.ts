@@ -4,16 +4,19 @@ import * as XLSX from "xlsx";
 
 import type { Signal } from "@/lib/signals";
 
-export type ExportTab = "all" | "scalping" | "swing";
+export type ExportTab = "all" | "super-scalping" | "scalping" | "swing";
 
 export function timeframeForTab(tab: ExportTab): string | undefined {
+  if (tab === "super-scalping") return "5m";
   if (tab === "scalping") return "15m";
   if (tab === "swing") return "1h";
   return undefined;
 }
 
 export function parseExportTab(value: string | null): ExportTab {
-  if (value === "scalping" || value === "swing") return value;
+  if (value === "super-scalping" || value === "scalping" || value === "swing") {
+    return value;
+  }
   return "all";
 }
 
@@ -55,11 +58,13 @@ export function buildClosedSignalsPdf(
 ): ArrayBuffer {
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   const label =
-    tab === "scalping"
-      ? "Scalping (15m)"
-      : tab === "swing"
-        ? "Swing (1h)"
-        : "All timeframes";
+    tab === "super-scalping"
+      ? "Super scalping (5m)"
+      : tab === "scalping"
+        ? "Scalping (15m)"
+        : tab === "swing"
+          ? "Swing (1h)"
+          : "All timeframes";
 
   doc.setFontSize(14);
   doc.text(`Qauntify — closed signals (${label})`, 40, 36);

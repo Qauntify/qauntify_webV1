@@ -28,6 +28,28 @@ def test_r_multiple_sl_hit_is_minus_one():
     assert _r_multiple(_row(status="sl_hit")) == -1.0
 
 
+def test_r_multiple_sl_after_tp1_is_flat():
+    assert _r_multiple(_row(
+        status="sl_hit", tp1_hit_at="2026-07-01T01:00:00+00:00",
+    )) == 0.0
+
+
+def test_r_multiple_sl_after_tp2_is_plus_one():
+    assert _r_multiple(_row(
+        status="sl_hit",
+        tp1_hit_at="2026-07-01T01:00:00+00:00",
+        tp2_hit_at="2026-07-01T02:00:00+00:00",
+    )) == 1.0
+
+
+def test_r_multiple_tp3_uses_take_profit_3_distance():
+    row = _row(
+        status="tp3_hit", entry=100.0, stop_loss=98.0,
+        take_profit=102.0, take_profit_3=106.0,
+    )
+    assert _r_multiple(row) == 3.0
+
+
 def test_r_multiple_expired_is_zero():
     # outcome_tracker records no exit price for expired signals, so their
     # true P&L is unknown — treated as neutral rather than guessed.
@@ -50,6 +72,17 @@ def test_bucket_stats_counts_and_win_rate():
     assert stats["expired"] == 1
     # Win rate is decided-outcomes only: expired rows aren't a win or a loss.
     assert stats["win_rate"] == 2 / 3
+
+
+def test_bucket_stats_counts_partial_sl_as_win():
+    rows = [
+        _row(status="sl_hit", tp1_hit_at="2026-07-01T01:00:00+00:00"),
+        _row(status="sl_hit"),
+    ]
+    stats = _bucket_stats(rows)
+    assert stats["wins"] == 1
+    assert stats["losses"] == 1
+    assert stats["win_rate"] == 0.5
 
 
 def test_bucket_stats_win_rate_none_when_no_decided_outcomes():

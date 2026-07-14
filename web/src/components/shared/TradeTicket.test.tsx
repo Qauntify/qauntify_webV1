@@ -54,6 +54,23 @@ describe("TradeTicket", () => {
     expect(screen.getByText("Expired")).toBeDefined();
   });
 
+  it("renders TP1 TP2 and TP3 when the ladder is filled", () => {
+    render(
+      <TradeTicket
+        signal={{
+          ...SIGNAL,
+          takeProfit2: 111500,
+          takeProfit3: 112500,
+        }}
+      />,
+    );
+    expect(screen.getByText("TP1")).toBeDefined();
+    expect(screen.getByText("TP2")).toBeDefined();
+    expect(screen.getByText("TP3")).toBeDefined();
+    expect(screen.getByText("111,500")).toBeDefined();
+    expect(screen.getByText("112,500")).toBeDefined();
+  });
+
   it("renders short direction with the short badge", () => {
     render(<TradeTicket signal={{ ...SIGNAL, direction: "short" }} />);
     expect(screen.getByText("Short")).toBeDefined();

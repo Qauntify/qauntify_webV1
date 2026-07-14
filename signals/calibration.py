@@ -20,29 +20,53 @@ def _confidence_bucket(confidence) -> str:
 
 
 def _r_multiple(row: dict) -> float:
-    """Realized R-multiple for one closed signal: +reward/risk on full TP,
-    -1 on sl_hit, 0 on expired. Partial TP1/TP2 rows are still open and
-    should not appear in closed-row calibration inputs."""
+    """Realized R-multiple for one closed signal.
+
+    Full TP3 / legacy tp_hit: +target/risk (usually +3R or legacy distance).
+    Pure sl_hit (no TP banked): -1.
+    sl_hit after TP1/TP2 timestamps: net R after banking those levels then
+    stopping (TP1-then-SL → 0R, TP2-then-SL → +1R).
+    expired: 0.
+    """
     status = row["status"]
-    if status == "sl_hit":
-        return -1.0
-    if status == "expired":
-        return 0.0
     entry, stop = row["entry"], row["stop_loss"]
-    target = row.get("take_profit_3") or row.get("take_profit")
     risk = abs(entry - stop)
     if risk == 0:
         return 0.0
-    return abs(target - entry) / risk
+
+    if status == "expired":
+        return 0.0
+
+    if status in ("tp_hit", "tp3_hit"):
+        target = row.get("take_profit_3") or row.get("take_profit")
+        return abs(float(target) - entry) / risk
+
+    if status == "sl_hit":
+        if row.get("tp2_hit_at"):
+            return 1.0
+        if row.get("tp1_hit_at"):
+            return 0.0
+        return -1.0
+
+    # Still-open partials should not appear in closed calibration inputs.
+    return 0.0
 
 
 def _bucket_stats(rows: list) -> dict:
-    wins = sum(1 for r in rows if r["status"] in ("tp_hit", "tp3_hit"))
-    losses = sum(1 for r in rows if r["status"] == "sl_hit")
+    wins = sum(
+        1 for r in rows
+        if r["status"] in ("tp_hit", "tp3_hit")
+        or (r["status"] == "sl_hit" and r.get("tp1_hit_at"))
+    )
+    losses = sum(
+        1 for r in rows
+        if r["status"] == "sl_hit" and not r.get("tp1_hit_at")
+    )
     expired = sum(1 for r in rows if r["status"] == "expired")
     decided = wins + losses
     decided_rows = [
-        r for r in rows if r["status"] in ("tp_hit", "tp3_hit", "sl_hit")
+        r for r in rows
+        if r["status"] in ("tp_hit", "tp3_hit", "sl_hit")
     ]
     return {
         "count": len(rows),

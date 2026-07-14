@@ -31,8 +31,10 @@ const CLOSED: Signal = {
 describe("export-closed-signals helpers", () => {
   it("maps tabs to timeframes", () => {
     expect(timeframeForTab("all")).toBeUndefined();
+    expect(timeframeForTab("super-scalping")).toBe("5m");
     expect(timeframeForTab("scalping")).toBe("15m");
     expect(timeframeForTab("swing")).toBe("1h");
+    expect(parseExportTab("super-scalping")).toBe("super-scalping");
     expect(parseExportTab("scalping")).toBe("scalping");
     expect(parseExportTab("nope")).toBe("all");
   });

@@ -37,9 +37,11 @@ from signals.storage import (
     latest_signal,
     latest_signals_since,
     open_symbols_for_timeframe,
+    release_engine_lock,
     save_ai_event,
     save_engine_run,
     save_signal,
+    try_acquire_engine_lock,
 )
 from signals.telegram_client import send_alert
 
@@ -221,13 +223,24 @@ def _fetch_feed_titles_safe(session=None):
 
 
 def _fetch_calendar_events_safe(session=None):
-    """This week's economic calendar; [] when the free feed is down."""
+    """This week's economic calendar.
+
+    Returns a list on success (may be empty). Returns None when the free
+    feed is down so the AI prompt can say "unavailable" instead of
+    pretending the day is quiet.
+    """
     try:
         return with_retry(lambda: fetch_calendar_events(session=session))
     except Exception as exc:
         print(f"economic calendar unavailable ({type(exc).__name__}), proceeding without")
-        return []
+        return None
 
+
+CALENDAR_UNAVAILABLE_BLOCK = (
+    "Economic calendar UNAVAILABLE this run (feed error). "
+    "Do not assume a quiet macro day — weigh headlines carefully and reduce "
+    "confidence if the setup looks news-driven."
+)
 
 # Just enough candles for EMA21 to warm up plus a little history — this is
 # only a trend-direction read, not a full setup scan.
@@ -331,8 +344,9 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         return _fetch_headlines_safe(symbol, session=session)
 
     def calendar_context_for_symbol():
-        events = calendar_events if calendar_events is not None else []
-        return calendar_block_for_symbol(events, symbol)
+        if calendar_events is None:
+            return CALENDAR_UNAVAILABLE_BLOCK
+        return calendar_block_for_symbol(calendar_events, symbol)
 
     closes = [c.close for c in candles]
     highs = [c.high for c in candles]
@@ -383,6 +397,17 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             }
             if adx14[-1] is not None:
                 indicators["adx"] = adx14[-1]
+            if htf_trend is not None:
+                indicators["htf_trend"] = htf_trend
+        elif strategy == "ict_fvg":
+            if atr14[-1] is None:
+                return ScanResult(candles=candles)
+            indicators = indicators or {}
+            indicators = {
+                **indicators,
+                "strategy": "ict_fvg",
+                "atr": atr14[-1],
+            }
             if htf_trend is not None:
                 indicators["htf_trend"] = htf_trend
         elif strategy == "ce_lwma":
@@ -581,152 +606,164 @@ def main():
     cfg = load_config()
     # Main-thread session for Supabase reads/writes outside the scan workers.
     db_session = requests.Session()
-    settings = fetch_bot_settings(cfg.supabase_url, cfg.supabase_service_key,
-                                  session=db_session)
-    keys = cfg.sealion_api_keys or (cfg.sealion_api_key,)
-    session_label = "+".join(s.timeframe for s in TRADING_SESSIONS)
-    print(f"Using {len(keys)} SEA-LION API key(s) across "
-          f"{len(settings.symbols)} symbol(s) in {len(TRADING_SESSIONS)} "
-          f"session(s) ({session_label}), "
-          f"swing_strategy={settings.signal_strategy}, scalp=ce_lwma.")
-    # RSS feeds change slower than a run: fetch them once, filter per symbol.
-    feed_titles = _fetch_feed_titles_safe(session=requests.Session())
-    calendar_events = _fetch_calendar_events_safe(session=requests.Session())
-
-    def scan_one(item):
-        """(index, symbol, TradingSession, recent_events, recent_signals, open_symbols)
-        -> (ScanResult | None, error | None)."""
-        (index, symbol, trading_session, recent_events, recent_signals,
-         open_symbols) = item
-        # Symbols round-robin across keys so a full scan never concentrates
-        # its LLM calls on a single key's rate limit.
-        llm = SeaLionClient(
-            api_key=keys[index % len(keys)],
-            model=cfg.sealion_model,
-            base_url=cfg.sealion_base_url,
-        )
-        session_strategy = (
-            trading_session.strategy or settings.signal_strategy
-        )
-        try:
-            return scan_symbol(
-                symbol, cfg, llm, strategy=session_strategy,
-                timeframe=trading_session.timeframe,
-                feed_titles=feed_titles, calendar_events=calendar_events,
-                session=requests.Session(),
-                recent_events=recent_events, recent_signals=recent_signals,
-                open_symbols=open_symbols,
-                confluence_timeframe=trading_session.confluence_timeframe,
-                min_store_confidence=settings.min_alert_confidence,
-            ), None
-        except Exception as exc:
-            return None, exc
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    if not try_acquire_engine_lock(
+        run_id, cfg.supabase_url, cfg.supabase_service_key, session=db_session,
+    ):
+        print(f"Another engine run holds the lock; skipping this trigger ({run_id}).")
+        return
 
     stored = 0
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     outcomes: list[dict] = []
     candles_by_symbol: dict = {}
-    workers = max(1, min(len(settings.symbols), MAX_SCAN_WORKERS))
+    session_label = "+".join(s.timeframe for s in TRADING_SESSIONS)
+    try:
+        settings = fetch_bot_settings(cfg.supabase_url, cfg.supabase_service_key,
+                                      session=db_session)
+        keys = cfg.sealion_api_keys or (cfg.sealion_api_key,)
+        print(f"Using {len(keys)} SEA-LION API key(s) across "
+              f"{len(settings.symbols)} symbol(s) in {len(TRADING_SESSIONS)} "
+              f"session(s) ({session_label}), "
+              f"swing_strategy={settings.signal_strategy}, "
+              f"scalp=ce_lwma, super_scalp=ict_fvg.")
+        # RSS feeds change slower than a run: fetch them once, filter per symbol.
+        feed_titles = _fetch_feed_titles_safe(session=requests.Session())
+        calendar_events = _fetch_calendar_events_safe(session=requests.Session())
 
-    # Each session (scalp, swing) scans all symbols in parallel, one session
-    # at a time — so a run's outcomes group by session for a clear summary.
-    for trading_session in TRADING_SESSIONS:
-        # One query each for the whole session's symbol list, instead of
-        # every symbol hitting Supabase individually before its scan even
-        # starts — collapses up to 3*len(symbols) round trips into 3.
-        recent_events = _prefetch_recent_events(
-            settings.symbols, trading_session.timeframe, cfg, session=db_session)
-        recent_signals = _prefetch_recent_signals(
-            settings.symbols, trading_session.timeframe, cfg, session=db_session)
-        open_symbols = _prefetch_open_symbols(
-            settings.symbols, trading_session.timeframe, cfg, session=db_session)
-        tasks = [
-            (i, symbol, trading_session, recent_events, recent_signals, open_symbols)
-            for i, symbol in enumerate(settings.symbols)
-        ]
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            results = list(pool.map(scan_one, tasks))
+        def scan_one(item):
+            """(index, symbol, TradingSession, recent_events, recent_signals, open_symbols)
+            -> (ScanResult | None, error | None)."""
+            (index, symbol, trading_session, recent_events, recent_signals,
+             open_symbols) = item
+            # Symbols round-robin across keys so a full scan never concentrates
+            # its LLM calls on a single key's rate limit.
+            llm = SeaLionClient(
+                api_key=keys[index % len(keys)],
+                model=cfg.sealion_model,
+                base_url=cfg.sealion_base_url,
+            )
+            session_strategy = (
+                trading_session.strategy or settings.signal_strategy
+            )
+            try:
+                return scan_symbol(
+                    symbol, cfg, llm, strategy=session_strategy,
+                    timeframe=trading_session.timeframe,
+                    feed_titles=feed_titles, calendar_events=calendar_events,
+                    session=requests.Session(),
+                    recent_events=recent_events, recent_signals=recent_signals,
+                    open_symbols=open_symbols,
+                    confluence_timeframe=trading_session.confluence_timeframe,
+                    min_store_confidence=settings.min_store_confidence,
+                ), None
+            except Exception as exc:
+                return None, exc
 
-        # Alerts go out from the main thread, in symbol order, after the
-        # session's scans finish.
-        for symbol, (result, error) in zip(settings.symbols, results):
-            if error is not None:
-                print(f"[{symbol}] unexpected error, skipping: "
-                      f"{type(error).__name__}: {error}")
-                outcomes.append({
-                    "symbol": symbol,
-                    "timeframe": trading_session.timeframe,
-                    "status": "ERROR",
-                    "extra": f"{type(error).__name__}",
-                })
-                continue
-            if result.candles:
-                candles_by_symbol[(symbol, trading_session.timeframe)] = result.candles
-            if result.signal is not None:
-                stored += 1
-                maybe_send_alert(result.signal, settings, cfg)
-                outcomes.append({
-                    "symbol": symbol,
-                    "timeframe": trading_session.timeframe,
-                    "status": "CONFIRMED",
-                    "extra": f"{result.signal.direction.upper()} {result.signal.confidence}%",
-                })
-            elif result.no_signal is not None:
-                # No Telegram for no-setup / rejected — only confirmed
-                # signals and SL/TP hits get pushed.
-                if result.no_signal.kind == "rejected":
+        workers = max(1, min(len(settings.symbols), MAX_SCAN_WORKERS))
+
+        # Each session (scalp, swing) scans all symbols in parallel, one session
+        # at a time — so a run's outcomes group by session for a clear summary.
+        for trading_session in TRADING_SESSIONS:
+            # One query each for the whole session's symbol list, instead of
+            # every symbol hitting Supabase individually before its scan even
+            # starts — collapses up to 3*len(symbols) round trips into 3.
+            recent_events = _prefetch_recent_events(
+                settings.symbols, trading_session.timeframe, cfg, session=db_session)
+            recent_signals = _prefetch_recent_signals(
+                settings.symbols, trading_session.timeframe, cfg, session=db_session)
+            open_symbols = _prefetch_open_symbols(
+                settings.symbols, trading_session.timeframe, cfg, session=db_session)
+            tasks = [
+                (i, symbol, trading_session, recent_events, recent_signals, open_symbols)
+                for i, symbol in enumerate(settings.symbols)
+            ]
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                results = list(pool.map(scan_one, tasks))
+
+            # Alerts go out from the main thread, in symbol order, after the
+            # session's scans finish.
+            for symbol, (result, error) in zip(settings.symbols, results):
+                if error is not None:
+                    print(f"[{symbol}] unexpected error, skipping: "
+                          f"{type(error).__name__}: {error}")
                     outcomes.append({
                         "symbol": symbol,
                         "timeframe": trading_session.timeframe,
-                        "status": "REJECTED",
-                        "extra": (result.no_signal.rationale or "")[:140],
+                        "status": "ERROR",
+                        "extra": f"{type(error).__name__}",
                     })
+                    continue
+                if result.candles:
+                    candles_by_symbol[(symbol, trading_session.timeframe)] = result.candles
+                if result.signal is not None:
+                    stored += 1
+                    maybe_send_alert(result.signal, settings, cfg)
+                    outcomes.append({
+                        "symbol": symbol,
+                        "timeframe": trading_session.timeframe,
+                        "status": "CONFIRMED",
+                        "extra": f"{result.signal.direction.upper()} {result.signal.confidence}%",
+                    })
+                elif result.no_signal is not None:
+                    # No Telegram for no-setup / rejected — only confirmed
+                    # signals and SL/TP hits get pushed.
+                    if result.no_signal.kind == "rejected":
+                        outcomes.append({
+                            "symbol": symbol,
+                            "timeframe": trading_session.timeframe,
+                            "status": "REJECTED",
+                            "extra": (result.no_signal.rationale or "")[:140],
+                        })
+                    else:
+                        outcomes.append({
+                            "symbol": symbol,
+                            "timeframe": trading_session.timeframe,
+                            "status": "NO SIGNAL",
+                            "extra": (result.no_signal.rationale or "")[:140],
+                        })
                 else:
                     outcomes.append({
                         "symbol": symbol,
                         "timeframe": trading_session.timeframe,
-                        "status": "NO SIGNAL",
-                        "extra": (result.no_signal.rationale or "")[:140],
+                        "status": "SKIPPED",
+                        "extra": "No change (dedup) or missing indicators/data",
                     })
-            else:
-                outcomes.append({
-                    "symbol": symbol,
-                    "timeframe": trading_session.timeframe,
-                    "status": "SKIPPED",
-                    "extra": "No change (dedup) or missing indicators/data",
-                })
 
-    # After scanning both sessions, settle open signals whose TP or SL has
-    # been hit and expire stale ones (per-session window), reusing this
-    # run's candles where they already cover a signal's life.
-    for row, outcome in track_open_signals(cfg, prefetched=candles_by_symbol,
-                                           session=db_session):
-        entry = {
-            "symbol": row["symbol"],
-            "status": OUTCOME_LABELS.get(outcome, outcome.upper()),
-            "extra": f"{row['direction'].upper()} closed",
-        }
-        if row.get("timeframe"):
-            entry["timeframe"] = row["timeframe"]
-        outcomes.append(entry)
-    try:
-        with_retry(lambda: save_engine_run(
-            {
-                "id": str(uuid.uuid4()),
-                "run_id": run_id,
-                "timeframe": session_label,
-                "stored_count": stored,
-                "outcomes": outcomes,
-                "finished_at": datetime.now(timezone.utc).isoformat(),
-            },
-            cfg.supabase_url,
-            cfg.supabase_service_key,
-            session=db_session,
-        ))
-    except Exception as exc:
-        print(f"Failed to store engine run heartbeat ({type(exc).__name__}), continuing")
-    # Run summary stays in Supabase / logs only — not pushed to Telegram.
-    print(f"Done. {stored} signal(s) stored in Supabase.")
+        # After scanning both sessions, settle open signals whose TP or SL has
+        # been hit and expire stale ones (per-session window), reusing this
+        # run's candles where they already cover a signal's life.
+        for row, outcome in track_open_signals(cfg, prefetched=candles_by_symbol,
+                                               session=db_session):
+            entry = {
+                "symbol": row["symbol"],
+                "status": OUTCOME_LABELS.get(outcome, outcome.upper()),
+                "extra": f"{row['direction'].upper()} closed",
+            }
+            if row.get("timeframe"):
+                entry["timeframe"] = row["timeframe"]
+            outcomes.append(entry)
+        try:
+            with_retry(lambda: save_engine_run(
+                {
+                    "id": str(uuid.uuid4()),
+                    "run_id": run_id,
+                    "timeframe": session_label,
+                    "stored_count": stored,
+                    "outcomes": outcomes,
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                },
+                cfg.supabase_url,
+                cfg.supabase_service_key,
+                session=db_session,
+            ))
+        except Exception as exc:
+            print(f"Failed to store engine run heartbeat ({type(exc).__name__}), continuing")
+        # Run summary stays in Supabase / logs only — not pushed to Telegram.
+        print(f"Done. {stored} signal(s) stored in Supabase.")
+    finally:
+        release_engine_lock(
+            run_id, cfg.supabase_url, cfg.supabase_service_key, session=db_session,
+        )
 
 
 if __name__ == "__main__":

@@ -28,7 +28,8 @@ export async function saveBotSettings(formData: FormData) {
     .split(",")
     .map((s) => s.trim().toUpperCase())
     .filter(Boolean);
-  const confidence = Number(formData.get("minAlertConfidence"));
+  const alertConfidence = Number(formData.get("minAlertConfidence"));
+  const storeConfidence = Number(formData.get("minStoreConfidence"));
   const signalStrategy = String(formData.get("signalStrategy") ?? "ema_cross");
 
   if (symbols.length === 0 || symbols.some((s) => !SYMBOL_PATTERN.test(s))) {
@@ -38,10 +39,17 @@ export async function saveBotSettings(formData: FormData) {
       )}`,
     );
   }
-  if (!Number.isInteger(confidence) || confidence < 0 || confidence > 100) {
+  if (!Number.isInteger(alertConfidence) || alertConfidence < 0 || alertConfidence > 100) {
     redirect(
       `/admin/ai/settings?error=${encodeURIComponent(
         "Min alert confidence must be a whole number from 0 to 100.",
+      )}`,
+    );
+  }
+  if (!Number.isInteger(storeConfidence) || storeConfidence < 0 || storeConfidence > 100) {
+    redirect(
+      `/admin/ai/settings?error=${encodeURIComponent(
+        "Min store confidence must be a whole number from 0 to 100.",
       )}`,
     );
   }
@@ -53,7 +61,8 @@ export async function saveBotSettings(formData: FormData) {
 
   const ok = await updateBotSettings({
     symbols,
-    minAlertConfidence: confidence,
+    minAlertConfidence: alertConfidence,
+    minStoreConfidence: storeConfidence,
     signalStrategy,
   });
   redirect(

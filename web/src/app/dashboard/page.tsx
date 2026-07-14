@@ -16,12 +16,21 @@ export const revalidate = 30;
 
 const SESSIONS = [
   {
+    id: "super-scalping",
+    title: "Super scalping",
+    subtitle: "5m ICT — sweep, CHoCH, FVG retest (tight SL/TP)",
+    timeframe: "5m",
+    emptyHint: "Super-scalp setups are checked every ~10 minutes on the 5m chart.",
+  },
+  {
+    id: "scalping",
     title: "Scalping",
-    subtitle: "15m chart — fast, frequent setups",
+    subtitle: "15m chart — CE + LWMA zone setups",
     timeframe: "15m",
     emptyHint: "Scalp setups are checked every ~10 minutes on the 15m chart.",
   },
   {
+    id: "swing",
     title: "Swing",
     subtitle: "1h chart — slower, higher-conviction setups",
     timeframe: "1h",
@@ -41,6 +50,7 @@ async function SessionSection({
   timeframe: string;
   emptyHint: string;
   accessToken: string | undefined;
+  id?: string;
 }) {
   const [signals, stats] = await Promise.all([
     getSignals(30, accessToken, timeframe),
@@ -93,7 +103,14 @@ export default async function Dashboard({
   const accessToken = session?.access_token;
   const { admin, tab } = await searchParams;
   
-  const currentTab = tab === "swing" ? "swing" : tab === "scalping" ? "scalping" : "all";
+  const currentTab =
+    tab === "swing"
+      ? "swing"
+      : tab === "scalping"
+        ? "scalping"
+        : tab === "super-scalping"
+          ? "super-scalping"
+          : "all";
 
   return (
     <DashboardShell
@@ -115,22 +132,44 @@ export default async function Dashboard({
           </p>
         </div>
 
-        <nav className="flex gap-2 border-b border-line pb-4 overflow-x-auto">
+        <nav className="flex gap-2 border-b border-line pb-4 overflow-x-auto relative">
           <Link
             href="/dashboard?tab=all"
-            className={`nav-item ${currentTab === "all" ? "nav-item-active" : ""}`}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              currentTab === "all"
+                ? "bg-ink text-paper shadow-md"
+                : "text-slate hover:bg-card hover:text-ink"
+            }`}
           >
             All
           </Link>
           <Link
+            href="/dashboard?tab=super-scalping"
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              currentTab === "super-scalping"
+                ? "bg-ink text-paper shadow-md"
+                : "text-slate hover:bg-card hover:text-ink"
+            }`}
+          >
+            Super scalp (5m)
+          </Link>
+          <Link
             href="/dashboard?tab=scalping"
-            className={`nav-item ${currentTab === "scalping" ? "nav-item-active" : ""}`}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              currentTab === "scalping"
+                ? "bg-ink text-paper shadow-md"
+                : "text-slate hover:bg-card hover:text-ink"
+            }`}
           >
             Scalping (15m)
           </Link>
           <Link
             href="/dashboard?tab=swing"
-            className={`nav-item ${currentTab === "swing" ? "nav-item-active" : ""}`}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              currentTab === "swing"
+                ? "bg-ink text-paper shadow-md"
+                : "text-slate hover:bg-card hover:text-ink"
+            }`}
           >
             Swing (1h)
           </Link>
@@ -141,9 +180,9 @@ export default async function Dashboard({
             <SessionSection key={s.timeframe} accessToken={accessToken} {...s} />
           ))
         ) : (
-          <SessionSection 
-            accessToken={accessToken} 
-            {...SESSIONS.find((s) => s.title.toLowerCase() === currentTab)!} 
+          <SessionSection
+            accessToken={accessToken}
+            {...SESSIONS.find((s) => s.id === currentTab)!}
           />
         )}
       </div>

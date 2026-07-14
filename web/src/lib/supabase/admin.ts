@@ -12,6 +12,7 @@ export type AdminUser = {
 export type BotSettings = {
   symbols: string[];
   minAlertConfidence: number;
+  minStoreConfidence: number;
   signalStrategy: string;
 };
 
@@ -162,7 +163,7 @@ export async function getBotSettings(): Promise<BotSettings | null> {
   if (!cfg) return null;
   try {
     const response = await fetch(
-      `${cfg.url}/rest/v1/bot_settings?id=eq.1&select=symbols,min_alert_confidence,signal_strategy`,
+      `${cfg.url}/rest/v1/bot_settings?id=eq.1&select=symbols,min_alert_confidence,min_store_confidence,signal_strategy`,
       { headers: headers(cfg.serviceKey), ...READ_CACHE },
     );
     if (!response.ok) return null;
@@ -172,6 +173,7 @@ export async function getBotSettings(): Promise<BotSettings | null> {
     return {
       symbols: row.symbols,
       minAlertConfidence: row.min_alert_confidence,
+      minStoreConfidence: row.min_store_confidence ?? 0,
       signalStrategy: row.signal_strategy ?? "ema_cross",
     };
   } catch {
@@ -191,6 +193,7 @@ export async function updateBotSettings(
       body: JSON.stringify({
         symbols: settings.symbols,
         min_alert_confidence: settings.minAlertConfidence,
+        min_store_confidence: settings.minStoreConfidence,
         signal_strategy: settings.signalStrategy,
         updated_at: new Date().toISOString(),
       }),

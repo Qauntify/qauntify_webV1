@@ -28,14 +28,23 @@ def _candle_closed_at(candle) -> str:
 
 
 def _targets(signal_row: dict) -> list[float]:
-    """TP1/TP2/TP3 prices — fall back to single take_profit for legacy rows."""
+    """TP1/TP2/TP3 prices — fall back to single take_profit for legacy rows.
+
+    Rows where TP2/TP3 were wrongly cloned to equal TP1 are treated as a
+    single-target trade so one touch cannot mark all three levels.
+    """
     tp1 = signal_row.get("take_profit_1", signal_row.get("take_profit"))
     tp2 = signal_row.get("take_profit_2")
     tp3 = signal_row.get("take_profit_3")
+    if tp1 is None:
+        return []
+    tp1_f = float(tp1)
     if tp2 is None or tp3 is None:
-        # Legacy single-TP row: treat take_profit as the only (final) target.
-        return [float(tp1)] if tp1 is not None else []
-    return [float(tp1), float(tp2), float(tp3)]
+        return [tp1_f]
+    tp2_f, tp3_f = float(tp2), float(tp3)
+    if tp2_f == tp1_f and tp3_f == tp1_f:
+        return [tp1_f]
+    return [tp1_f, tp2_f, tp3_f]
 
 
 def _already_hit(signal_row: dict) -> set[str]:

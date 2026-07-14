@@ -23,8 +23,22 @@ export default async function AdminSignals({
   await requireAdminPage();
   const { tab, page: pageParam } = await searchParams;
 
-  const currentTab = tab === "swing" ? "swing" : tab === "scalping" ? "scalping" : "all";
-  const timeframe = currentTab === "swing" ? "1h" : currentTab === "scalping" ? "15m" : undefined;
+  const currentTab =
+    tab === "swing"
+      ? "swing"
+      : tab === "scalping"
+        ? "scalping"
+        : tab === "super-scalping"
+          ? "super-scalping"
+          : "all";
+  const timeframe =
+    currentTab === "swing"
+      ? "1h"
+      : currentTab === "scalping"
+        ? "15m"
+        : currentTab === "super-scalping"
+          ? "5m"
+          : undefined;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
 
   const token = serviceRoleToken();
@@ -32,7 +46,7 @@ export default async function AdminSignals({
     getSignalsPaginated(page, token, timeframe),
     getStats(token, timeframe),
   ]);
-  const exportableCount = stats.tpHits + stats.slHits;
+  const exportableCount = stats.tpHits + stats.partialWins + stats.slHits;
 
   // Extra params to preserve the active tab when paginating
   const extraParams: Record<string, string> = currentTab !== "all" ? { tab: currentTab } : {};
@@ -55,6 +69,12 @@ export default async function AdminSignals({
           className={`nav-item ${currentTab === "all" ? "nav-item-active" : ""}`}
         >
           All
+        </Link>
+        <Link
+          href="/admin/signals?tab=super-scalping"
+          className={`nav-item ${currentTab === "super-scalping" ? "nav-item-active" : ""}`}
+        >
+          Super scalp (5m)
         </Link>
         <Link
           href="/admin/signals?tab=scalping"

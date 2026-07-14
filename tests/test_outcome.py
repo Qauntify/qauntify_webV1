@@ -357,3 +357,25 @@ def test_track_scalp_signals_expire_faster_than_swing(monkeypatch):
     closed, _, closes, _ = _track(monkeypatch, [swing],
                                   fetched_candles=quiet)
     assert closes == []  # 3 days is nothing on the 1h session
+
+
+def test_cloned_tp_levels_collapse_to_single_target():
+    from signals.outcome_tracker import _targets
+    row = {
+        "take_profit": 110.0,
+        "take_profit_1": 110.0,
+        "take_profit_2": 110.0,
+        "take_profit_3": 110.0,
+    }
+    assert _targets(row) == [110.0]
+
+
+def test_distinct_tp_ladder_kept():
+    from signals.outcome_tracker import _targets
+    row = {
+        "take_profit": 102.0,
+        "take_profit_1": 102.0,
+        "take_profit_2": 104.0,
+        "take_profit_3": 106.0,
+    }
+    assert _targets(row) == [102.0, 104.0, 106.0]

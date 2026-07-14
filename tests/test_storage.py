@@ -92,9 +92,26 @@ def test_fetch_bot_settings_reads_row():
     )
     assert settings.symbols == ("BTCUSDT", "SOLUSDT")
     assert settings.min_alert_confidence == 75
+    assert settings.min_store_confidence == 0
     assert settings.signal_strategy == "ict_smc"
     assert "bot_settings" in session.last_url
     assert session.last_headers["apikey"] == "service-key"
+
+
+def test_fetch_bot_settings_reads_store_confidence():
+    session = FakeGetSession(
+        payload=[{
+            "symbols": ["BTCUSDT"],
+            "min_alert_confidence": 80,
+            "min_store_confidence": 60,
+            "signal_strategy": "ema_cross",
+        }],
+    )
+    settings = fetch_bot_settings(
+        "https://abc.supabase.co", "service-key", session=session,
+    )
+    assert settings.min_store_confidence == 60
+    assert settings.min_alert_confidence == 80
 
 
 def test_fetch_bot_settings_defaults_unknown_strategy():

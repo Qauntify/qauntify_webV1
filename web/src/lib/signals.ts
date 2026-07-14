@@ -52,8 +52,9 @@ export type Stats = {
   longs: number;
   shorts: number;
   tpHits: number;
+  partialWins: number;
   slHits: number;
-  // Percent of closed signals that hit TP; null until something closes.
+  // Percent of decided closed outcomes that banked at least TP1 (full or partial).
   winRate: number | null;
 };
 
@@ -257,7 +258,7 @@ export async function getSignals(
 
 const ZERO_STATS: Stats = {
   total: 0, avgConfidence: 0, longs: 0, shorts: 0,
-  tpHits: 0, slHits: 0, winRate: null,
+  tpHits: 0, partialWins: 0, slHits: 0, winRate: null,
 };
 
 type StatsRpcRow = {
@@ -266,6 +267,7 @@ type StatsRpcRow = {
   longs: number;
   shorts: number;
   tp_hits: number;
+  partial_wins?: number;
   sl_hits: number;
 };
 
@@ -283,15 +285,18 @@ export async function getStats(
     accessToken,
   ).then((rows) => rows?.[0]);
   if (!row) return ZERO_STATS;
-  const closed = row.tp_hits + row.sl_hits;
+  const partialWins = Number(row.partial_wins ?? 0);
+  const wins = row.tp_hits + partialWins;
+  const closed = wins + row.sl_hits;
   return {
     total: row.total,
     avgConfidence: row.avg_confidence,
     longs: row.longs,
     shorts: row.shorts,
     tpHits: row.tp_hits,
+    partialWins,
     slHits: row.sl_hits,
-    winRate: closed > 0 ? Math.round((row.tp_hits / closed) * 100) : null,
+    winRate: closed > 0 ? Math.round((wins / closed) * 100) : null,
   };
 }
 

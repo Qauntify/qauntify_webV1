@@ -113,7 +113,7 @@ describe("getSignals", () => {
 describe("getStats", () => {
   const ZERO_STATS = {
     total: 0, avgConfidence: 0, longs: 0, shorts: 0,
-    tpHits: 0, slHits: 0, winRate: null,
+    tpHits: 0, partialWins: 0, slHits: 0, winRate: null,
   };
 
   function mockRpc(row: Record<string, unknown>) {
@@ -129,12 +129,13 @@ describe("getStats", () => {
 
   it("calls the get_signal_stats RPC and maps the aggregated row", async () => {
     const fetchFn = mockRpc({
-      total: 3, avg_confidence: 80, longs: 2, shorts: 1, tp_hits: 1, sl_hits: 1,
+      total: 3, avg_confidence: 80, longs: 2, shorts: 1,
+      tp_hits: 1, partial_wins: 0, sl_hits: 1,
     });
 
     expect(await getStats()).toEqual({
       total: 3, avgConfidence: 80, longs: 2, shorts: 1,
-      tpHits: 1, slHits: 1, winRate: 50,
+      tpHits: 1, partialWins: 0, slHits: 1, winRate: 50,
     });
 
     const [url, options] = fetchFn.mock.calls[0];
@@ -146,7 +147,8 @@ describe("getStats", () => {
 
   it("passes the timeframe as an RPC parameter, not a query filter", async () => {
     const fetchFn = mockRpc({
-      total: 0, avg_confidence: 0, longs: 0, shorts: 0, tp_hits: 0, sl_hits: 0,
+      total: 0, avg_confidence: 0, longs: 0, shorts: 0,
+      tp_hits: 0, partial_wins: 0, sl_hits: 0,
     });
     await getStats(undefined, "1h");
     const [, options] = fetchFn.mock.calls[0];
@@ -155,7 +157,10 @@ describe("getStats", () => {
 
   it("returns null win rate when nothing has closed yet", async () => {
     const stats = await (async () => {
-      mockRpc({ total: 3, avg_confidence: 75, longs: 2, shorts: 1, tp_hits: 0, sl_hits: 0 });
+      mockRpc({
+        total: 3, avg_confidence: 75, longs: 2, shorts: 1,
+        tp_hits: 0, partial_wins: 0, sl_hits: 0,
+      });
       return getStats();
     })();
     expect(stats.winRate).toBeNull();

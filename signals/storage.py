@@ -65,6 +65,79 @@ def save_engine_run(run: dict, supabase_url: str, service_key: str,
     response.raise_for_status()
 
 
+ENGINE_LOCK_STALE_MINUTES = 12
+
+
+def try_acquire_engine_lock(
+    holder: str,
+    supabase_url: str,
+    service_key: str,
+    *,
+    stale_minutes: int = ENGINE_LOCK_STALE_MINUTES,
+    session=None,
+) -> bool:
+    """Claim the single engine_lock row. Returns False if another live run holds it.
+
+    Soft-fails open (returns True) when the lock table is missing so a missing
+    migration never permanently stops scans.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    session = session or requests.Session()
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(minutes=stale_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+    try:
+        response = session.patch(
+            f"{supabase_url}/rest/v1/engine_lock"
+            f"?id=eq.1&or=(holder.is.null,acquired_at.lt.{cutoff})",
+            headers=headers,
+            json={"holder": holder, "acquired_at": now.strftime("%Y-%m-%dT%H:%M:%SZ")},
+            timeout=15,
+        )
+        if response.status_code == 404:
+            print("engine_lock unavailable (missing table?), continuing without lock")
+            return True
+        response.raise_for_status()
+        rows = response.json()
+        return bool(rows)
+    except Exception as exc:
+        print(f"engine_lock acquire failed ({type(exc).__name__}), continuing without lock")
+        return True
+
+
+def release_engine_lock(
+    holder: str,
+    supabase_url: str,
+    service_key: str,
+    session=None,
+) -> None:
+    """Clear the lock if we still own it. Never raises."""
+    session = session or requests.Session()
+    try:
+        response = session.patch(
+            f"{supabase_url}/rest/v1/engine_lock"
+            f"?id=eq.1&holder=eq.{quote(holder)}",
+            headers={
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            },
+            json={"holder": None, "acquired_at": None},
+            timeout=15,
+        )
+        if response.status_code not in (200, 204, 404):
+            response.raise_for_status()
+    except Exception as exc:
+        print(f"engine_lock release failed ({type(exc).__name__}), continuing")
+
+
 def list_open_signals(supabase_url: str, service_key: str, session=None):
     """Signals still needing outcome polling (open / tp1 / tp2), oldest first."""
     session = session or requests.Session()
@@ -298,7 +371,7 @@ def fetch_bot_settings(supabase_url: str, service_key: str,
     try:
         response = session.get(
             f"{supabase_url}/rest/v1/bot_settings"
-            "?id=eq.1&select=symbols,min_alert_confidence,signal_strategy",
+            "?id=eq.1&select=symbols,min_alert_confidence,min_store_confidence,signal_strategy",
             headers={
                 "apikey": service_key,
                 "Authorization": f"Bearer {service_key}",
@@ -312,15 +385,20 @@ def fetch_bot_settings(supabase_url: str, service_key: str,
             s.upper() for s in row["symbols"]
             if isinstance(s, str) and s.strip()
         )
-        confidence = int(row["min_alert_confidence"])
+        alert_confidence = int(row["min_alert_confidence"])
+        store_raw = row.get("min_store_confidence", 0)
+        store_confidence = int(store_raw if store_raw is not None else 0)
         strategy = row.get("signal_strategy", DEFAULT_SIGNAL_STRATEGY)
         if strategy not in SIGNAL_STRATEGIES:
             strategy = DEFAULT_SIGNAL_STRATEGY
-        if not symbols or not 0 <= confidence <= 100:
+        if not symbols or not 0 <= alert_confidence <= 100:
             raise ValueError("empty symbols or confidence out of range")
+        if not 0 <= store_confidence <= 100:
+            store_confidence = 0
         return BotSettings(
             symbols=symbols,
-            min_alert_confidence=confidence,
+            min_alert_confidence=alert_confidence,
+            min_store_confidence=store_confidence,
             signal_strategy=strategy,
         )
     except Exception as exc:

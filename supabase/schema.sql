@@ -44,16 +44,48 @@ alter table public.signals add column if not exists tp1_hit_at timestamptz;
 alter table public.signals add column if not exists tp2_hit_at timestamptz;
 alter table public.signals add column if not exists tp3_hit_at timestamptz;
 
+-- Only copy legacy take_profit into TP1. Never clone the same price into
+-- TP2/TP3 — that made one candle hit mark all three levels at once.
 update public.signals
-set
-    take_profit_1 = coalesce(take_profit_1, take_profit),
-    take_profit_2 = coalesce(take_profit_2, take_profit),
-    take_profit_3 = coalesce(take_profit_3, take_profit)
-where take_profit_1 is null or take_profit_2 is null or take_profit_3 is null;
+set take_profit_1 = coalesce(take_profit_1, take_profit)
+where take_profit_1 is null;
+
+-- Repair rows previously backfilled with TP2=TP3=TP1.
+update public.signals
+set take_profit_2 = null, take_profit_3 = null
+where take_profit_1 is not null
+  and take_profit_2 is not distinct from take_profit_1
+  and take_profit_3 is not distinct from take_profit_1;
 
 drop index if exists signals_status_idx;
 create index if not exists signals_status_idx
     on public.signals (status)
+    where status in ('open', 'tp1_hit', 'tp2_hit');
+
+-- Before the unique open-index: keep the newest live row per symbol+timeframe
+-- and expire older duplicates (from overlapping cron runs).
+with ranked as (
+    select
+        id,
+        row_number() over (
+            partition by symbol, timeframe
+            order by created_at desc, id desc
+        ) as rn
+    from public.signals
+    where status in ('open', 'tp1_hit', 'tp2_hit')
+)
+update public.signals s
+set
+    status = 'expired',
+    closed_at = coalesce(s.closed_at, now())
+from ranked r
+where s.id = r.id
+  and r.rn > 1;
+
+-- At most one live trade per symbol+timeframe (blocks concurrent engine races).
+drop index if exists signals_one_open_per_symbol_tf;
+create unique index if not exists signals_one_open_per_symbol_tf
+    on public.signals (symbol, timeframe)
     where status in ('open', 'tp1_hit', 'tp2_hit');
 
 -- Freemium gate, enforced at the database:
@@ -82,6 +114,8 @@ create policy "member full access"
 -- as the calling role, so the RLS policies above still apply per caller —
 -- anon still only sees the 24h preview, authenticated still sees full
 -- history. A definer function here would silently bypass that gate.
+-- DROP first: CREATE OR REPLACE cannot change OUT / return row shape.
+drop function if exists public.get_signal_stats(text);
 create or replace function public.get_signal_stats(p_timeframe text default null)
 returns table (
     total int,
@@ -89,6 +123,7 @@ returns table (
     longs int,
     shorts int,
     tp_hits int,
+    partial_wins int,
     sl_hits int
 )
 language sql
@@ -100,8 +135,16 @@ as $$
         coalesce(round(avg(confidence)), 0)::int as avg_confidence,
         count(*) filter (where direction = 'long')::int as longs,
         count(*) filter (where direction = 'short')::int as shorts,
+        -- Full wins: reached final target.
         count(*) filter (where status in ('tp_hit', 'tp3_hit'))::int as tp_hits,
-        count(*) filter (where status = 'sl_hit')::int as sl_hits
+        -- Partial wins: stopped out after banking at least TP1.
+        count(*) filter (
+            where status = 'sl_hit' and tp1_hit_at is not null
+        )::int as partial_wins,
+        -- Pure losses: stopped with no TP banked.
+        count(*) filter (
+            where status = 'sl_hit' and tp1_hit_at is null
+        )::int as sl_hits
     from public.signals
     where p_timeframe is null or timeframe = p_timeframe;
 $$;
@@ -116,14 +159,18 @@ create table if not exists public.bot_settings (
     symbols jsonb not null default '["BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT"]',
     min_alert_confidence integer not null
         default 0 check (min_alert_confidence between 0 and 100),
+    min_store_confidence integer not null
+        default 0 check (min_store_confidence between 0 and 100),
     signal_strategy text not null default 'ema_cross'
         check (signal_strategy in ('ema_cross', 'ict_smc')),
     updated_at timestamptz not null default now()
 );
 
--- Existing installs: add strategy column without recreating the table.
+-- Existing installs: add strategy + store-confidence columns without recreate.
 alter table public.bot_settings
     add column if not exists signal_strategy text not null default 'ema_cross';
+alter table public.bot_settings
+    add column if not exists min_store_confidence integer not null default 0;
 
 alter table public.bot_settings enable row level security;
 
@@ -195,3 +242,17 @@ select
 from public.engine_runs r
 order by r.finished_at desc
 limit 1;
+
+-- Single-row lock so overlapping cron/GitHub triggers cannot run together.
+-- A holder older than 12 minutes is considered stale and can be stolen.
+create table if not exists public.engine_lock (
+    id integer primary key check (id = 1),
+    holder text,
+    acquired_at timestamptz
+);
+
+alter table public.engine_lock enable row level security;
+
+insert into public.engine_lock (id, holder, acquired_at)
+values (1, null, null)
+on conflict (id) do nothing;

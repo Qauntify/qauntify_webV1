@@ -9,7 +9,7 @@ describe("StatsBar", () => {
       <StatsBar
         stats={{
           total: 12, avgConfidence: 76, longs: 8, shorts: 4,
-          tpHits: 3, slHits: 1, winRate: 75,
+          tpHits: 3, partialWins: 0, slHits: 1, winRate: 75,
         }}
       />,
     );
@@ -25,7 +25,7 @@ describe("StatsBar", () => {
       <StatsBar
         stats={{
           total: 0, avgConfidence: 0, longs: 0, shorts: 0,
-          tpHits: 0, slHits: 0, winRate: null,
+          tpHits: 0, partialWins: 0, slHits: 0, winRate: null,
         }}
       />,
     );

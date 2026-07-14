@@ -37,6 +37,12 @@ def _no_setup_reason(strategy: str, timeframe: str) -> str:
             f"liquidity sweep followed by a structure shift / CHoCH on the "
             f"{chart})."
         )
+    if strategy == "ict_fvg":
+        return (
+            f"The rules engine found no valid ICT FVG scalp setup (need a "
+            f"liquidity sweep, CHoCH, and a Fair Value Gap retest on the "
+            f"{chart})."
+        )
     if strategy == "ce_lwma":
         return (
             f"The rules engine found no valid CE+LWMA setup (no fresh H1 "
@@ -63,6 +69,24 @@ def no_setup_rationale(symbol: str, timeframe: str, indicators: dict,
 
 def _format_indicators(strategy: str, indicators: dict) -> str:
     active = indicators.get("strategy", strategy)
+    if active == "ict_fvg":
+        parts = []
+        for key, label in (
+            ("structure", "structure"),
+            ("sweep_level", "sweep level"),
+            ("choch_level", "CHoCH level"),
+            ("fvg_bottom", "FVG low"),
+            ("fvg_top", "FVG high"),
+            ("atr", "ATR"),
+            ("htf_trend", "HTF trend"),
+        ):
+            if key in indicators:
+                value = indicators[key]
+                if isinstance(value, float):
+                    parts.append(f"{label}={value:.4f}")
+                else:
+                    parts.append(f"{label}={value}")
+        return ", ".join(parts) if parts else "no ICT FVG reading"
     if active == "ce_lwma":
         parts = []
         for key, label in (
@@ -137,12 +161,20 @@ def build_messages(setup: CandidateSetup, headlines: list,
             "- Strategy: H1 Chandelier Exit flip + M15 LWMA200 zone "
             "(discount/premium)\n"
         )
+    elif active == "ict_fvg":
+        strategy_line = (
+            "- Strategy: ICT 5m scalp (liquidity sweep + CHoCH + FVG retest, "
+            "tight 0.5R/1R/1.5R targets)\n"
+        )
     else:
         strategy_line = (
             "- Strategy: EMA 9/21 crossover with RSI + MACD filters\n"
         )
     tp1, tp2, tp3 = setup.resolved_take_profits()
-    session_hint = "scalp" if timeframe in ("5m", "15m") else "swing"
+    session_hint = (
+        "super scalp" if timeframe == "5m"
+        else ("scalp" if timeframe in ("15m",) else "swing")
+    )
     session_line = session_context or "Market session: unavailable"
     cal_block = calendar_block or (
         "No nearby high/medium-impact economic events for this symbol's "

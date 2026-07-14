@@ -40,7 +40,7 @@ export default async function AdminOverview() {
       value: stats.winRate !== null ? `${stats.winRate}%` : "—",
       sub:
         stats.winRate !== null
-          ? `${stats.tpHits} TP hit / ${stats.slHits} SL hit`
+          ? `${stats.tpHits} full / ${stats.partialWins} partial / ${stats.slHits} SL`
           : "No closed signals yet.",
     },
     { label: "Engine", value: engine.label, sub: engine.detail },

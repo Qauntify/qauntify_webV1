@@ -20,6 +20,14 @@ def _config():
     )
 
 
+def _patch_engine_lock(monkeypatch):
+    """main() acquires a DB lock; tests without Supabase always pass it."""
+    monkeypatch.setattr(run_module, "try_acquire_engine_lock",
+                        lambda *a, **k: True)
+    monkeypatch.setattr(run_module, "release_engine_lock",
+                        lambda *a, **k: None)
+
+
 SETUP = CandidateSetup(
     symbol="BTCUSDT", direction="long", entry=100.0,
     stop_loss=98.0, take_profit=104.0,
@@ -448,6 +456,7 @@ def test_scan_symbol_threads_session_through_fetches(monkeypatch):
 
 
 def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
+    _patch_engine_lock(monkeypatch)
     import threading
 
     settings = BotSettings(
@@ -494,6 +503,7 @@ def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
 
 
 def test_main_reports_expired_signals_in_run_summary(monkeypatch):
+    _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))
     monkeypatch.setattr(run_module, "load_config", _config)
     monkeypatch.setattr(run_module, "fetch_bot_settings",
@@ -525,6 +535,7 @@ def test_main_reports_expired_signals_in_run_summary(monkeypatch):
 
 
 def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
+    _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))
     candles = _flat_candles(n=5)
     monkeypatch.setattr(run_module, "load_config", _config)
@@ -554,6 +565,7 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
     run_module.main()
 
     assert seen["prefetched"] == {
+        ("BTCUSDT", "5m"): candles,
         ("BTCUSDT", "15m"): candles,
         ("BTCUSDT", "1h"): candles,
     }
@@ -563,16 +575,20 @@ def test_trading_sessions_define_scalp_and_swing():
     from signals.models import TRADING_SESSIONS
 
     by_name = {s.name: s for s in TRADING_SESSIONS}
-    assert set(by_name) == {"scalp", "swing"}
+    assert set(by_name) == {"super_scalp", "scalp", "swing"}
+    assert by_name["super_scalp"].timeframe == "5m"
+    assert by_name["super_scalp"].strategy == "ict_fvg"
+    assert by_name["super_scalp"].confluence_timeframe == "15m"
     assert by_name["scalp"].timeframe == "15m"
     assert by_name["swing"].timeframe == "1h"
     # Scalp must expire much faster than swing: a 15m setup that sat open
     # for two weeks is meaningless.
     assert by_name["scalp"].max_open_days < by_name["swing"].max_open_days
+    assert by_name["super_scalp"].max_open_days <= by_name["scalp"].max_open_days
     # Scalp is hardcoded to CE+LWMA (no EMA HTF confluence gate).
     assert by_name["scalp"].strategy == "ce_lwma"
     assert by_name["scalp"].confluence_timeframe is None
-    assert by_name["swing"].confluence_timeframe is None
+    assert by_name["swing"].confluence_timeframe == "4h"
     assert by_name["swing"].strategy is None
 
 
@@ -662,6 +678,7 @@ def test_already_signaled_uses_prefetched_map_without_querying(monkeypatch):
 
 
 def test_main_prefetches_recent_maps_once_per_session_not_per_symbol(monkeypatch):
+    _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT", "ETHUSDT", "PAXGUSDT"))
     monkeypatch.setattr(run_module, "load_config", _config)
     monkeypatch.setattr(run_module, "fetch_bot_settings",
@@ -694,19 +711,22 @@ def test_main_prefetches_recent_maps_once_per_session_not_per_symbol(monkeypatch
 
     run_module.main()
 
-    # One batched call per session (2 sessions), each covering all 3
-    # symbols — not one call per symbol (which would be 6).
+    # One batched call per session (3 sessions), each covering all 3
+    # symbols — not one call per symbol.
     assert events_calls == [
+        (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "5m"),
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "15m"),
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "1h"),
     ]
     assert signals_calls == [
+        (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "5m"),
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "15m"),
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "1h"),
     ]
 
 
 def test_main_passes_prefetched_maps_into_scan_symbol(monkeypatch):
+    _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))
     monkeypatch.setattr(run_module, "load_config", _config)
     monkeypatch.setattr(run_module, "fetch_bot_settings",
@@ -744,6 +764,7 @@ def test_main_passes_prefetched_maps_into_scan_symbol(monkeypatch):
 
 
 def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
+    _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT", "ETHUSDT"))
     monkeypatch.setattr(run_module, "load_config", _config)
     monkeypatch.setattr(run_module, "fetch_bot_settings",
@@ -772,17 +793,19 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
     run_module.main()
 
     assert sorted(scanned) == [
-        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"),
-        ("ETHUSDT", "15m"), ("ETHUSDT", "1h"),
+        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
+        ("ETHUSDT", "15m"), ("ETHUSDT", "1h"), ("ETHUSDT", "5m"),
     ]
     outcomes = runs[0]["outcomes"]
     assert [(o["symbol"], o["timeframe"]) for o in outcomes] == [
+        ("BTCUSDT", "5m"), ("ETHUSDT", "5m"),
         ("BTCUSDT", "15m"), ("ETHUSDT", "15m"),
         ("BTCUSDT", "1h"), ("ETHUSDT", "1h"),
     ]
 
 
 def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypatch):
+    _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))
     monkeypatch.setattr(run_module, "load_config", _config)
     monkeypatch.setattr(run_module, "fetch_bot_settings",
@@ -809,10 +832,11 @@ def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypat
 
     run_module.main()
 
-    assert sorted(seen) == [("15m", None), ("1h", None)]
+    assert sorted(seen) == [("15m", None), ("1h", "4h"), ("5m", "15m")]
 
 
 def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
+    _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))
     candles = _flat_candles(n=5)
     monkeypatch.setattr(run_module, "load_config", _config)
@@ -842,6 +866,7 @@ def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
     run_module.main()
 
     assert seen["prefetched"] == {
+        ("BTCUSDT", "5m"): candles,
         ("BTCUSDT", "15m"): candles,
         ("BTCUSDT", "1h"): candles,
     }
