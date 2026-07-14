@@ -9,7 +9,11 @@ function authorized(request: Request): boolean {
   if (!secret) return false;
 
   const header = request.headers.get("authorization");
-  return header === `Bearer ${secret}`;
+  if (header === `Bearer ${secret}`) return true;
+
+  // cron-job.org stores the secret in the URL query string.
+  const querySecret = new URL(request.url).searchParams.get("secret");
+  return querySecret === secret;
 }
 
 export async function GET(request: Request) {
