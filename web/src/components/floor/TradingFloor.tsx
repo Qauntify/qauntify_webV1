@@ -40,9 +40,7 @@ export function TradingFloor() {
   return (
     <div className="space-y-8">
       {error ? <p className="text-sm text-ink" role="alert">{error}</p> : null}
-      {!error || desks.length > 0 ? (
-        <DeskBoard desks={desks} isLoading={isLoadingBoard} />
-      ) : null}
+      <DeskBoard desks={desks} isLoading={isLoadingBoard} />
       <FloorChat />
     </div>
   );

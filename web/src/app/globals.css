@@ -370,4 +370,236 @@ body {
   .scroll-reveal {
     animation: none !important;
   }
+
+  .floor-robot *,
+  .floor-pit__ticker-track,
+  .floor-pit__live-dot {
+    animation: none !important;
+  }
 }
+
+/* Trading Floor pit — gamified desk bay */
+.floor-pit {
+  --floor-bay: color-mix(in srgb, var(--card) 88%, #0b3d4a);
+  --floor-grid: color-mix(in srgb, var(--line) 70%, #1f6f7a);
+  --floor-screen: #5eead4;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--card) 92%, #123) 0%, var(--card) 40%),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 18px,
+      color-mix(in srgb, var(--floor-grid) 35%, transparent) 18px,
+      color-mix(in srgb, var(--floor-grid) 35%, transparent) 19px
+    );
+  background-color: var(--floor-bay);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--floor-screen) 18%, transparent);
+}
+
+.floor-pit__header {
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.floor-pit__live-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55);
+  animation: floor-ping 1.8s ease-out infinite;
+}
+
+.floor-pit__ticker {
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, #04151a 55%, var(--ink));
+  color: #99f6e4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  line-height: 2.2;
+}
+
+.floor-pit__ticker-track {
+  display: flex;
+  gap: 2.5rem;
+  width: max-content;
+  animation: floor-ticker 28s linear infinite;
+}
+
+.floor-station {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, color-mix(in srgb, var(--floor-screen) 10%, transparent), transparent 70%),
+    var(--card);
+  transition: transform 200ms ease, border-color 200ms ease;
+}
+
+.floor-station:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--floor-screen) 35%, var(--line));
+}
+
+.floor-station__stage {
+  background:
+    linear-gradient(180deg, transparent, color-mix(in srgb, #04151a 8%, transparent)),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 10px,
+      color-mix(in srgb, var(--line) 40%, transparent) 10px,
+      color-mix(in srgb, var(--line) 40%, transparent) 11px
+    );
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  min-height: 9.5rem;
+}
+
+.floor-robot {
+  width: 7.5rem;
+  height: auto;
+  overflow: visible;
+}
+
+.floor-robot__shadow {
+  fill: color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.floor-robot__chest-panel,
+.floor-robot__desk,
+.floor-robot__hand {
+  fill: color-mix(in srgb, var(--paper) 55%, #0f172a);
+}
+
+.floor-robot__visor {
+  fill: #0b1220;
+}
+
+.floor-robot__eye {
+  fill: var(--floor-screen);
+  animation: floor-blink 4s ease-in-out infinite;
+}
+
+.floor-robot__eye--right {
+  animation-delay: 0.15s;
+}
+
+.floor-robot__monitor {
+  fill: #0b1220;
+  stroke: color-mix(in srgb, var(--floor-screen) 55%, transparent);
+  stroke-width: 1;
+}
+
+.floor-robot__keyboard {
+  fill: color-mix(in srgb, var(--paper) 40%, #111827);
+}
+
+.floor-robot__antenna-stem {
+  stroke: color-mix(in srgb, var(--ink) 55%, transparent);
+  stroke-width: 2;
+}
+
+.floor-robot--working .floor-robot__arm--right {
+  transform-origin: 94px 88px;
+  animation: floor-type 0.55s ease-in-out infinite;
+}
+
+.floor-robot--working .floor-robot__arm--left {
+  transform-origin: 26px 88px;
+  animation: floor-type 0.55s ease-in-out infinite reverse;
+}
+
+.floor-robot--working .floor-robot__head {
+  transform-origin: 60px 54px;
+  animation: floor-nod 2.4s ease-in-out infinite;
+}
+
+.floor-robot--working .floor-robot__monitor {
+  animation: floor-screen 1.1s steps(2, end) infinite;
+}
+
+.floor-robot--warming .floor-robot__antenna {
+  animation: floor-boot 1s ease-in-out infinite;
+}
+
+.floor-robot--warming .floor-robot__head {
+  transform-origin: 60px 54px;
+  animation: floor-sway 1.6s ease-in-out infinite;
+}
+
+.floor-robot--idle .floor-robot__antenna {
+  animation: floor-idle-glow 2.8s ease-in-out infinite;
+}
+
+.floor-robot--idle .floor-robot__arm--right {
+  transform-origin: 94px 88px;
+  animation: floor-wave 3.6s ease-in-out infinite;
+}
+
+.floor-robot__led {
+  animation: floor-led 1.4s ease-in-out infinite;
+}
+
+.floor-robot__led--delay { animation-delay: 0.2s; }
+.floor-robot__led--delay-2 { animation-delay: 0.4s; }
+
+@keyframes floor-ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes floor-ping {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
+  70% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+@keyframes floor-type {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  50% { transform: rotate(12deg) translateY(2px); }
+}
+
+@keyframes floor-nod {
+  0%, 100% { transform: rotate(0deg); }
+  40% { transform: rotate(-3deg); }
+  70% { transform: rotate(2deg); }
+}
+
+@keyframes floor-screen {
+  0%, 100% { fill: #0b1220; }
+  50% { fill: #134e4a; }
+}
+
+@keyframes floor-boot {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+@keyframes floor-sway {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(3px); }
+}
+
+@keyframes floor-idle-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@keyframes floor-wave {
+  0%, 70%, 100% { transform: rotate(0deg); }
+  80% { transform: rotate(-18deg); }
+  90% { transform: rotate(8deg); }
+}
+
+@keyframes floor-blink {
+  0%, 92%, 100% { opacity: 1; }
+  95% { opacity: 0.15; }
+}
+
+@keyframes floor-led {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
