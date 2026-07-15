@@ -18,7 +18,7 @@ type SignalRow = {
 };
 
 function config(): Config | null {
-  const url = process.env.SUPABASE_URL?.trim();
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)?.trim();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !serviceKey) return null;
   return { url: url.replace(/\/$/, ""), serviceKey };
@@ -85,7 +85,7 @@ export async function fetchSignalSnapshots(): Promise<SignalSnapshot[]> {
     );
     query.searchParams.set(
       "or",
-      `(status.in.(open,tp1_hit,tp2_hit),created_at.gte.${cutoff})`,
+      `(status.in.(open,tp1_hit,tp2_hit),created_at.gte."${cutoff}")`,
     );
     query.searchParams.set("order", "created_at.desc");
     query.searchParams.set("limit", "20");
