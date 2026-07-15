@@ -40,7 +40,18 @@ export async function GET() {
     .order("created_at", { ascending: false })
     .limit(40);
   if (error) {
-    return NextResponse.json({ error: "Could not load floor board" }, { status: 500 });
+    const missing =
+      error.code === "PGRST205" ||
+      /floor_briefs|schema cache|does not exist/i.test(error.message ?? "");
+    return NextResponse.json(
+      {
+        error: missing
+          ? "Floor tables are missing. Run supabase/migrations/20260715_trading_floor.sql in the Supabase SQL editor."
+          : "Could not load floor board",
+        detail: error.message,
+      },
+      { status: 500 },
+    );
   }
 
   const latestByDesk = new Map<FloorDesk, FloorBrief>();

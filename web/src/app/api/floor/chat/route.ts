@@ -91,7 +91,18 @@ export async function GET() {
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) {
-    return NextResponse.json({ error: "Could not load floor chat" }, { status: 500 });
+    const missing =
+      error.code === "PGRST205" ||
+      /floor_chat_messages|schema cache|does not exist/i.test(error.message ?? "");
+    return NextResponse.json(
+      {
+        error: missing
+          ? "Floor tables are missing. Run supabase/migrations/20260715_trading_floor.sql in the Supabase SQL editor."
+          : "Could not load floor chat",
+        detail: error.message,
+      },
+      { status: 500 },
+    );
   }
 
   const messages = ((data ?? []) as FloorChatRow[]).reverse().map(mapFloorChatMessage);
