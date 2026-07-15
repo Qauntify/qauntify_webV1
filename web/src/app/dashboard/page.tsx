@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { SignalsGrid } from "@/components/dashboard/SignalsGrid";
 import { StatsBar } from "@/components/dashboard/StatsBar";
+import { TradingFloor } from "@/components/floor/TradingFloor";
 import { Notice } from "@/components/shared/Notice";
 import { getSignals, getStats } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
@@ -104,18 +105,25 @@ export default async function Dashboard({
   const { admin, tab } = await searchParams;
   
   const currentTab =
-    tab === "swing"
-      ? "swing"
-      : tab === "scalping"
-        ? "scalping"
-        : tab === "super-scalping"
-          ? "super-scalping"
-          : "all";
+    tab === "floor"
+      ? "floor"
+      : tab === "swing"
+        ? "swing"
+        : tab === "scalping"
+          ? "scalping"
+          : tab === "super-scalping"
+            ? "super-scalping"
+            : "all";
+  const isFloor = currentTab === "floor";
+  const title = isFloor ? "Trading Floor" : "Signals";
+  const subtitle = isFloor
+    ? "Desk board and PM chat"
+    : "AI-confirmed setups — refreshed every engine run";
 
   return (
     <DashboardShell
-      title="Signals"
-      subtitle="AI-confirmed setups — refreshed every engine run"
+      title={title}
+      subtitle={subtitle}
     >
       <div className="w-full space-y-6">
         {admin === "denied" ? (
@@ -126,9 +134,9 @@ export default async function Dashboard({
         ) : null}
 
         <div className="lg:hidden">
-          <h1 className="text-xl font-bold">Signals</h1>
+          <h1 className="text-xl font-bold">{title}</h1>
           <p className="text-sm text-slate">
-            AI-confirmed setups — refreshed every engine run
+            {subtitle}
           </p>
         </div>
 
@@ -173,9 +181,21 @@ export default async function Dashboard({
           >
             Swing (1h)
           </Link>
+          <Link
+            href="/dashboard?tab=floor"
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+              currentTab === "floor"
+                ? "bg-ink text-paper shadow-md"
+                : "text-slate hover:bg-card hover:text-ink"
+            }`}
+          >
+            Trading Floor
+          </Link>
         </nav>
 
-        {currentTab === "all" ? (
+        {currentTab === "floor" ? (
+          <TradingFloor />
+        ) : currentTab === "all" ? (
           SESSIONS.map((s) => (
             <SessionSection key={s.timeframe} accessToken={accessToken} {...s} />
           ))
