@@ -386,13 +386,12 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     )
     if setup is None:
         print(f"[{symbol}] no setup found ({strategy})")
-        indicators = _latest_indicators(ema9, ema21, rsi14, macd_hist)
+        # Log only fields the active strategy cares about — do not dump EMA/RSI/MACD
+        # onto ICT / CE no-setup events (those series are still computed for ema_cross).
         if strategy == "ict_smc":
             if atr14[-1] is None:
                 return ScanResult(candles=candles)
-            indicators = indicators or {}
             indicators = {
-                **indicators,
                 "strategy": "ict_smc",
                 "atr": atr14[-1],
             }
@@ -403,9 +402,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         elif strategy == "ict_fvg":
             if atr14[-1] is None:
                 return ScanResult(candles=candles)
-            indicators = indicators or {}
             indicators = {
-                **indicators,
                 "strategy": "ict_fvg",
                 "atr": atr14[-1],
             }
@@ -413,8 +410,10 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
                 indicators["htf_trend"] = htf_trend
         elif strategy == "ce_lwma":
             indicators = {"strategy": "ce_lwma"}
-        elif indicators is None:
-            return ScanResult(candles=candles)
+        else:
+            indicators = _latest_indicators(ema9, ema21, rsi14, macd_hist)
+            if indicators is None:
+                return ScanResult(candles=candles)
         headlines = headlines_for_symbol()
         rationale = no_setup_rationale(
             symbol, timeframe, indicators, strategy=strategy,
