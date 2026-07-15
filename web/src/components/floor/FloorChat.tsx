@@ -71,7 +71,7 @@ export function FloorChat() {
   }
 
   return (
-    <section className="rounded-xl border border-line bg-card p-5" aria-label="Floor PM chat">
+    <section className="w-full max-w-full min-w-0 rounded-xl border border-line bg-card p-5" aria-label="Floor PM chat">
       <div className="border-b border-line pb-4">
         <h2 className="text-base font-semibold text-ink">Floor PM chat</h2>
         <p className="mt-1 text-sm text-slate">Ask for a read on the current desk board.</p>

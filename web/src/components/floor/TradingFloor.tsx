@@ -38,7 +38,7 @@ export function TradingFloor() {
   }, []);
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto w-full max-w-5xl min-w-0 space-y-6">
       {error ? <p className="text-sm text-ink" role="alert">{error}</p> : null}
       <DeskBoard desks={desks} isLoading={isLoadingBoard} />
       <FloorChat />

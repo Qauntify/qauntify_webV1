@@ -33,7 +33,10 @@ export function DeskBoard({
   const liveCount = desks.length;
 
   return (
-    <section aria-label="Trading desk board" className="dealing-room overflow-hidden rounded-2xl border border-line">
+    <section
+      aria-label="Trading desk board"
+      className="dealing-room w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-line"
+    >
       <div className="dealing-room__skyline" aria-hidden>
         <div className="dealing-room__wall-glow" />
         <div className="dealing-room__desk-rows">
@@ -85,7 +88,7 @@ export function DeskBoard({
           </div>
         </div>
 
-        <div className="grid gap-3 p-3 sm:p-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:p-4">
           {FLOOR_DESKS.map((desk) => {
             const brief = deskByName.get(desk);
             const active = Boolean(brief) || isLoading;
@@ -93,7 +96,7 @@ export function DeskBoard({
             return (
               <article
                 key={desk}
-                className="dealing-desk flex min-h-72 flex-col border border-white/10 bg-black/35 p-4 backdrop-blur-md"
+                className="dealing-desk flex min-h-0 min-w-0 flex-col border border-white/10 bg-black/35 p-4 backdrop-blur-md"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
