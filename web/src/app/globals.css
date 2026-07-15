@@ -371,235 +371,216 @@ body {
     animation: none !important;
   }
 
-  .floor-robot *,
-  .floor-pit__ticker-track,
-  .floor-pit__live-dot {
+  .dealing-room__ticker-track,
+  .dealing-room__live,
+  .trading-console--live .trading-console__panel,
+  .trading-console--live .trading-console__chart,
+  .dealing-room__screen-haze {
     animation: none !important;
   }
 }
 
-/* Trading Floor pit — gamified desk bay */
-.floor-pit {
-  --floor-bay: color-mix(in srgb, var(--card) 88%, #0b3d4a);
-  --floor-grid: color-mix(in srgb, var(--line) 70%, #1f6f7a);
-  --floor-screen: #5eead4;
+/* Institutional dealing room — multi-monitor bays + wall ticker */
+.dealing-room {
+  position: relative;
+  color: #e2e8f0;
+  background: #070b12;
+  isolation: isolate;
+}
+
+.dealing-room__skyline {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--card) 92%, #123) 0%, var(--card) 40%),
+    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(14, 116, 144, 0.35), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 15% 80%, rgba(6, 78, 59, 0.2), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 85% 75%, rgba(30, 58, 138, 0.18), transparent 50%),
+    linear-gradient(180deg, #0b1220 0%, #070b12 45%, #05080d 100%);
+}
+
+.dealing-room__wall-glow {
+  position: absolute;
+  inset: 8% 4% auto;
+  height: 28%;
+  background:
+    linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.08), transparent),
     repeating-linear-gradient(
       90deg,
-      transparent,
-      transparent 18px,
-      color-mix(in srgb, var(--floor-grid) 35%, transparent) 18px,
-      color-mix(in srgb, var(--floor-grid) 35%, transparent) 19px
+      rgba(148, 163, 184, 0.04) 0,
+      rgba(148, 163, 184, 0.04) 2px,
+      transparent 2px,
+      transparent 28px
     );
-  background-color: var(--floor-bay);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--floor-screen) 18%, transparent);
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-bottom: 1px solid rgba(34, 211, 238, 0.15);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
 }
 
-.floor-pit__header {
-  background: color-mix(in srgb, var(--card) 85%, transparent);
-  backdrop-filter: blur(10px);
+.dealing-room__desk-rows {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 55%;
+  display: grid;
+  align-content: end;
+  gap: 10%;
+  padding: 0 6% 4%;
+  opacity: 0.35;
 }
 
-.floor-pit__live-dot {
+.dealing-room__desk-rows span {
+  display: block;
+  height: 18%;
+  border-radius: 2px 2px 0 0;
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, 0.12), transparent 70%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(15, 23, 42, 0.9) 0,
+      rgba(15, 23, 42, 0.9) 12%,
+      rgba(30, 41, 59, 0.85) 12%,
+      rgba(30, 41, 59, 0.85) 22%
+    );
+  box-shadow: 0 -8px 24px rgba(6, 182, 212, 0.08);
+  transform: perspective(400px) rotateX(18deg);
+  transform-origin: center bottom;
+}
+
+.dealing-room__screen-haze {
+  position: absolute;
+  inset: 20% 10% 30%;
+  background: radial-gradient(circle at 50% 40%, rgba(34, 211, 238, 0.12), transparent 65%);
+  animation: dealing-haze 8s ease-in-out infinite alternate;
+}
+
+.dealing-room__header {
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.85), rgba(2, 6, 23, 0.55));
+  backdrop-filter: blur(12px);
+}
+
+.dealing-room__live {
   display: inline-block;
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 999px;
-  background: #34d399;
-  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55);
-  animation: floor-ping 1.8s ease-out infinite;
+  background: #22c55e;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+  animation: dealing-ping 1.8s ease-out infinite;
 }
 
-.floor-pit__ticker {
+.dealing-room__ticker {
   overflow: hidden;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, #04151a 55%, var(--ink));
-  color: #99f6e4;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.2);
+  background: linear-gradient(90deg, #020617, #083344, #020617);
+  color: #67e8f9;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  line-height: 2.2;
+  line-height: 2.1;
 }
 
-.floor-pit__ticker-track {
+.dealing-room__ticker-track {
   display: flex;
-  gap: 2.5rem;
+  gap: 2.25rem;
   width: max-content;
-  animation: floor-ticker 28s linear infinite;
+  animation: dealing-ticker 32s linear infinite;
 }
 
-.floor-station {
+.dealing-desk {
+  border-radius: 0.75rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: border-color 180ms ease, transform 180ms ease, background 180ms ease;
+}
+
+.dealing-desk:hover {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.35);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.dealing-desk__console {
+  min-height: 7.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, color-mix(in srgb, var(--floor-screen) 10%, transparent), transparent 70%),
-    var(--card);
-  transition: transform 200ms ease, border-color 200ms ease;
-}
-
-.floor-station:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--floor-screen) 35%, var(--line));
-}
-
-.floor-station__stage {
-  background:
-    linear-gradient(180deg, transparent, color-mix(in srgb, #04151a 8%, transparent)),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.35), rgba(2, 6, 23, 0.55)),
     repeating-linear-gradient(
       0deg,
       transparent,
-      transparent 10px,
-      color-mix(in srgb, var(--line) 40%, transparent) 10px,
-      color-mix(in srgb, var(--line) 40%, transparent) 11px
+      transparent 11px,
+      rgba(148, 163, 184, 0.05) 11px,
+      rgba(148, 163, 184, 0.05) 12px
     );
-  border-radius: 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  min-height: 9.5rem;
 }
 
-.floor-robot {
-  width: 7.5rem;
+.trading-console {
+  width: min(100%, 13rem);
   height: auto;
-  overflow: visible;
 }
 
-.floor-robot__shadow {
-  fill: color-mix(in srgb, var(--ink) 18%, transparent);
+.trading-console__desk {
+  fill: #334155;
 }
 
-.floor-robot__chest-panel,
-.floor-robot__desk,
-.floor-robot__hand {
-  fill: color-mix(in srgb, var(--paper) 55%, #0f172a);
+.trading-console__rail,
+.trading-console__arm,
+.trading-console__kb {
+  fill: #475569;
 }
 
-.floor-robot__visor {
-  fill: #0b1220;
-}
-
-.floor-robot__eye {
-  fill: var(--floor-screen);
-  animation: floor-blink 4s ease-in-out infinite;
-}
-
-.floor-robot__eye--right {
-  animation-delay: 0.15s;
-}
-
-.floor-robot__monitor {
-  fill: #0b1220;
-  stroke: color-mix(in srgb, var(--floor-screen) 55%, transparent);
+.trading-console__bezel {
+  fill: #0f172a;
+  stroke: #1e293b;
   stroke-width: 1;
 }
 
-.floor-robot__keyboard {
-  fill: color-mix(in srgb, var(--paper) 40%, #111827);
+.trading-console__chart {
+  stroke: #67e8f9;
+  stroke-width: 1.4;
+  opacity: 0.55;
 }
 
-.floor-robot__antenna-stem {
-  stroke: color-mix(in srgb, var(--ink) 55%, transparent);
-  stroke-width: 2;
+.trading-console--live .trading-console__panel--main,
+.trading-console--live .trading-console__panel--wide {
+  animation: dealing-screen 2.4s ease-in-out infinite;
 }
 
-.floor-robot--working .floor-robot__arm--right {
-  transform-origin: 94px 88px;
-  animation: floor-type 0.55s ease-in-out infinite;
+.trading-console--live .trading-console__chart {
+  animation: dealing-chart 3s ease-in-out infinite;
 }
 
-.floor-robot--working .floor-robot__arm--left {
-  transform-origin: 26px 88px;
-  animation: floor-type 0.55s ease-in-out infinite reverse;
+.trading-console--standby .trading-console__panel {
+  opacity: 0.45;
 }
 
-.floor-robot--working .floor-robot__head {
-  transform-origin: 60px 54px;
-  animation: floor-nod 2.4s ease-in-out infinite;
-}
-
-.floor-robot--working .floor-robot__monitor {
-  animation: floor-screen 1.1s steps(2, end) infinite;
-}
-
-.floor-robot--warming .floor-robot__antenna {
-  animation: floor-boot 1s ease-in-out infinite;
-}
-
-.floor-robot--warming .floor-robot__head {
-  transform-origin: 60px 54px;
-  animation: floor-sway 1.6s ease-in-out infinite;
-}
-
-.floor-robot--idle .floor-robot__antenna {
-  animation: floor-idle-glow 2.8s ease-in-out infinite;
-}
-
-.floor-robot--idle .floor-robot__arm--right {
-  transform-origin: 94px 88px;
-  animation: floor-wave 3.6s ease-in-out infinite;
-}
-
-.floor-robot__led {
-  animation: floor-led 1.4s ease-in-out infinite;
-}
-
-.floor-robot__led--delay { animation-delay: 0.2s; }
-.floor-robot__led--delay-2 { animation-delay: 0.4s; }
-
-@keyframes floor-ticker {
+@keyframes dealing-ticker {
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
 }
 
-@keyframes floor-ping {
-  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
-  70% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+@keyframes dealing-ping {
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
 }
 
-@keyframes floor-type {
-  0%, 100% { transform: rotate(0deg) translateY(0); }
-  50% { transform: rotate(12deg) translateY(2px); }
+@keyframes dealing-haze {
+  from { opacity: 0.55; transform: scale(1); }
+  to { opacity: 0.9; transform: scale(1.04); }
 }
 
-@keyframes floor-nod {
-  0%, 100% { transform: rotate(0deg); }
-  40% { transform: rotate(-3deg); }
-  70% { transform: rotate(2deg); }
-}
-
-@keyframes floor-screen {
-  0%, 100% { fill: #0b1220; }
-  50% { fill: #134e4a; }
-}
-
-@keyframes floor-boot {
-  0%, 100% { opacity: 0.35; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.15); }
-}
-
-@keyframes floor-sway {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(3px); }
-}
-
-@keyframes floor-idle-glow {
-  0%, 100% { opacity: 0.55; }
+@keyframes dealing-screen {
+  0%, 100% { opacity: 0.75; }
   50% { opacity: 1; }
 }
 
-@keyframes floor-wave {
-  0%, 70%, 100% { transform: rotate(0deg); }
-  80% { transform: rotate(-18deg); }
-  90% { transform: rotate(8deg); }
-}
-
-@keyframes floor-blink {
-  0%, 92%, 100% { opacity: 1; }
-  95% { opacity: 0.15; }
-}
-
-@keyframes floor-led {
+@keyframes dealing-chart {
   0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  50% { opacity: 0.95; }
 }
 
