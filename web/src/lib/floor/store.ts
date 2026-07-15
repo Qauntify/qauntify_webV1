@@ -2,7 +2,7 @@ import { buildContextBlocks, formatSignalsBlock, type SignalSnapshot } from "./c
 import { fetchCalendarBlock } from "./calendar";
 import { fetchHeadlinesBlock } from "./news";
 import { describeMarketSession } from "./session";
-import type { FloorDesk, FloorTone } from "./types";
+import type { FloorChatMessage, FloorDesk, FloorTone } from "./types";
 import type { FloorContextBlocks } from "./prompts";
 
 type Config = { url: string; serviceKey: string };
@@ -70,6 +70,48 @@ export async function insertFloorBrief(input: {
   if (!response.ok) {
     throw new Error(`Could not insert floor brief (HTTP ${response.status})`);
   }
+}
+
+export async function insertFloorChatAssistant(input: {
+  userId: string;
+  content: string;
+}): Promise<FloorChatMessage> {
+  const cfg = config();
+  if (!cfg) throw new Error("Supabase service-role configuration is unavailable");
+
+  const response = await fetch(`${cfg.url}/rest/v1/floor_chat_messages`, {
+    method: "POST",
+    headers: {
+      ...headers(cfg.serviceKey),
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify({
+      user_id: input.userId,
+      role: "assistant",
+      content: input.content,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Could not insert floor chat assistant reply (HTTP ${response.status})`);
+  }
+
+  const rows = (await response.json()) as Array<{
+    id?: unknown;
+    role?: unknown;
+    content?: unknown;
+    created_at?: unknown;
+  }>;
+  const row = rows[0];
+  if (!row || row.role !== "assistant") {
+    throw new Error("Floor chat assistant reply was not returned");
+  }
+
+  return {
+    id: String(row.id ?? ""),
+    role: "assistant",
+    content: String(row.content ?? ""),
+    createdAt: String(row.created_at ?? ""),
+  };
 }
 
 export async function fetchSignalSnapshots(): Promise<SignalSnapshot[]> {
