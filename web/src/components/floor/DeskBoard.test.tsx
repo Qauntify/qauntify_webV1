@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { formatRelativeTime } from "@/lib/format";
 import type { FloorBrief } from "@/lib/floor/types";
 import { DeskBoard } from "./DeskBoard";
 
@@ -13,6 +14,10 @@ const MACRO_BRIEF: FloorBrief = {
   createdAt: "2026-07-15T12:00:00.000Z",
 };
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("DeskBoard", () => {
   it("explains when the floor has not posted a brief", () => {
     render(<DeskBoard desks={[]} />);
@@ -22,6 +27,9 @@ describe("DeskBoard", () => {
   });
 
   it("orders all desk cards and fills missing desks", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-15T14:00:00.000Z"));
+
     render(<DeskBoard desks={[MACRO_BRIEF]} />);
 
     expect(screen.getByText("Macro")).toBeDefined();
@@ -31,6 +39,9 @@ describe("DeskBoard", () => {
     expect(screen.getByText("bullish")).toBeDefined();
     expect(screen.getByText("Dollar liquidity is improving.")).toBeDefined();
     expect(screen.getAllByText("—")).toHaveLength(3);
-    expect(screen.getByText(MACRO_BRIEF.createdAt)).toBeDefined();
+
+    const timestamp = screen.getByText(formatRelativeTime(MACRO_BRIEF.createdAt));
+    expect(timestamp).toBeDefined();
+    expect(timestamp.getAttribute("dateTime")).toBe(MACRO_BRIEF.createdAt);
   });
 });

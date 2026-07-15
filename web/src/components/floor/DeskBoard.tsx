@@ -1,3 +1,4 @@
+import { formatRelativeTime } from "@/lib/format";
 import { FLOOR_DESKS, type FloorBrief, type FloorDesk, type FloorTone } from "@/lib/floor/types";
 
 const DESK_LABELS: Record<FloorDesk, string> = {
@@ -13,14 +14,24 @@ const TONE_STYLES: Record<FloorTone, string> = {
   cautious: "border-line bg-paper text-ink",
 };
 
-export function DeskBoard({ desks }: { desks: FloorBrief[] }) {
+export function DeskBoard({
+  desks,
+  isLoading = false,
+}: {
+  desks: FloorBrief[];
+  isLoading?: boolean;
+}) {
   if (desks.length === 0) {
     return (
       <section className="rounded-xl border border-dashed border-line bg-card p-10 text-center">
-        <h2 className="text-base font-semibold text-ink">Desks warming up</h2>
-        <p className="mt-1 text-sm text-slate">
-          The floor cron has not posted yet.
-        </p>
+        <h2 className="text-base font-semibold text-ink">
+          {isLoading ? "Loading desk board..." : "Desks warming up"}
+        </h2>
+        {isLoading ? null : (
+          <p className="mt-1 text-sm text-slate">
+            The floor cron has not posted yet.
+          </p>
+        )}
       </section>
     );
   }
@@ -47,7 +58,7 @@ export function DeskBoard({ desks }: { desks: FloorBrief[] }) {
             <p className="mt-4 flex-1 text-sm leading-6 text-slate">{brief?.body ?? "—"}</p>
             {brief ? (
               <time className="mt-4 font-mono text-[11px] text-slate" dateTime={brief.createdAt}>
-                {brief.createdAt}
+                {formatRelativeTime(brief.createdAt)}
               </time>
             ) : null}
           </article>

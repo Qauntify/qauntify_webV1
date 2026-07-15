@@ -11,6 +11,7 @@ type BoardResponse = { desks: FloorBrief[]; error?: string };
 export function TradingFloor() {
   const [desks, setDesks] = useState<FloorBrief[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingBoard, setIsLoadingBoard] = useState(true);
 
   useEffect(() => {
     let isCurrent = true;
@@ -25,6 +26,8 @@ export function TradingFloor() {
         if (isCurrent) {
           setError(loadError instanceof Error ? loadError.message : "Could not load desk board.");
         }
+      } finally {
+        if (isCurrent) setIsLoadingBoard(false);
       }
     }
 
@@ -37,7 +40,7 @@ export function TradingFloor() {
   return (
     <div className="space-y-8">
       {error ? <p className="text-sm text-ink" role="alert">{error}</p> : null}
-      <DeskBoard desks={desks} />
+      <DeskBoard desks={desks} isLoading={isLoadingBoard} />
       <FloorChat />
     </div>
   );
