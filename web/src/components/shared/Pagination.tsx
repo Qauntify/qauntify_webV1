@@ -15,6 +15,7 @@ export function Pagination({
   pageSize,
   basePath,
   extraParams = {},
+  itemLabel = "signals",
 }: {
   page: number;
   totalPages: number;
@@ -22,6 +23,7 @@ export function Pagination({
   pageSize: number;
   basePath: string;
   extraParams?: Record<string, string>;
+  itemLabel?: string;
 }) {
   if (totalPages <= 1) return null;
 
@@ -44,7 +46,7 @@ export function Pagination({
     <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
       <p className="text-xs text-slate font-mono">
         Showing <span className="text-ink font-semibold">{from}–{to}</span> of{" "}
-        <span className="text-ink font-semibold">{total}</span> signals
+        <span className="text-ink font-semibold">{total}</span> {itemLabel}
       </p>
 
       <nav className="flex items-center gap-1" aria-label="Pagination">
