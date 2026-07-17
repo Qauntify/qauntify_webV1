@@ -93,16 +93,12 @@ export default async function Dashboard({
   searchParams: Promise<{ admin?: string; tab?: string }>;
 }) {
   const supabase = await createClient();
-  // getUser() re-verifies the token with the auth server — the redirect
-  // decision must not trust a raw (possibly stale/tampered) cookie
-  // session. getSession() is only safe to read afterward, purely to pull
-  // out the access token for the RLS-authenticated signals fetches below.
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const { data: { session } } = await supabase.auth.getSession();
   const accessToken = session?.access_token;
   const { admin, tab } = await searchParams;
-  
+
   const currentTab =
     tab === "swing"
       ? "swing"

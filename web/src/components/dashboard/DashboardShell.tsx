@@ -57,7 +57,7 @@ export async function DashboardShell({
           </div>
         </div>
       </aside>
-      <div className="flex flex-1 flex-col lg:ml-56">
+      <div className="flex min-w-0 flex-1 flex-col lg:ml-56">
         <header className="flex h-16 items-center justify-between border-b border-line bg-card/80 backdrop-blur-xl px-4 lg:px-8 sticky top-0 z-30 transition-all duration-300">
           <div className="lg:hidden">
             <Logo />
@@ -72,7 +72,7 @@ export async function DashboardShell({
             Home
           </Link>
         </header>
-        <main className="flex-1 p-4 lg:p-6">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-hidden p-4 lg:p-6">{children}</main>
       </div>
     </div>
   );
