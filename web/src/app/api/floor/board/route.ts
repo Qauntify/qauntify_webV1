@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { floorRunSnapshot } from "@/lib/floor/run-control";
+import { FLOOR_DESKS, GOLD_SYMBOL, type FloorBrief, type FloorDesk, type FloorTone } from "@/lib/floor/types";
+import { isAdminEmail } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { FLOOR_DESKS, type FloorBrief, type FloorDesk, type FloorTone } from "@/lib/floor/types";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,17 @@ function mapFloorBrief(row: FloorBriefRow): FloorBrief {
   };
 }
 
+function scanLineFromSnapshot(): string {
+  const snapshot = floorRunSnapshot();
+  if (snapshot.running) {
+    return snapshot.lastMessage || `Cycle ${snapshot.cycle} — ${snapshot.phase}`;
+  }
+  if (snapshot.lastSignal) {
+    return `Last signal: ${snapshot.lastSignal.direction.toUpperCase()} @ ${snapshot.lastSignal.entry}`;
+  }
+  return "Press Run to start the gold AI hunter.";
+}
+
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -33,12 +46,16 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!isAdminEmail(user.email)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { data, error } = await supabase
     .from("floor_briefs")
     .select("id, desk, tone, body, run_id, created_at")
     .order("created_at", { ascending: false })
     .limit(40);
+
   if (error) {
     const missing =
       error.code === "PGRST205" ||
@@ -47,7 +64,7 @@ export async function GET() {
       {
         error: missing
           ? "Floor tables are missing. Run supabase/migrations/20260715_trading_floor.sql in the Supabase SQL editor."
-          : "Could not load floor board",
+          : "Could not load gold floor board",
         detail: error.message,
       },
       { status: 500 },
@@ -64,5 +81,12 @@ export async function GET() {
     return brief ? [brief] : [];
   });
 
-  return NextResponse.json({ desks });
+  const snapshot = floorRunSnapshot();
+
+  return NextResponse.json({
+    symbol: GOLD_SYMBOL,
+    desks,
+    lastSignal: snapshot.lastSignal,
+    scanLine: scanLineFromSnapshot(),
+  });
 }

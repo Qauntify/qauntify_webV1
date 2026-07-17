@@ -8,26 +8,39 @@ afterEach(() => {
 });
 
 describe("TradingFloor", () => {
-  it("loads the desk board above the PM chat", async () => {
+  it("loads the gold floor board and shows run controls", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => {
       if (url === "/api/floor/board") {
         return Promise.resolve(new Response(JSON.stringify({
-        desks: [{
-          id: "macro-1",
-          desk: "macro",
-          tone: "neutral",
-          body: "Macro remains range-bound.",
-          runId: "run-1",
-          createdAt: "2026-07-15T12:00:00.000Z",
-        }],
+          symbol: "PAXGUSDT",
+          desks: [{
+            id: "macro-1",
+            desk: "macro",
+            tone: "neutral",
+            body: "Gold range-bound ahead of US data.",
+            runId: "run-1",
+            createdAt: "2026-07-15T12:00:00.000Z",
+          }],
+          lastSignal: null,
+          scanLine: "Press Run to start the gold AI hunter.",
         })));
       }
-      return Promise.resolve(new Response(JSON.stringify({ messages: [] })));
+      if (url === "/api/admin/floor/run") {
+        return Promise.resolve(new Response(JSON.stringify({
+          running: false,
+          runId: null,
+          cycle: 0,
+          phase: "idle",
+          lastMessage: "",
+          lastSignal: null,
+        })));
+      }
+      return Promise.resolve(new Response(JSON.stringify({})));
     }));
 
     render(<TradingFloor />);
 
-    expect(await screen.findByText("Macro remains range-bound.")).toBeDefined();
-    expect(screen.getByRole("region", { name: "Floor PM chat" })).toBeDefined();
+    expect(await screen.findByText("Gold floor — PAXGUSDT")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Run" })).toBeDefined();
   });
 });

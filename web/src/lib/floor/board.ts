@@ -17,6 +17,11 @@ export async function latestBriefsByDesk(
   return briefs;
 }
 
+type FloorChatFn = (
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  opts: { desk: FloorDesk; temperature?: number },
+) => Promise<string>;
+
 type BoardCycleDependencies = {
   loadContext: () => Promise<FloorContextBlocks>;
   insertBrief: (brief: {
@@ -25,12 +30,20 @@ type BoardCycleDependencies = {
     body: string;
     runId: string;
   }) => Promise<void>;
-  chat?: typeof floorChat;
+  chat?: FloorChatFn;
+  shouldStop?: () => boolean;
+};
+
+export type BoardCycleResult = {
+  runId: string;
+  saved: FloorDesk[];
+  failed: FloorDesk[];
+  stopped?: boolean;
 };
 
 export async function runFloorBoardCycle(
   deps: BoardCycleDependencies,
-): Promise<{ runId: string; saved: FloorDesk[]; failed: FloorDesk[] }> {
+): Promise<BoardCycleResult> {
   const runId = randomUUID();
   const context = await deps.loadContext();
   const chat = deps.chat ?? floorChat;
@@ -39,14 +52,23 @@ export async function runFloorBoardCycle(
   const peerNotes: string[] = [];
 
   for (const desk of FLOOR_DESKS.filter((item) => item !== "pm")) {
+    if (deps.shouldStop?.()) {
+      return { runId, saved, failed, stopped: true };
+    }
     try {
-      const brief = parseDeskBrief(await chat(buildDeskMessages(desk, context)));
+      const brief = parseDeskBrief(
+        await chat(buildDeskMessages(desk, context), { desk }),
+      );
       await deps.insertBrief({ desk, ...brief, runId });
       peerNotes.push(`${desk} (${brief.tone}): ${brief.body}`);
       saved.push(desk);
     } catch {
       failed.push(desk);
     }
+  }
+
+  if (deps.shouldStop?.()) {
+    return { runId, saved, failed, stopped: true };
   }
 
   try {
@@ -56,6 +78,7 @@ export async function runFloorBoardCycle(
           ...context,
           peerBriefsBlock: peerNotes.join("\n") || "No peer notes this run.",
         }),
+        { desk: "pm" },
       ),
     );
     await deps.insertBrief({ desk: "pm", ...brief, runId });

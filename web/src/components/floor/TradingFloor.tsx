@@ -1,47 +1,91 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import type { FloorBrief } from "@/lib/floor/types";
-import { DeskBoard } from "./DeskBoard";
-import { FloorChat } from "./FloorChat";
+import type { FloorBrief, FloorGoldSignal, FloorRunStatus } from "@/lib/floor/types";
+import { Notice } from "@/components/shared/Notice";
+import { GoldFloorBoard } from "./GoldFloorBoard";
+import { FloorRunControls } from "./FloorRunControls";
+import { FloorRobot } from "./FloorRobot";
 
-type BoardResponse = { desks: FloorBrief[]; error?: string };
+type BoardResponse = {
+  symbol: string;
+  desks: FloorBrief[];
+  lastSignal: FloorGoldSignal | null;
+  scanLine: string;
+  error?: string;
+};
+
+const IDLE_STATUS: FloorRunStatus = {
+  running: false,
+  runId: null,
+  cycle: 0,
+  phase: "idle",
+  lastMessage: "",
+  lastSignal: null,
+};
 
 export function TradingFloor() {
+  const [symbol, setSymbol] = useState("PAXGUSDT");
   const [desks, setDesks] = useState<FloorBrief[]>([]);
+  const [boardLastSignal, setBoardLastSignal] = useState<FloorGoldSignal | null>(null);
+  const [scanLine, setScanLine] = useState("Press Run to start the gold AI hunter.");
   const [error, setError] = useState<string | null>(null);
   const [isLoadingBoard, setIsLoadingBoard] = useState(true);
+  const [runStatus, setRunStatus] = useState<FloorRunStatus>(IDLE_STATUS);
 
-  useEffect(() => {
-    let isCurrent = true;
-
-    async function loadBoard() {
-      try {
-        const response = await fetch("/api/floor/board");
-        const payload = await response.json() as BoardResponse;
-        if (!response.ok) throw new Error(payload.error ?? "Could not load desk board.");
-        if (isCurrent) setDesks(payload.desks);
-      } catch (loadError) {
-        if (isCurrent) {
-          setError(loadError instanceof Error ? loadError.message : "Could not load desk board.");
-        }
-      } finally {
-        if (isCurrent) setIsLoadingBoard(false);
-      }
+  const loadBoard = useCallback(async () => {
+    setIsLoadingBoard(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/floor/board");
+      const payload = await response.json() as BoardResponse;
+      if (!response.ok) throw new Error(payload.error ?? "Could not load gold floor.");
+      setSymbol(payload.symbol);
+      setDesks(payload.desks);
+      setBoardLastSignal(payload.lastSignal);
+      setScanLine(payload.scanLine);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Could not load gold floor.");
+    } finally {
+      setIsLoadingBoard(false);
     }
-
-    void loadBoard();
-    return () => {
-      isCurrent = false;
-    };
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadBoard();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadBoard]);
+
+  useEffect(() => {
+    if (!runStatus.running) return undefined;
+    const timer = window.setInterval(() => {
+      void loadBoard();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [runStatus.running, loadBoard]);
+
+  const lastSignal = runStatus.lastSignal ?? boardLastSignal;
+
   return (
-    <div className="mx-auto w-full max-w-5xl min-w-0 space-y-6">
-      {error ? <p className="text-sm text-ink" role="alert">{error}</p> : null}
-      <DeskBoard desks={desks} isLoading={isLoadingBoard} />
-      <FloorChat />
+    <div className="flex w-full min-w-0 flex-col gap-6">
+      <FloorRunControls
+        onStatusChange={setRunStatus}
+        onCycleComplete={() => void loadBoard()}
+      />
+      <FloorRobot status={runStatus} />
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      <GoldFloorBoard
+        symbol={symbol}
+        desks={desks}
+        lastSignal={lastSignal}
+        scanLine={scanLine}
+        isLoading={isLoadingBoard}
+        isHunting={runStatus.running}
+        phase={runStatus.phase}
+      />
     </div>
   );
 }
