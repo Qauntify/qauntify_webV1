@@ -1,15 +1,17 @@
 import Link from "next/link";
 
+import {
+  aiResponsesHref,
+  type AiEventFilters,
+} from "@/lib/admin-ai-filters";
+
 type AiResponsesPaginationProps = {
   page: number;
   pageSize: number;
   total: number;
   totalPages: number;
+  filters?: AiEventFilters;
 };
-
-function pageHref(page: number): string {
-  return page <= 1 ? "/admin/ai/responses" : `/admin/ai/responses?page=${page}`;
-}
 
 function visiblePages(page: number, totalPages: number): number[] {
   const start = Math.max(1, page - 2);
@@ -26,6 +28,7 @@ export function AiResponsesPagination({
   pageSize,
   total,
   totalPages,
+  filters = {},
 }: AiResponsesPaginationProps) {
   if (total === 0) return null;
 
@@ -48,7 +51,7 @@ export function AiResponsesPagination({
         aria-label="AI responses pagination"
       >
         {page > 1 ? (
-          <Link href={pageHref(page - 1)} className={linkClass}>
+          <Link href={aiResponsesHref(filters, page - 1)} className={linkClass}>
             Previous
           </Link>
         ) : (
@@ -59,7 +62,7 @@ export function AiResponsesPagination({
 
         {pages[0] > 1 ? (
           <>
-            <Link href={pageHref(1)} className={linkClass}>
+            <Link href={aiResponsesHref(filters, 1)} className={linkClass}>
               1
             </Link>
             {pages[0] > 2 ? (
@@ -74,7 +77,11 @@ export function AiResponsesPagination({
               {p}
             </span>
           ) : (
-            <Link key={p} href={pageHref(p)} className={linkClass}>
+            <Link
+              key={p}
+              href={aiResponsesHref(filters, p)}
+              className={linkClass}
+            >
               {p}
             </Link>
           ),
@@ -85,14 +92,17 @@ export function AiResponsesPagination({
             {pages[pages.length - 1] < totalPages - 1 ? (
               <span className="px-1 text-sm text-slate">…</span>
             ) : null}
-            <Link href={pageHref(totalPages)} className={linkClass}>
+            <Link
+              href={aiResponsesHref(filters, totalPages)}
+              className={linkClass}
+            >
               {totalPages}
             </Link>
           </>
         ) : null}
 
         {page < totalPages ? (
-          <Link href={pageHref(page + 1)} className={linkClass}>
+          <Link href={aiResponsesHref(filters, page + 1)} className={linkClass}>
             Next
           </Link>
         ) : (

@@ -2,6 +2,12 @@
 // and the bot_settings table. Import only from server components/actions —
 // SUPABASE_SERVICE_ROLE_KEY must never reach the browser.
 
+import {
+  aiEventsFilterQuery,
+  type AiEventFilters,
+} from "@/lib/admin-ai-filters";
+import { parseEngineOutcomes } from "@/lib/admin-scans";
+
 export type AdminUser = {
   id: string;
   email: string;
@@ -248,15 +254,17 @@ export type AiEventsPage = {
 export async function listAiEventsPage(
   page = 1,
   pageSize = AI_EVENTS_PAGE_SIZE,
+  filters: AiEventFilters = {},
 ): Promise<AiEventsPage | null> {
   const cfg = config();
   if (!cfg) return null;
   const safePage = Number.isInteger(page) && page > 0 ? page : 1;
   const offset = (safePage - 1) * pageSize;
   const rangeEnd = offset + pageSize - 1;
+  const filterQuery = aiEventsFilterQuery(filters);
   try {
     const response = await fetch(
-      `${cfg.url}/rest/v1/ai_events?select=*&order=created_at.desc`,
+      `${cfg.url}/rest/v1/ai_events?select=*&order=created_at.desc${filterQuery}`,
       {
         headers: {
           ...headers(cfg.serviceKey),
@@ -272,7 +280,7 @@ export async function listAiEventsPage(
     const total = parseContentRangeTotal(
       response.headers.get("content-range"),
     ) ?? events.length;
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
     return {
       events,
       page: Math.min(safePage, totalPages),
@@ -308,6 +316,17 @@ type EngineRunRow = {
   finished_at: string;
 };
 
+function mapEngineRunRow(row: EngineRunRow): EngineRun {
+  return {
+    id: String(row.id),
+    runId: String(row.run_id),
+    timeframe: String(row.timeframe),
+    storedCount: Number(row.stored_count ?? 0),
+    outcomes: row.outcomes,
+    finishedAt: String(row.finished_at),
+  };
+}
+
 export async function latestEngineRun(): Promise<EngineRun | null> {
   const cfg = config();
   if (!cfg) return null;
@@ -321,18 +340,65 @@ export async function latestEngineRun(): Promise<EngineRun | null> {
     const rows = (await response.json()) as EngineRunRow[];
     const row = Array.isArray(rows) ? rows[0] : null;
     if (!row) return null;
+    return mapEngineRunRow(row);
+  } catch {
+    return null;
+  }
+}
+
+export const ENGINE_RUNS_PAGE_SIZE = 20;
+
+export type EngineRunsPage = {
+  runs: EngineRun[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export async function listEngineRunsPage(
+  page = 1,
+  pageSize = ENGINE_RUNS_PAGE_SIZE,
+): Promise<EngineRunsPage | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const offset = (safePage - 1) * pageSize;
+  const rangeEnd = offset + pageSize - 1;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/engine_runs?select=*&order=finished_at.desc`,
+      {
+        headers: {
+          ...headers(cfg.serviceKey),
+          Range: `${offset}-${rangeEnd}`,
+          Prefer: "count=exact",
+        },
+        ...READ_CACHE,
+      },
+    );
+    if (!response.ok) return null;
+    const rows = (await response.json()) as EngineRunRow[];
+    const runs = Array.isArray(rows) ? rows.map(mapEngineRunRow) : [];
+    const total =
+      parseContentRangeTotal(response.headers.get("content-range")) ??
+      runs.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
     return {
-      id: String(row.id),
-      runId: String(row.run_id),
-      timeframe: String(row.timeframe),
-      storedCount: Number(row.stored_count ?? 0),
-      outcomes: row.outcomes,
-      finishedAt: String(row.finished_at),
+      runs,
+      page: Math.min(safePage, totalPages),
+      pageSize,
+      total,
+      totalPages,
     };
   } catch {
     return null;
   }
 }
+
+/** Re-export for admin pages that want typed outcomes without a second import. */
+export { parseEngineOutcomes };
+
 
 export type EngineStatus = {
   runId: string;
