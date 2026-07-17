@@ -63,16 +63,33 @@ def test_detect_ict_fvg_bullish():
     assert abs(setup.take_profit_3 - (setup.entry + SUPER_SCALP_TP3_R * risk)) < 1e-9
 
 
-def test_detect_ict_fvg_rejects_htf_against():
+def test_detect_ict_fvg_allows_htf_against():
+    """HTF is a soft preference — against-trend still eligible."""
     candles = _bullish_ict_fvg_series()
     atr14 = [4.0] * len(candles)
-    assert detect_setup("BTCUSDT", candles, atr14, htf_trend="down") is None
+    setup = detect_setup("BTCUSDT", candles, atr14, htf_trend="down")
+    assert setup is not None
+    assert setup.direction == "long"
+    assert setup.indicators["htf_trend"] == "down"
 
 
 def test_detect_ict_fvg_none_without_retest():
     candles = _bullish_ict_fvg_series()[:-1]  # drop retest bar
     atr14 = [4.0] * len(candles)
     assert detect_setup("BTCUSDT", candles, atr14) is None
+
+
+def test_detect_ict_fvg_accepts_older_retest():
+    """Retest may be up to 5 bars before the latest close (was 2)."""
+    candles = _bullish_ict_fvg_series()
+    # Pad three closed bars after the retest so last_i - retest_i == 4.
+    base = len(candles)
+    for i in range(3):
+        candles.append(_c(base + i, 101.8, 102.2, 101.4, 101.9))
+    atr14 = [4.0] * len(candles)
+    setup = detect_setup("BTCUSDT", candles, atr14)
+    assert setup is not None
+    assert setup.direction == "long"
 
 
 def test_router_dispatches_ict_fvg():
