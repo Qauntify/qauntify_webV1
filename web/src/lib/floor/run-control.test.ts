@@ -158,4 +158,18 @@ describe("floor run-control (Supabase-backed)", () => {
     const [, init] = fetchMock.mock.calls[0];
     expect(JSON.parse(init.body)).toMatchObject({ last_signal: signal });
   });
+
+  it("throws when Supabase returns a non-2xx response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}, false));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(readFloorRunState()).rejects.toThrow("Could not read floor run state");
+  });
+
+  it("throws when the floor_run_state row is missing", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(readFloorRunState()).rejects.toThrow("floor_run_state row is missing");
+  });
 });

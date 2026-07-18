@@ -130,6 +130,8 @@ export async function endCycleProgress(): Promise<void> {
   await patchRow({ in_progress: false });
 }
 
+/** Not atomic — safe only because callers always run inside a
+ * beginCycle()-held lock; do not call outside that guard. */
 export async function incrementFloorCycle(): Promise<number> {
   const row = await readRow();
   const cycle = row.cycle + 1;
