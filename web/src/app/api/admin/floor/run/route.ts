@@ -31,8 +31,9 @@ export async function POST() {
 
   try {
     await runOneGoldCycleIfEnabled();
-  } catch {
+  } catch (error) {
     // The run is armed regardless — the next cron tick retries this cycle.
+    console.error("floor run cycle failed:", error);
   }
 
   return NextResponse.json({
