@@ -46,6 +46,13 @@ export type FloorRunPhase =
   | "pm"
   | "sleeping";
 
+export type FloorLogEntry = {
+  ts: string;
+  desk: string;
+  tone: string;
+  text: string;
+};
+
 export type FloorRunStatus = {
   running: boolean;
   runId: string | null;
