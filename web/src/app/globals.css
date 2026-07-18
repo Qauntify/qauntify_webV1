@@ -749,6 +749,89 @@ body {
   animation: floor-shimmer-move 1.1s linear infinite;
 }
 
+/* Gold floor live AI stream */
+.floor-stream-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 28rem;
+  overflow-y: auto;
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  padding: 0.5rem 0;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.78rem;
+  scroll-behavior: smooth;
+}
+
+.floor-stream-empty {
+  padding: 2.5rem 1.25rem;
+  text-align: center;
+  color: var(--slate);
+}
+
+.floor-stream-line {
+  display: grid;
+  grid-template-columns: 0.65rem 3rem 0.5rem 1fr auto;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  opacity: 0;
+  animation: floor-stream-in 0.25s ease forwards;
+}
+
+.floor-stream-line:last-of-type {
+  border-bottom: none;
+}
+
+.floor-stream-dot {
+  display: block;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+}
+
+.floor-stream-desk {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.floor-stream-sep {
+  color: var(--line);
+  user-select: none;
+}
+
+.floor-stream-text {
+  color: var(--ink);
+  line-height: 1.6;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.floor-stream-time {
+  color: var(--slate);
+  font-size: 0.65rem;
+  white-space: nowrap;
+  padding-left: 0.5rem;
+}
+
+@keyframes floor-stream-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes floor-node-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.06); }
