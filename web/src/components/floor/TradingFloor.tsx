@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { FloorBrief, FloorGoldSignal, FloorRunStatus } from "@/lib/floor/types";
+import type { FloorGoldSignal, FloorLogEntry, FloorRunStatus } from "@/lib/floor/types";
 import { Notice } from "@/components/shared/Notice";
 import { GoldFloorBoard } from "./GoldFloorBoard";
 import { FloorRunControls } from "./FloorRunControls";
@@ -10,7 +10,7 @@ import { FloorRobot } from "./FloorRobot";
 
 type BoardResponse = {
   symbol: string;
-  desks: FloorBrief[];
+  log: FloorLogEntry[];
   lastSignal: FloorGoldSignal | null;
   scanLine: string;
   error?: string;
@@ -27,7 +27,7 @@ const IDLE_STATUS: FloorRunStatus = {
 
 export function TradingFloor() {
   const [symbol, setSymbol] = useState("PAXGUSDT");
-  const [desks, setDesks] = useState<FloorBrief[]>([]);
+  const [boardLog, setBoardLog] = useState<FloorLogEntry[]>([]);
   const [boardLastSignal, setBoardLastSignal] = useState<FloorGoldSignal | null>(null);
   const [scanLine, setScanLine] = useState("Press Run to start the gold AI hunter.");
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export function TradingFloor() {
       const payload = await response.json() as BoardResponse;
       if (!response.ok) throw new Error(payload.error ?? "Could not load gold floor.");
       setSymbol(payload.symbol);
-      setDesks(payload.desks);
+      setBoardLog(payload.log);
       setBoardLastSignal(payload.lastSignal);
       setScanLine(payload.scanLine);
     } catch (loadError) {
@@ -53,20 +53,17 @@ export function TradingFloor() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadBoard();
-    }, 0);
+    const timer = window.setTimeout(() => { void loadBoard(); }, 0);
     return () => window.clearTimeout(timer);
   }, [loadBoard]);
 
   useEffect(() => {
     if (!runStatus.running) return undefined;
-    const timer = window.setInterval(() => {
-      void loadBoard();
-    }, 5000);
+    const timer = window.setInterval(() => { void loadBoard(); }, 3000);
     return () => window.clearInterval(timer);
   }, [runStatus.running, loadBoard]);
 
+  const log = boardLog;
   const lastSignal = runStatus.lastSignal ?? boardLastSignal;
 
   return (
@@ -79,7 +76,7 @@ export function TradingFloor() {
       {error ? <Notice tone="error">{error}</Notice> : null}
       <GoldFloorBoard
         symbol={symbol}
-        desks={desks}
+        log={log}
         lastSignal={lastSignal}
         scanLine={scanLine}
         isLoading={isLoadingBoard}
