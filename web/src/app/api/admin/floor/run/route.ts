@@ -3,13 +3,8 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin-api-guard";
-import { runGoldFloorLoop } from "@/lib/floor/gold-cycle";
-import {
-  beginFloorRun,
-  endFloorRun,
-  floorRunSnapshot,
-  requestFloorStop,
-} from "@/lib/floor/run-control";
+import { runOneGoldCycleIfEnabled } from "@/lib/floor/gold-cycle";
+import { armFloorRun, readFloorRunState } from "@/lib/floor/run-control";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -18,7 +13,7 @@ export async function GET() {
   const denied = await requireAdminApi();
   if (denied) return denied;
 
-  return NextResponse.json(floorRunSnapshot());
+  return NextResponse.json(await readFloorRunState());
 }
 
 export async function POST() {
@@ -26,20 +21,19 @@ export async function POST() {
   if (denied) return denied;
 
   const runId = randomUUID();
-  if (!beginFloorRun(runId)) {
+  const armed = await armFloorRun(runId);
+  if (!armed) {
     return NextResponse.json(
       { error: "Gold hunter is already running." },
       { status: 409 },
     );
   }
 
-  void runGoldFloorLoop(runId)
-    .catch(() => {
-      // loop errors are surfaced via lastMessage on the next poll
-    })
-    .finally(() => {
-      endFloorRun();
-    });
+  try {
+    await runOneGoldCycleIfEnabled();
+  } catch {
+    // The run is armed regardless — the next cron tick retries this cycle.
+  }
 
   return NextResponse.json({
     ok: true,
@@ -47,11 +41,4 @@ export async function POST() {
     runId,
     message: "Gold hunter started. It will run until you press Stop.",
   });
-}
-
-export async function DELETE() {
-  const denied = await requireAdminApi();
-  if (denied) return denied;
-  requestFloorStop();
-  return NextResponse.json({ ok: true, ...floorRunSnapshot() });
 }
