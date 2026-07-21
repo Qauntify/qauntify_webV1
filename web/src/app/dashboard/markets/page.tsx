@@ -44,7 +44,7 @@ export default async function MarketsPage({
   return (
     <DashboardShell
       title="Markets"
-      subtitle="Live USD candles from Kraken"
+      subtitle="Live USD markets — crypto/FX via Kraken, gold via COMEX"
       fullBleed
     >
       <div className="flex min-h-0 flex-1 flex-col">
