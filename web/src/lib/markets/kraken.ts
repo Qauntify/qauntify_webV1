@@ -103,12 +103,15 @@ export async function fetchKrakenCandles(
   url.searchParams.set("interval", String(minutes));
 
   const response = await fetch(url.toString(), {
-    next: { revalidate: 30 },
+    cache: "no-store",
   });
   if (!response.ok) {
     throw new Error(`Kraken HTTP ${response.status}`);
   }
   const candles = parseKrakenOhlcPayload(await response.json());
-  if (candles.length > limit) return candles.slice(-limit);
-  return candles;
+  // Drop the still-forming last bar so the chart matches engine closed bars.
+  const closed =
+    candles.length > 1 ? candles.slice(0, -1) : candles;
+  if (closed.length > limit) return closed.slice(-limit);
+  return closed;
 }

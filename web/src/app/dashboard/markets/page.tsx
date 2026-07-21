@@ -75,7 +75,11 @@ export default async function MarketsPage({
         </div>
 
         <div className="min-h-0 flex-1">
-          <MarketChart symbol={symbol} interval={interval} />
+          <MarketChart
+            key={`${symbol}-${interval}`}
+            symbol={symbol}
+            interval={interval}
+          />
         </div>
       </div>
     </DashboardShell>

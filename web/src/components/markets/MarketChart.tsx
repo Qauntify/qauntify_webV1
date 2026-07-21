@@ -24,7 +24,10 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastClose, setLastClose] = useState<number | null>(null);
+  const [candleCount, setCandleCount] = useState(0);
 
+  // Recreate the chart whenever the market changes so the price scale is
+  // never stuck on a previous symbol's range (BTC → GBP looked blank).
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -39,7 +42,10 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
         vertLines: { color: "rgba(148, 163, 184, 0.12)" },
         horzLines: { color: "rgba(148, 163, 184, 0.12)" },
       },
-      rightPriceScale: { borderVisible: false },
+      rightPriceScale: {
+        borderVisible: false,
+        autoScale: true,
+      },
       timeScale: { borderVisible: false, timeVisible: true },
       crosshair: { mode: 1 },
     });
@@ -49,26 +55,26 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
       borderVisible: false,
       wickUpColor: "#0f766e",
       wickDownColor: "#be123c",
+      priceFormat: {
+        type: "price",
+        precision: symbol === "GBPUSD" ? 5 : 2,
+        minMove: symbol === "GBPUSD" ? 0.00001 : 0.01,
+      },
     });
     chartRef.current = chart;
     seriesRef.current = series;
 
-    return () => {
-      chart.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setLastClose(null);
+    setCandleCount(0);
 
     async function load() {
       try {
         const response = await fetch(
           `/api/markets/candles?symbol=${encodeURIComponent(symbol)}&interval=${interval}`,
+          { cache: "no-store" },
         );
         const body = (await response.json()) as {
           candles?: MarketCandle[];
@@ -86,13 +92,23 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
           close: c.close,
         }));
         if (cancelled) return;
-        seriesRef.current?.setData(data);
-        chartRef.current?.timeScale().fitContent();
-        setLastClose(data.length ? data[data.length - 1].close : null);
+        if (!seriesRef.current || !chartRef.current) return;
+        if (data.length === 0) {
+          setError("No candles returned for this market");
+          setCandleCount(0);
+          setLastClose(null);
+          return;
+        }
+        seriesRef.current.setData(data);
+        chartRef.current.priceScale("right").applyOptions({ autoScale: true });
+        chartRef.current.timeScale().fitContent();
+        setCandleCount(data.length);
+        setLastClose(data[data.length - 1].close);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load chart");
           setLastClose(null);
+          setCandleCount(0);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -100,8 +116,12 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
     }
 
     void load();
+
     return () => {
       cancelled = true;
+      chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
     };
   }, [symbol, interval]);
 
@@ -115,7 +135,8 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
           <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">
             {lastClose != null
               ? lastClose.toLocaleString(undefined, {
-                  maximumFractionDigits: lastClose >= 100 ? 2 : 5,
+                  maximumFractionDigits:
+                    symbol === "GBPUSD" ? 5 : lastClose >= 100 ? 2 : 4,
                 })
               : "—"}
           </p>
@@ -125,7 +146,9 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
         ) : error ? (
           <p className="text-xs text-rose-700">{error}</p>
         ) : (
-          <p className="text-xs text-slate">Kraken public market data</p>
+          <p className="text-xs text-slate">
+            {candleCount} candles · Kraken
+          </p>
         )}
       </div>
       <div ref={containerRef} className="min-h-0 w-full flex-1" />
