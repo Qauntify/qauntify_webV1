@@ -435,7 +435,6 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         print(f"[{symbol}] open or recent duplicate setup, skipping")
         return ScanResult(candles=candles)
 
-    headlines = headlines_for_symbol()
     rag_block = retrieve_context(
         setup,
         strategy=strategy,
@@ -458,7 +457,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             timeframe=timeframe,
             rationale=confirmation.rationale,
             indicators=setup.indicators,
-            headlines=headlines,
+            headlines=[],
             direction=setup.direction,
             entry=setup.entry,
             stop_loss=setup.stop_loss,
@@ -492,7 +491,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             timeframe=timeframe,
             rationale=rationale,
             indicators=setup.indicators,
-            headlines=headlines,
+            headlines=[],
             direction=setup.direction,
             entry=setup.entry,
             stop_loss=setup.stop_loss,
@@ -515,7 +514,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             confidence=confirmation.confidence,
         ), candles=candles)
 
-    signal = make_signal(setup, confirmation, headlines, timeframe=timeframe)
+    signal = make_signal(setup, confirmation, [], timeframe=timeframe)
     try:
         with_retry(lambda: save_signal(
             signal, cfg.supabase_url, cfg.supabase_service_key, session=session,
