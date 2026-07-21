@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getClosedOutcomeSignals, getSignals, getStats } from "./signals";
+import { getClosedOutcomeSignals, getSignals, getStats } from "@/lib/signals";
 
 const ROW = {
   id: "abc-123",

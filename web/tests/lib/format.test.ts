@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatPrice, formatRelativeTime } from "./format";
+import { formatPrice, formatRelativeTime } from "@/lib/format";
 
 describe("formatPrice", () => {
   it("uses no decimals for large prices", () => {

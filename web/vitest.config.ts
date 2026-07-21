@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true, // lets @testing-library/react register its afterEach cleanup
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["tests/**/*.test.{ts,tsx}"],
   },
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },

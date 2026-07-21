@@ -34,38 +34,42 @@ class FakeLLM:
         return self._reply
 
 
-def test_build_messages_includes_setup_and_news():
-    messages = build_messages(SETUP, HEADLINES)
+def test_build_messages_includes_setup():
+    messages = build_messages(SETUP)
     assert messages[0]["role"] == "system"
     user_content = messages[1]["content"]
     assert "BTCUSDT" in user_content
     assert "long" in user_content
     assert "100.0" in user_content       # entry
     assert "98.0" in user_content        # stop loss
-    assert "Bitcoin breaks resistance" in user_content
-    assert "economic-calendar" in messages[0]["content"] or (
-        "economic calendar" in messages[0]["content"].lower()
-    )
     assert "Market session" in user_content
-    assert "Economic calendar" in user_content
 
 
-def test_build_messages_includes_session_and_calendar_blocks():
+def test_build_messages_is_purely_technical():
+    """News and calendar must be gone from both halves of the prompt."""
+    messages = build_messages(SETUP)
+    system = messages[0]["content"].lower()
+    user_content = messages[1]["content"].lower()
+    assert "headline" not in user_content
+    assert "economic calendar" not in user_content
+    assert "headline" not in system
+    assert "calendar" not in system
+
+
+def test_system_prompt_leans_confirm_on_borderline_setups():
+    messages = build_messages(SETUP)
+    system = messages[0]["content"].lower()
+    assert "lean confirm" in system
+    assert "reject only" in system
+
+
+def test_build_messages_includes_session_context():
     messages = build_messages(
-        SETUP, HEADLINES,
+        SETUP,
         session_context="Market session at 2026-07-14 14:00 UTC: London / New York overlap",
-        calendar_block="- 2026-07-14 12:30 UTC | USD | High | CPI m/m | forecast 0.2%",
     )
     user_content = messages[1]["content"]
     assert "London / New York overlap" in user_content
-    assert "CPI m/m" in user_content
-    assert "May confirm trades during news" in messages[0]["content"] or (
-        "MAY confirm trades during news" in messages[0]["content"]
-    )
-
-def test_build_messages_handles_no_headlines():
-    messages = build_messages(SETUP, [])
-    assert "No recent headlines available" in messages[1]["content"]
 
 
 def test_build_messages_includes_adx_and_htf_trend_when_present():
@@ -75,13 +79,13 @@ def test_build_messages_includes_adx_and_htf_trend_when_present():
         indicators={"ema9": 101.0, "ema21": 100.0, "rsi": 55.0,
                     "macd_hist": 0.5, "adx": 27.3, "htf_trend": "up"},
     )
-    user_content = build_messages(setup, [])[1]["content"]
+    user_content = build_messages(setup)[1]["content"]
     assert "ADX=27.3" in user_content
     assert "HTF trend=up" in user_content
 
 
 def test_build_messages_omits_adx_and_htf_trend_when_absent():
-    user_content = build_messages(SETUP, [])[1]["content"]
+    user_content = build_messages(SETUP)[1]["content"]
     assert "ADX=" not in user_content
     assert "HTF trend=" not in user_content
 
@@ -124,14 +128,14 @@ def test_parse_confirmation_infinite_confidence_is_reject_safe():
 
 def test_confirm_setup_happy_path():
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 80, "rationale": "ok"}')
-    result = confirm_setup(SETUP, HEADLINES, llm)
+    result = confirm_setup(SETUP, llm)
     assert result.verdict == "confirm"
     assert llm.last_messages is not None
 
 
 def test_confirm_setup_llm_error_is_reject():
     llm = FakeLLM(error=RuntimeError("HTTP 429"))
-    result = confirm_setup(SETUP, HEADLINES, llm)
+    result = confirm_setup(SETUP, llm)
     assert result.verdict == "reject"
     assert result.confidence == 0
     assert "HTTP 429" in result.rationale

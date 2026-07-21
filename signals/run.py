@@ -11,7 +11,6 @@ import requests
 
 from signals.market_client import fetch_candles
 from signals.calendar_client import (
-    calendar_block_for_symbol,
     fetch_calendar_events,
 )
 from signals.composer import confirm_setup, no_setup_rationale
@@ -237,12 +236,6 @@ def _fetch_calendar_events_safe(session=None):
         return None
 
 
-CALENDAR_UNAVAILABLE_BLOCK = (
-    "Economic calendar UNAVAILABLE this run (feed error). "
-    "Do not assume a quiet macro day — weigh headlines carefully and reduce "
-    "confidence if the setup looks news-driven."
-)
-
 # Just enough candles for EMA21 to warm up plus a little history — this is
 # only a trend-direction read, not a full setup scan.
 HTF_TREND_CANDLE_LIMIT = 30
@@ -343,11 +336,6 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         if feed_titles is not None:
             return filter_headlines(feed_titles, symbol)
         return _fetch_headlines_safe(symbol, session=session)
-
-    def calendar_context_for_symbol():
-        if calendar_events is None:
-            return CALENDAR_UNAVAILABLE_BLOCK
-        return calendar_block_for_symbol(calendar_events, symbol)
 
     closes = [c.close for c in candles]
     highs = [c.high for c in candles]
@@ -458,9 +446,8 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         session=session,
     )
     confirmation = confirm_setup(
-        setup, headlines, llm, strategy=strategy, timeframe=timeframe,
+        setup, llm, strategy=strategy, timeframe=timeframe,
         session_context=describe_market_session(),
-        calendar_block=calendar_context_for_symbol(),
         rag_block=rag_block or None,
     )
     if confirmation.verdict != "confirm":

@@ -45,6 +45,13 @@ def test_local_playbook_filters_by_strategy():
     assert chunks
     assert all(c["strategy"] == "ict_fvg" for c in chunks)
     assert len(chunks) <= 2
+    assert "confirm" in chunks[0]["title"].lower()
+
+
+def test_local_playbook_prefers_confirm_gate_over_reject_cues():
+    chunks = local_playbook_chunks("ict_fvg", "ict_fvg 5m long confirm risk reward")
+    assert chunks
+    assert "confirm" in chunks[0]["title"].lower()
 
 
 def test_retrieve_context_soft_fails_and_uses_local_playbook(monkeypatch):
@@ -78,7 +85,7 @@ def test_retrieve_context_soft_fails_and_uses_local_playbook(monkeypatch):
 
 def test_build_messages_includes_rag_block():
     messages = build_messages(
-        SETUP, ["headline"], strategy="ict_fvg", timeframe="5m",
+        SETUP, strategy="ict_fvg", timeframe="5m",
         rag_block="Retrieved context:\n- sample",
     )
     assert "Retrieved context" in messages[1]["content"]
@@ -97,7 +104,7 @@ def test_confirm_setup_passes_rag_into_llm():
 
     llm = FakeLLM()
     result = confirm_setup(
-        SETUP, [], llm, strategy="ict_fvg", timeframe="5m",
+        SETUP, llm, strategy="ict_fvg", timeframe="5m",
         rag_block="Retrieved context:\n- past win",
     )
     assert result.verdict == "confirm"

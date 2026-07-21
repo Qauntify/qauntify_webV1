@@ -9,12 +9,12 @@ SWEEP_LOOKBACK = 12
 CHOCH_LOOKBACK = 5
 # CHoCH must complete within this many bars of the latest closed candle,
 # otherwise the setup is stale relative to a market-order entry.
-MAX_BARS_SINCE_CHOCH = 3
+MAX_BARS_SINCE_CHOCH = 4
 ATR_STOP_BUFFER = 0.5
 # Reject setups whose stop is farther than this many ATRs from entry —
 # otherwise multi-R targets become unrealistic for a late market entry.
 MAX_STOP_ATR = 2.0
-ADX_TREND_MIN = 20.0
+ADX_TREND_MIN = 18.0
 # A tight PIVOT_LEFT/RIGHT window flags almost any small wick past a prior
 # swing point as a "sweep." Requiring the wick to clear the level by at
 # least this fraction of ATR filters that noise out, keeping only sweeps

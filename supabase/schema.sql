@@ -162,13 +162,20 @@ create table if not exists public.bot_settings (
     min_store_confidence integer not null
         default 0 check (min_store_confidence between 0 and 100),
     signal_strategy text not null default 'ema_cross'
-        check (signal_strategy in ('ema_cross', 'ict_smc')),
+        check (signal_strategy in ('ema_cross', 'ict_smc', 'sr_zone')),
     updated_at timestamptz not null default now()
 );
 
 -- Existing installs: add strategy + store-confidence columns without recreate.
 alter table public.bot_settings
     add column if not exists signal_strategy text not null default 'ema_cross';
+-- Refresh the allowed-strategy check so admin-selectable strategies added after
+-- the original install (e.g. sr_zone) are accepted. Idempotent.
+alter table public.bot_settings
+    drop constraint if exists bot_settings_signal_strategy_check;
+alter table public.bot_settings
+    add constraint bot_settings_signal_strategy_check
+    check (signal_strategy in ('ema_cross', 'ict_smc', 'sr_zone'));
 alter table public.bot_settings
     add column if not exists min_store_confidence integer not null default 0;
 

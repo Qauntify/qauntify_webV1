@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { dispatchEngineWorkflow } from "./github-engine";
+import { dispatchEngineWorkflow } from "@/lib/github-engine";
 
 describe("dispatchEngineWorkflow", () => {
   afterEach(() => {

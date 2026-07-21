@@ -23,7 +23,18 @@ def format_alert(signal: Signal) -> str:
 def format_no_signal_alert(report: NoSignalReport) -> str:
     """Telegram HTML-mode message explaining why no signal was stored."""
     ind = report.indicators
-    if ind.get("strategy") == "ict_smc" or "structure" in ind:
+    if ind.get("strategy") == "sr_zone" or "zone_low" in ind:
+        parts = []
+        if "side" in ind:
+            parts.append(str(ind["side"]))
+        if "zone_low" in ind and "zone_high" in ind:
+            parts.append(f"zone {ind['zone_low']:.2f}-{ind['zone_high']:.2f}")
+        if "atr" in ind:
+            parts.append(f"ATR {ind['atr']:.2f}")
+        if "adx" in ind:
+            parts.append(f"ADX {ind['adx']:.1f}")
+        indicator_line = " | ".join(parts) if parts else "S/R context"
+    elif ind.get("strategy") == "ict_smc" or "structure" in ind:
         parts = []
         if "structure" in ind:
             parts.append(f"structure {ind['structure']}")

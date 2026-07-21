@@ -5,7 +5,7 @@ import {
   aiResponsesExtraParams,
   aiResponsesHref,
   parseAiEventFilters,
-} from "./admin-ai-filters";
+} from "@/lib/admin-ai-filters";
 
 describe("parseAiEventFilters", () => {
   it("parses known filters and uppercases symbol", () => {

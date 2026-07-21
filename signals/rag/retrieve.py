@@ -147,11 +147,9 @@ def local_playbook_chunks(strategy: str, query: str,
             continue
         text = f"{chunk['title']} {chunk['body']}".lower()
         score = sum(1 for t in tokens if t in text)
-        # Prefer confirm-gate chunks slightly when query mentions confirm cues.
-        if "reject" in query.lower() and "reject" in chunk["title"].lower():
-            score += 2
+        # Prefer confirm-gate chunks so the reviewer sees approval cues first.
         if "confirm" in chunk["title"].lower():
-            score += 1
+            score += 2
         scored.append((score, chunk))
     scored.sort(key=lambda item: (-item[0], item[1]["title"]))
     return [c for _, c in scored[:limit]]
@@ -160,7 +158,7 @@ def local_playbook_chunks(strategy: str, query: str,
 def _playbook_query(setup, strategy: str, timeframe: str) -> str:
     return (
         f"{strategy} {timeframe} {setup.direction} "
-        f"confirm reject risk reward stop take profit"
+        f"confirm risk reward stop take profit"
     )
 
 

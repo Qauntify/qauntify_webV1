@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { Signal } from "@/lib/signals";
-import { TradeTicket } from "./TradeTicket";
+import { TradeTicket } from "@/components/shared/TradeTicket";
 
 const SIGNAL: Signal = {
   id: "t1",

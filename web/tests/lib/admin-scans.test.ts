@@ -5,7 +5,7 @@ import {
   aiResponsesWindowForRun,
   countOutcomesByStatus,
   parseEngineOutcomes,
-} from "./admin-scans";
+} from "@/lib/admin-scans";
 
 describe("parseEngineOutcomes", () => {
   it("maps valid outcome rows", () => {

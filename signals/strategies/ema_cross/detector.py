@@ -1,7 +1,7 @@
 """EMA 9/21 crossover with RSI, MACD, ADX regime, and HTF-trend filters."""
 from signals.models import CandidateSetup, take_profits_from_risk
 
-CROSS_LOOKBACK = 3
+CROSS_LOOKBACK = 4
 SWING_WINDOW = 10
 ATR_STOP_BUFFER = 0.5
 RSI_OVERBOUGHT = 70.0
@@ -9,7 +9,7 @@ RSI_OVERSOLD = 30.0
 # Below this, ADX marks a non-trending/ranging market — the exact regime
 # where EMA crossovers whipsaw most. 20 is the standard Wilder threshold
 # separating trending from ranging conditions.
-ADX_TREND_MIN = 20.0
+ADX_TREND_MIN = 18.0
 # Cap stop distance so late entries cannot invent oversized 2R targets.
 MAX_STOP_ATR = 2.5
 # If price has already traveled this many ATRs from the cross-bar close,

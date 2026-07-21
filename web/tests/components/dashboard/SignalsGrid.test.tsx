@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { Signal } from "@/lib/signals";
-import { SignalsGrid } from "./SignalsGrid";
+import { SignalsGrid } from "@/components/dashboard/SignalsGrid";
 
 const SIGNAL: Signal = {
   id: "t1",

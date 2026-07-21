@@ -209,6 +209,35 @@ def test_format_no_signal_alert_for_rejected():
     assert "Confidence 25%" in text
 
 
+def test_format_no_signal_alert_for_sr_zone_no_setup():
+    report = NoSignalReport(
+        symbol="BTCUSDT", timeframe="1h", kind="no_setup",
+        rationale="No tested S/R zone rejecting.",
+        indicators={"strategy": "sr_zone", "atr": 12.5, "adx": 18.0},
+    )
+    text = format_no_signal_alert(report)
+    assert "ATR 12.50" in text
+    assert "ADX 18.0" in text
+    # Must NOT fall through to the EMA branch and print zeroed readings.
+    assert "EMA9" not in text
+
+
+def test_format_no_signal_alert_for_sr_zone_rejected_shows_zone():
+    report = NoSignalReport(
+        symbol="BTCUSDT", timeframe="1h", kind="rejected",
+        rationale="Bounce rejected.",
+        indicators={
+            "strategy": "sr_zone", "side": "support",
+            "zone_low": 100.0, "zone_high": 100.5, "touches": 2, "atr": 4.0,
+        },
+        direction="long", entry=103.0, stop_loss=98.0, take_profit=108.0,
+        confidence=40,
+    )
+    text = format_no_signal_alert(report)
+    assert "support" in text
+    assert "zone 100.00-100.50" in text
+
+
 def test_send_no_signal_alert_posts_to_bot_api():
     session = FakeSession()
     send_no_signal_alert(_no_signal_report(), "bot-token", "chat-42", session=session)

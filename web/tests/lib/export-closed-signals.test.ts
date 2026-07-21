@@ -7,7 +7,7 @@ import {
   exportFilename,
   parseExportTab,
   timeframeForTab,
-} from "./export-closed-signals";
+} from "@/lib/export-closed-signals";
 
 const CLOSED: Signal = {
   id: "c1",

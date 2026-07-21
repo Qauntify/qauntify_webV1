@@ -7,7 +7,7 @@ import {
   parseKrakenOhlcPayload,
   parseMarketInterval,
   parseYahooChartPayload,
-} from "./kraken";
+} from "@/lib/markets/kraken";
 
 describe("canonicalMarketSymbol", () => {
   it("renames USDT quotes and PAXG to XAUUSD", () => {

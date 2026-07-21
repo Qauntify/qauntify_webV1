@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { StatsBar } from "./StatsBar";
+import { StatsBar } from "@/components/dashboard/StatsBar";
 
 describe("StatsBar", () => {
   it("renders totals, the long/short split, and the win rate", () => {

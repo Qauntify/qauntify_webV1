@@ -14,7 +14,8 @@ PLAYBOOK_CHUNKS = (
             "and Fair Value Gap retest all printed recently. Prefer 15m HTF "
             "agreement. Tight targets (0.5R/1R/1.5R) — reject if stop is wide "
             "vs ATR or the retest is stale. No session killzone requirement; "
-            "structure quality matters more than clock."
+            "structure quality matters more than clock. When borderline but "
+            "technically valid, lean confirm with moderate confidence."
         ),
     },
     {
@@ -35,7 +36,9 @@ PLAYBOOK_CHUNKS = (
             "Scalp ce_lwma: need a fresh H1 Chandelier Exit flip into the "
             "matching M15 LWMA200 zone (long in discount / short in premium). "
             "Entry is last closed M15; SL is the active CE trail. Confirm when "
-            "zone + flip align and R:R to 1R/2R/3R stays sensible."
+            "zone + flip align and R:R to 1R/2R/3R stays sensible. When "
+            "borderline but technically valid, lean confirm with moderate "
+            "confidence."
         ),
     },
     {
@@ -55,7 +58,8 @@ PLAYBOOK_CHUNKS = (
             "Swing ict_smc: liquidity sweep then structure shift / CHoCH. "
             "Prefer HTF 4h trend agreement and healthy ADX when provided. "
             "Targets are 1R/2R/3R. Confirm when displacement after the sweep "
-            "is clear and stop sits beyond the swept liquidity."
+            "is clear and stop sits beyond the swept liquidity. When borderline "
+            "but technically valid, lean confirm with moderate confidence."
         ),
     },
     {
@@ -68,12 +72,38 @@ PLAYBOOK_CHUNKS = (
         ),
     },
     {
+        "strategy": "sr_zone",
+        "title": "S/R bounce confirm gate",
+        "body": (
+            "Support/Resistance sr_zone: trade a bounce only when price reaches "
+            "a tested zone (>=2 touches) AND a confirmation candle rejects it — "
+            "a rejection wick that closes back inside the range (bullish at "
+            "support, bearish at resistance). Prefer the 1st-2nd touch; each "
+            "retest weakens the level. Best in ranging conditions; stop sits "
+            "beyond the zone, targets 1R/2R/3R. When borderline but technically "
+            "valid, lean confirm with moderate confidence."
+        ),
+    },
+    {
+        "strategy": "sr_zone",
+        "title": "S/R bounce reject cues",
+        "body": (
+            "Reject sr_zone on a mere touch with no rejection close, on a "
+            "strong trend (high ADX) that runs levels over, when HTF trend "
+            "opposes the bounce, on a heavily-retested level about to break, "
+            "or when the wick pierced deep through the zone (a breakdown, not "
+            "a rejection)."
+        ),
+    },
+    {
         "strategy": "ema_cross",
         "title": "EMA cross confirm gate",
         "body": (
             "Swing ema_cross: EMA9/21 crossover with RSI and MACD histogram "
             "filters. Prefer HTF trend agreement when provided. Confirm when "
-            "momentum agrees and stop placement leaves workable 1R/2R/3R."
+            "momentum agrees and stop placement leaves workable 1R/2R/3R. "
+            "When borderline but technically valid, lean confirm with moderate "
+            "confidence."
         ),
     },
     {
