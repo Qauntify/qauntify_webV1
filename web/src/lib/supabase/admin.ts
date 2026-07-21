@@ -34,6 +34,12 @@ export const SIGNAL_STRATEGIES = [
     description:
       "Smart-money style — sweep beyond a swing level, then a structure shift.",
   },
+  {
+    id: "sr_zone",
+    label: "Support / Resistance (bounce)",
+    description:
+      "Buy support / sell resistance on a confirmation candle at a tested zone. Favours ranging markets.",
+  },
 ] as const;
 
 export type AiEvent = {

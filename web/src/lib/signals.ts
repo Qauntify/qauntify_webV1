@@ -25,6 +25,10 @@ export type SignalIndicators = {
   ceDirection?: string;
   lwma200?: number;
   zone?: string;
+  side?: string;
+  zoneLow?: number;
+  zoneHigh?: number;
+  touches?: number;
 };
 
 export type Signal = {
@@ -214,6 +218,10 @@ function parseIndicators(raw: Record<string, unknown>): SignalIndicators {
     ceDirection: str(raw.ce_direction),
     lwma200: num(raw.lwma200),
     zone: str(raw.zone),
+    side: str(raw.side),
+    zoneLow: num(raw.zone_low),
+    zoneHigh: num(raw.zone_high),
+    touches: num(raw.touches),
   };
 }
 

@@ -43,6 +43,21 @@ function indicatorRows(signal: Signal): { label: string; value: string }[] {
     if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
     return rows.length > 0 ? rows : [{ label: "Strategy", value: "ICT / SMC" }];
   }
+  if (ind.strategy === "sr_zone" || ind.zoneLow !== undefined) {
+    if (ind.side) rows.push({ label: "Side", value: ind.side });
+    const lo = fmtNum(ind.zoneLow, 2);
+    const hi = fmtNum(ind.zoneHigh, 2);
+    if (lo && hi) rows.push({ label: "Zone", value: `${lo}–${hi}` });
+    if (ind.touches !== undefined) {
+      rows.push({ label: "Touches", value: String(ind.touches) });
+    }
+    const atr = fmtNum(ind.atr, 4);
+    if (atr) rows.push({ label: "ATR", value: atr });
+    const adx = fmtNum(ind.adx, 1);
+    if (adx) rows.push({ label: "ADX", value: adx });
+    if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
+    return rows.length > 0 ? rows : [{ label: "Strategy", value: "S/R bounce" }];
+  }
   const ema9 = fmtNum(ind.ema9, 2);
   const ema21 = fmtNum(ind.ema21, 2);
   const rsi = fmtNum(ind.rsi, 1);
