@@ -54,10 +54,13 @@ class FakeSession:
 
 def test_format_alert_contains_trade_details():
     text = format_alert(_signal())
-    assert "<b>LONG BTCUSDT</b>" in text
-    assert "(1h)" in text
-    assert "Entry 108240 | SL 106900 | TP1" in text
-    assert "Confidence 80%" in text
+    assert "<b>▲ LONG</b>" in text
+    assert "<b>BTCUSDT</b>" in text
+    assert "1h" in text
+    assert "Entry  <code>108240</code>" in text
+    assert "Stop   <code>106900</code>" in text
+    assert "TP1    <code>110920</code>" in text
+    assert "Confidence</b>  80%" in text
     assert "Looks good." in text
     assert text.startswith("<b>")
 
@@ -65,7 +68,8 @@ def test_format_alert_contains_trade_details():
 def test_format_alert_short_uses_red_and_escapes_html():
     text = format_alert(_signal(direction="short", rationale="a<b>&c"))
     assert text.startswith("<b>")
-    assert "<b>SHORT BTCUSDT</b>" in text
+    assert "<b>▼ SHORT</b>" in text
+    assert "<b>BTCUSDT</b>" in text
     assert "a&lt;b&gt;&amp;c" in text
 
 
@@ -197,16 +201,18 @@ def _no_signal_report(kind="no_setup", rationale="No crossover yet."):
 
 def test_format_no_signal_alert_for_no_setup():
     text = format_no_signal_alert(_no_signal_report())
-    assert "<b>NO SIGNAL BTCUSDT</b>" in text
+    assert "NO SIGNAL" in text
+    assert "<b>BTCUSDT</b>" in text
     assert "EMA9 101.00" in text
     assert "No crossover yet." in text
 
 
 def test_format_no_signal_alert_for_rejected():
     text = format_no_signal_alert(_no_signal_report(kind="rejected"))
-    assert "<b>REJECTED BTCUSDT</b>" in text
-    assert "LONG candidate @ 100" in text
-    assert "Confidence 25%" in text
+    assert "SIGNAL REJECTED" in text
+    assert "<b>BTCUSDT</b>" in text
+    assert "LONG  @  <code>100</code>" in text
+    assert "Confidence  25%" in text
 
 
 def test_format_no_signal_alert_for_sr_zone_no_setup():
@@ -242,7 +248,8 @@ def test_send_no_signal_alert_posts_to_bot_api():
     session = FakeSession()
     send_no_signal_alert(_no_signal_report(), "bot-token", "chat-42", session=session)
     assert session.last_url == "https://api.telegram.org/botbot-token/sendMessage"
-    assert "NO SIGNAL BTCUSDT" in session.last_json["text"]
+    assert "NO SIGNAL" in session.last_json["text"]
+    assert "BTCUSDT" in session.last_json["text"]
 
 
 def test_format_run_summary_contains_outcomes():
@@ -254,10 +261,11 @@ def test_format_run_summary_contains_outcomes():
             {"symbol": "ETHUSDT", "status": "CONFIRMED", "extra": "LONG 82%"},
         ],
     )
-    assert "<b>ENGINE RUN</b> (1h)" in text
-    assert "Run id: run-1" in text
-    assert "BTCUSDT: NO SIGNAL" in text
-    assert "ETHUSDT: CONFIRMED" in text
+    assert "ENGINE RUN" in text
+    assert "<b>Timeframe</b>  1h" in text
+    assert "<code>run-1</code>" in text
+    assert "BTCUSDT  ·  NO SIGNAL  ·  sideways" in text
+    assert "ETHUSDT  ·  CONFIRMED  ·  LONG 82%" in text
 
 
 def test_send_run_summary_posts_to_bot_api():
@@ -322,5 +330,5 @@ def test_format_run_summary_tags_lines_with_timeframe():
         {"symbol": "BTCUSDT", "status": "NO SIGNAL", "extra": "",
          "timeframe": "1h"},
     ])
-    assert "BTCUSDT [15m]: CONFIRMED — LONG 82%" in text
-    assert "BTCUSDT [1h]: NO SIGNAL" in text
+    assert "BTCUSDT [15m]  ·  CONFIRMED  ·  LONG 82%" in text
+    assert "BTCUSDT [1h]  ·  NO SIGNAL" in text

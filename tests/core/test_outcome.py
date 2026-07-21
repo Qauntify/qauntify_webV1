@@ -285,16 +285,20 @@ def test_track_ignores_hits_after_expiry_window(monkeypatch):
 
 def test_format_outcome_alert_long_tp():
     text = format_outcome_alert(_row(), "tp_hit")
-    assert "TP HIT BTCUSDT" in text
-    assert "LONG +10.00%" in text
-    assert "Entry 100 → 110" in text
+    assert "TAKE PROFIT" in text
+    assert "<b>BTCUSDT</b>" in text
+    assert "LONG" in text
+    assert "+10.00%" in text
+    assert "Entry  <code>100</code>  →  <code>110</code>" in text
 
 
 def test_format_outcome_alert_short_sl_is_negative():
     row = _row(direction="short", stop=105.0, target=90.0)
     text = format_outcome_alert(row, "sl_hit")
-    assert "SL HIT BTCUSDT" in text
-    assert "SHORT -5.00%" in text
+    assert "STOP LOSS" in text
+    assert "<b>BTCUSDT</b>" in text
+    assert "SHORT" in text
+    assert "-5.00%" in text
 
 
 def test_track_fetches_candles_in_the_rows_own_timeframe(monkeypatch):

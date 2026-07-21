@@ -5,68 +5,123 @@ import requests
 
 from signals.models import NoSignalReport, Signal
 
+_DIVIDER = "━━━━━━━━━━━━━━━━━━━━"
+_SUBDIVIDER = "────────────────────"
+
+
+def _esc(text: str) -> str:
+    return html.escape(text)
+
+
+def _price(value: float) -> str:
+    return f"<code>{value:g}</code>"
+
+
+def _header(title: str) -> str:
+    return f"<b>{_DIVIDER}\n  {_esc(title)}\n{_DIVIDER}</b>"
+
+
+def _subsection(title: str) -> str:
+    return f"<b>{_esc(title)}</b>"
+
+
+def _direction_arrow(direction: str) -> str:
+    return "▲" if direction == "long" else "▼"
+
 
 def format_alert(signal: Signal) -> str:
     """Telegram HTML-mode message for one confirmed signal."""
+    direction = signal.direction.upper()
+    arrow = _direction_arrow(signal.direction)
+    symbol = _esc(signal.symbol)
+    timeframe = _esc(signal.timeframe)
+    tp2 = signal.take_profit_2 or signal.take_profit
+    tp3 = signal.take_profit_3 or signal.take_profit
     return (
-        f"<b>{signal.direction.upper()} {html.escape(signal.symbol)}</b>"
-        f" ({html.escape(signal.timeframe)})\n"
-        f"Entry {signal.entry:g} | SL {signal.stop_loss:g}"
-        f" | TP1 {signal.take_profit:g}"
-        f" | TP2 {(signal.take_profit_2 or signal.take_profit):g}"
-        f" | TP3 {(signal.take_profit_3 or signal.take_profit):g}\n"
-        f"Confidence {signal.confidence}%\n"
-        f"{html.escape(signal.rationale)}"
+        f"{_header('NEW SIGNAL')}\n"
+        f"\n"
+        f"<b>{arrow} {direction}</b>  ·  <b>{symbol}</b>  ·  {timeframe}\n"
+        f"\n"
+        f"{_subsection('Confidence')}  {signal.confidence}%\n"
+        f"\n"
+        f"{_subsection('Trade Levels')}\n"
+        f"Entry  {_price(signal.entry)}\n"
+        f"Stop   {_price(signal.stop_loss)}\n"
+        f"TP1    {_price(signal.take_profit)}\n"
+        f"TP2    {_price(tp2)}\n"
+        f"TP3    {_price(tp3)}\n"
+        f"\n"
+        f"{_subsection('Analysis')}\n"
+        f"<i>{_esc(signal.rationale)}</i>"
+    )
+
+
+def _indicator_line(indicators: dict) -> str:
+    if indicators.get("strategy") == "sr_zone" or "zone_low" in indicators:
+        parts = []
+        if "side" in indicators:
+            parts.append(str(indicators["side"]))
+        if "zone_low" in indicators and "zone_high" in indicators:
+            parts.append(
+                f"zone {indicators['zone_low']:.2f}-{indicators['zone_high']:.2f}"
+            )
+        if "atr" in indicators:
+            parts.append(f"ATR {indicators['atr']:.2f}")
+        if "adx" in indicators:
+            parts.append(f"ADX {indicators['adx']:.1f}")
+        return " | ".join(parts) if parts else "S/R context"
+    if indicators.get("strategy") == "ict_smc" or "structure" in indicators:
+        parts = []
+        if "structure" in indicators:
+            parts.append(f"structure {indicators['structure']}")
+        if "atr" in indicators:
+            parts.append(f"ATR {indicators['atr']:.2f}")
+        if "adx" in indicators:
+            parts.append(f"ADX {indicators['adx']:.1f}")
+        return " | ".join(parts) if parts else "ICT/SMC context"
+    return (
+        f"EMA9 {indicators.get('ema9', 0):.2f} | "
+        f"EMA21 {indicators.get('ema21', 0):.2f} | "
+        f"RSI {indicators.get('rsi', 0):.1f} | "
+        f"MACD {indicators.get('macd_hist', 0):.4f}"
     )
 
 
 def format_no_signal_alert(report: NoSignalReport) -> str:
     """Telegram HTML-mode message explaining why no signal was stored."""
-    ind = report.indicators
-    if ind.get("strategy") == "sr_zone" or "zone_low" in ind:
-        parts = []
-        if "side" in ind:
-            parts.append(str(ind["side"]))
-        if "zone_low" in ind and "zone_high" in ind:
-            parts.append(f"zone {ind['zone_low']:.2f}-{ind['zone_high']:.2f}")
-        if "atr" in ind:
-            parts.append(f"ATR {ind['atr']:.2f}")
-        if "adx" in ind:
-            parts.append(f"ADX {ind['adx']:.1f}")
-        indicator_line = " | ".join(parts) if parts else "S/R context"
-    elif ind.get("strategy") == "ict_smc" or "structure" in ind:
-        parts = []
-        if "structure" in ind:
-            parts.append(f"structure {ind['structure']}")
-        if "atr" in ind:
-            parts.append(f"ATR {ind['atr']:.2f}")
-        if "adx" in ind:
-            parts.append(f"ADX {ind['adx']:.1f}")
-        indicator_line = " | ".join(parts) if parts else "ICT/SMC context"
-    else:
-        indicator_line = (
-            f"EMA9 {ind.get('ema9', 0):.2f} | EMA21 {ind.get('ema21', 0):.2f} | "
-            f"RSI {ind.get('rsi', 0):.1f} | MACD {ind.get('macd_hist', 0):.4f}"
-        )
+    symbol = _esc(report.symbol)
+    timeframe = _esc(report.timeframe)
+    indicator_line = _indicator_line(report.indicators)
     if report.kind == "rejected":
-        header = (
-            f"<b>REJECTED {html.escape(report.symbol)}</b>"
-            f" ({html.escape(report.timeframe)})"
+        direction = _esc((report.direction or "").upper())
+        return (
+            f"{_header('SIGNAL REJECTED')}\n"
+            f"\n"
+            f"<b>{symbol}</b>  ·  {timeframe}\n"
+            f"\n"
+            f"{_subsection('Candidate')}\n"
+            f"{direction}  @  {_price(report.entry)}\n"
+            f"Stop  {_price(report.stop_loss)}  ·  "
+            f"TP  {_price(report.take_profit)}\n"
+            f"Confidence  {report.confidence}%\n"
+            f"\n"
+            f"{_subsection('Market Context')}\n"
+            f"{_esc(indicator_line)}\n"
+            f"\n"
+            f"{_subsection('Reason')}\n"
+            f"<i>{_esc(report.rationale)}</i>"
         )
-        trade_line = (
-            f"{html.escape((report.direction or '').upper())} candidate"
-            f" @ {report.entry:g} | SL {report.stop_loss:g}"
-            f" | TP {report.take_profit:g}\n"
-            f"Confidence {report.confidence}%"
-        )
-        body = f"{header}\n{trade_line}\n{indicator_line}\n{html.escape(report.rationale)}"
-    else:
-        header = (
-            f"<b>NO SIGNAL {html.escape(report.symbol)}</b>"
-            f" ({html.escape(report.timeframe)})"
-        )
-        body = f"{header}\n{indicator_line}\n{html.escape(report.rationale)}"
-    return body
+    return (
+        f"{_header('NO SIGNAL')}\n"
+        f"\n"
+        f"<b>{symbol}</b>  ·  {timeframe}\n"
+        f"\n"
+        f"{_subsection('Market Context')}\n"
+        f"{_esc(indicator_line)}\n"
+        f"\n"
+        f"{_subsection('Reason')}\n"
+        f"<i>{_esc(report.rationale)}</i>"
+    )
 
 
 def send_message(text: str, bot_token: str, chat_id: str,
@@ -112,18 +167,24 @@ def send_no_signal_alert(report: NoSignalReport, bot_token: str, chat_id: str,
 def format_outcome_alert(signal_row: dict, outcome: str) -> str:
     """Telegram HTML-mode message for TP1/TP2/TP3 or SL hits."""
     entry = signal_row["entry"]
-    direction = html.escape(signal_row["direction"].upper())
-    symbol = html.escape(signal_row["symbol"])
+    direction = signal_row["direction"]
+    direction_label = _esc(direction.upper())
+    symbol = _esc(signal_row["symbol"])
+    arrow = _direction_arrow(direction)
     if outcome == "sl_hit":
         exit_price = signal_row["stop_loss"]
         move = (exit_price - entry) / entry * 100
-        if signal_row["direction"] == "short":
+        if direction == "short":
             move = -move
         return (
-            f"<b>SL HIT {symbol}</b> — {direction} {move:+.2f}%\n"
-            f"Entry {entry:g} → {exit_price:g}"
+            f"{_header('STOP LOSS')}\n"
+            f"\n"
+            f"<b>{symbol}</b>  ·  <b>{arrow} {direction_label}</b>  ·  "
+            f"<b>{move:+.2f}%</b>\n"
+            f"\n"
+            f"{_subsection('Exit')}\n"
+            f"Entry  {_price(entry)}  →  {_price(exit_price)}"
         )
-    # Resolve TP price for this level.
     tp_map = {
         "tp1_hit": signal_row.get("take_profit_1", signal_row.get("take_profit")),
         "tp2_hit": signal_row.get("take_profit_2"),
@@ -132,25 +193,35 @@ def format_outcome_alert(signal_row: dict, outcome: str) -> str:
     }
     exit_price = tp_map.get(outcome) or signal_row.get("take_profit")
     move = (float(exit_price) - entry) / entry * 100
-    if signal_row["direction"] == "short":
+    if direction == "short":
         move = -move
     labels = {
         "tp1_hit": "TP1 HIT",
         "tp2_hit": "TP2 HIT",
         "tp3_hit": "TP3 HIT",
-        "tp_hit": "TP HIT",
+        "tp_hit": "TAKE PROFIT",
     }
     header = labels.get(outcome, outcome.upper().replace("_", " "))
     next_hint = {
-        "tp1_hit": " — running to TP2",
-        "tp2_hit": " — running to TP3",
-        "tp3_hit": "",
-        "tp_hit": "",
+        "tp1_hit": "Next target: TP2",
+        "tp2_hit": "Next target: TP3",
+        "tp3_hit": "Final target reached",
+        "tp_hit": "Target reached",
     }.get(outcome, "")
-    return (
-        f"<b>{header} {symbol}</b> — {direction} {move:+.2f}%{next_hint}\n"
-        f"Entry {entry:g} → {float(exit_price):g}"
-    )
+    lines = [
+        f"{_header(header)}",
+        f"",
+        f"<b>{symbol}</b>  ·  <b>{arrow} {direction_label}</b>  ·  "
+        f"<b>{move:+.2f}%</b>",
+    ]
+    if next_hint:
+        lines.extend(["", f"<i>{next_hint}</i>"])
+    lines.extend([
+        "",
+        f"{_subsection('Exit')}",
+        f"Entry  {_price(entry)}  →  {_price(float(exit_price))}",
+    ])
+    return "\n".join(lines)
 
 
 def send_outcome_alert(signal_row: dict, outcome: str, bot_token: str,
@@ -162,24 +233,28 @@ def send_outcome_alert(signal_row: dict, outcome: str, bot_token: str,
 
 def format_run_summary(run_id: str, timeframe: str, outcomes: list[dict]) -> str:
     """Telegram HTML-mode summary that is sent every run."""
-    lines = [f"<b>ENGINE RUN</b> ({html.escape(timeframe)})", f"Run id: {html.escape(run_id)}"]
+    lines = [
+        _header("ENGINE RUN"),
+        "",
+        f"<b>Timeframe</b>  {_esc(timeframe)}",
+        f"<b>Run ID</b>  <code>{_esc(run_id)}</code>",
+    ]
     if not outcomes:
-        lines.append("No symbols scanned.")
+        lines.extend(["", "<i>No symbols scanned.</i>"])
         return "\n".join(lines)
 
-    # One compact line per symbol to avoid spammy multi-paragraph messages.
+    lines.extend(["", _subsection("Results"), _SUBDIVIDER])
     for o in outcomes:
-        symbol = html.escape(str(o.get("symbol", "")))
+        symbol = _esc(str(o.get("symbol", "")))
         tf = o.get("timeframe")
         if tf:
-            symbol = f"{symbol} [{html.escape(str(tf))}]"
-        status = html.escape(str(o.get("status", "")))
+            symbol = f"{symbol} [{_esc(str(tf))}]"
+        status = _esc(str(o.get("status", "")))
         extra = str(o.get("extra", "") or "")
-        extra = html.escape(extra)
         if extra:
-            lines.append(f"{symbol}: {status} — {extra}")
+            lines.append(f"{symbol}  ·  {status}  ·  {_esc(extra)}")
         else:
-            lines.append(f"{symbol}: {status}")
+            lines.append(f"{symbol}  ·  {status}")
     return "\n".join(lines)
 
 
