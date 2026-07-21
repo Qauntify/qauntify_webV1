@@ -20,7 +20,7 @@ export function AuthShell({
             <div className="rounded-lg border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
               <div className="flex items-center justify-between text-xs font-medium">
                 <span className="rounded bg-long/20 px-2 py-0.5 text-long-soft">
-                  LONG · BTCUSDT
+                  LONG · BTCUSD
                 </span>
                 <span>82%</span>
               </div>

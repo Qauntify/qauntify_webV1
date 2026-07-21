@@ -5,7 +5,7 @@ import type { Signal } from "@/lib/signals";
 
 const SAMPLE_SIGNAL: Signal = {
   id: "sample",
-  symbol: "BTCUSDT",
+  symbol: "BTCUSD",
   timeframe: "1h",
   direction: "long",
   entry: 108240,

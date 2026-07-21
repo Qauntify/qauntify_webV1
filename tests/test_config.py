@@ -23,7 +23,7 @@ def test_load_config_reads_env(monkeypatch):
     assert cfg.sealion_api_keys == ("sk-test",)
     assert cfg.supabase_url == "https://abc.supabase.co"  # trailing slash stripped
     assert cfg.supabase_service_key == "service-key"
-    assert cfg.symbols == ("BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT")
+    assert cfg.symbols == ("BTCUSD", "ETHUSD", "PAXGUSD", "GBPUSD")
     assert cfg.timeframe == "1h"
 
 

@@ -5,6 +5,7 @@ from urllib.parse import quote
 import requests
 
 from signals.models import BotSettings, DEFAULT_SIGNAL_STRATEGY, SIGNAL_STRATEGIES, Signal
+from signals.market_client import canonical_symbol
 
 
 def save_signal(signal: Signal, supabase_url: str, service_key: str,
@@ -382,7 +383,8 @@ def fetch_bot_settings(supabase_url: str, service_key: str,
         rows = response.json()
         row = rows[0]
         symbols = tuple(
-            s.upper() for s in row["symbols"]
+            canonical_symbol(s)
+            for s in row["symbols"]
             if isinstance(s, str) and s.strip()
         )
         alert_confidence = int(row["min_alert_confidence"])

@@ -177,7 +177,7 @@ export default async function AdminAiResponses({
             <input
               name="symbol"
               defaultValue={filters.symbol ?? ""}
-              placeholder="e.g. BTCUSDT"
+              placeholder="e.g. BTCUSD"
               className="w-44 rounded-lg border border-line bg-card px-3 py-1.5 font-mono text-sm"
             />
           </label>

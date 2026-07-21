@@ -35,7 +35,7 @@ export default async function AdminAiSettings({
             <section className="card-surface p-5">
               <h2 className="text-lg font-semibold">Scanning</h2>
               <p className="mt-1 text-sm text-slate">
-                Pairs the engine checks every run (Binance symbols).
+                Pairs the engine checks every run (Kraken USD symbols).
               </p>
               <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium">
                 Symbols to scan
@@ -44,11 +44,11 @@ export default async function AdminAiSettings({
                   name="symbols"
                   required
                   defaultValue={settings.symbols.join(", ")}
-                  placeholder="BTCUSDT, ETHUSDT"
+                  placeholder="BTCUSD, ETHUSD"
                   className="input-field w-full font-mono"
                 />
                 <span className="text-xs font-normal text-slate">
-                  Comma-separated list, e.g. BTCUSDT, ETHUSDT, PAXGUSDT
+                  Comma-separated list, e.g. BTCUSD, ETHUSD, PAXGUSD, GBPUSD
                 </span>
               </label>
             </section>

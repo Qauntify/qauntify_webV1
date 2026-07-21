@@ -7,7 +7,7 @@ Telegram fires once per newly crossed level.
 """
 from datetime import datetime, timedelta, timezone
 
-from signals.binance_client import fetch_candles
+from signals.market_client import fetch_candles
 from signals.models import OPEN_POLL_STATUSES, TRADING_SESSIONS
 from signals.storage import list_open_signals, update_signal_outcome
 from signals.telegram_client import send_outcome_alert

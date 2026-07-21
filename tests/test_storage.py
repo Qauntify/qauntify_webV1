@@ -90,7 +90,7 @@ def test_fetch_bot_settings_reads_row():
     settings = fetch_bot_settings(
         "https://abc.supabase.co", "service-key", session=session,
     )
-    assert settings.symbols == ("BTCUSDT", "SOLUSDT")
+    assert settings.symbols == ("BTCUSD", "SOLUSD")
     assert settings.min_alert_confidence == 75
     assert settings.min_store_confidence == 0
     assert settings.signal_strategy == "ict_smc"

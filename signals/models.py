@@ -148,7 +148,7 @@ TRADING_SESSIONS = (
 @dataclass(frozen=True)
 class BotSettings:
     """Engine behavior controlled from the /admin page (bot_settings table)."""
-    symbols: tuple = ("BTCUSDT", "ETHUSDT", "PAXGUSDT", "GBPUSDT")
+    symbols: tuple = ("BTCUSD", "ETHUSD", "PAXGUSD", "GBPUSD")
     min_alert_confidence: int = 0  # Telegram floor only
     min_store_confidence: int = 0  # storage floor for LLM confirms
     signal_strategy: str = DEFAULT_SIGNAL_STRATEGY

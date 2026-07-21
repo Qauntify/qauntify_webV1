@@ -9,15 +9,19 @@ FEED_URLS = (
     "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "https://decrypt.co/feed",
     "https://www.theblock.co/rss.xml",
-    # Gold + forex, so PAXGUSDT/GBPUSDT confirmation sees real headlines.
+    # Gold + forex, so PAXGUSD/GBPUSD confirmation sees real headlines.
     "https://www.fxstreet.com/rss/news",
     "https://www.forexlive.com/feed/news",
 )
 
 SYMBOL_KEYWORDS = {
+    "BTCUSD": ("bitcoin", "btc"),
+    "ETHUSD": ("ethereum", "ether", "eth"),
+    "PAXGUSD": ("gold", "paxg", "xau"),
+    "GBPUSD": ("gbp", "sterling", "pound sterling", "bank of england", "boe"),
+    # Legacy Binance symbols still used on older signal rows.
     "BTCUSDT": ("bitcoin", "btc"),
     "ETHUSDT": ("ethereum", "ether", "eth"),
-    # PAXG is tokenized gold; GBPUSDT tracks GBP/USD.
     "PAXGUSDT": ("gold", "paxg", "xau"),
     "GBPUSDT": ("gbp", "sterling", "pound sterling", "bank of england", "boe"),
 }

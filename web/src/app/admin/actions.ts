@@ -11,6 +11,7 @@ import {
   SIGNAL_STRATEGIES,
   updateBotSettings,
 } from "@/lib/supabase/admin";
+import { canonicalMarketSymbol } from "@/lib/markets/kraken";
 import { createClient } from "@/lib/supabase/server";
 
 const SYMBOL_PATTERN = /^[A-Z0-9]{3,20}$/;
@@ -26,7 +27,7 @@ export async function saveBotSettings(formData: FormData) {
 
   const symbols = String(formData.get("symbols") ?? "")
     .split(",")
-    .map((s) => s.trim().toUpperCase())
+    .map((s) => canonicalMarketSymbol(s.trim()))
     .filter(Boolean);
   const alertConfidence = Number(formData.get("minAlertConfidence"));
   const storeConfidence = Number(formData.get("minStoreConfidence"));
@@ -35,7 +36,7 @@ export async function saveBotSettings(formData: FormData) {
   if (symbols.length === 0 || symbols.some((s) => !SYMBOL_PATTERN.test(s))) {
     redirect(
       `/admin/ai/settings?error=${encodeURIComponent(
-        "Symbols must be comma-separated Binance pairs like BTCUSDT, SOLUSDT.",
+        "Symbols must be comma-separated USD pairs like BTCUSD, ETHUSD.",
       )}`,
     );
   }

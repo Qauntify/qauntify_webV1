@@ -1,10 +1,10 @@
 # Qauntify Signals Engine
 
-AI-confirmed crypto trading signals. Scans BTCUSDT/ETHUSDT 1h candles from
-Binance, derives technical setups (EMA 9/21 crossover, RSI 14, MACD, ATR),
-confirms each candidate with SEA-LION using recent news headlines from
-public RSS feeds (CoinDesk, Decrypt, The Block), and stores confirmed
-signals in Supabase (Postgres).
+AI-confirmed crypto trading signals. Scans BTCUSD/ETHUSD (and related USD
+pairs) candles from Kraken, derives technical setups (EMA 9/21 crossover,
+RSI 14, MACD, ATR), confirms each candidate with SEA-LION using recent news
+headlines from public RSS feeds (CoinDesk, Decrypt, The Block), and stores
+confirmed signals in Supabase (Postgres).
 
 Part of the Qauntify platform rebuild (formerly FinhubKH, ThinkTrade). Spec:
 `docs/superpowers/specs/2026-07-05-signals-engine-design.md`
@@ -22,7 +22,7 @@ Keys required:
 - `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` — Supabase Dashboard →
   Project Settings → API
 
-No Binance key needed (public market data), and news comes from public RSS
+No Kraken key needed (public market data), and news comes from public RSS
 feeds — no news API key either.
 
 **One-time Supabase setup:** create a free project at https://supabase.com,

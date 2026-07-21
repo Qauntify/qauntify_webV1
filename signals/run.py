@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from signals.binance_client import fetch_candles
+from signals.market_client import fetch_candles
 from signals.calendar_client import (
     calendar_block_for_symbol,
     fetch_calendar_events,
