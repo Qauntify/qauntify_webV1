@@ -44,34 +44,40 @@ export default async function MarketsPage({
   return (
     <DashboardShell
       title="Markets"
-      subtitle="Live USD candles from Kraken (no API key)."
+      subtitle="Live USD candles from Kraken"
+      fullBleed
     >
-      <div className="mb-5 flex flex-col gap-4">
-        <nav className="flex flex-wrap gap-2" aria-label="Market symbols">
-          {DEFAULT_MARKET_SYMBOLS.map((s) => (
-            <Link
-              key={s}
-              href={`/dashboard/markets?symbol=${s}&interval=${interval}`}
-              className={`nav-item ${s === symbol ? "nav-item-active" : ""}`}
-            >
-              {s}
-            </Link>
-          ))}
-        </nav>
-        <nav className="flex flex-wrap gap-2" aria-label="Chart interval">
-          {INTERVALS.map((i) => (
-            <Link
-              key={i.id}
-              href={`/dashboard/markets?symbol=${symbol}&interval=${i.id}`}
-              className={`nav-item ${i.id === interval ? "nav-item-active" : ""}`}
-            >
-              {i.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line bg-card/60 px-4 py-3 lg:px-6">
+          <nav className="flex flex-wrap gap-1.5" aria-label="Market symbols">
+            {DEFAULT_MARKET_SYMBOLS.map((s) => (
+              <Link
+                key={s}
+                href={`/dashboard/markets?symbol=${s}&interval=${interval}`}
+                className={`nav-item ${s === symbol ? "nav-item-active" : ""}`}
+              >
+                {s}
+              </Link>
+            ))}
+          </nav>
+          <span className="hidden h-5 w-px bg-line sm:block" aria-hidden />
+          <nav className="flex flex-wrap gap-1.5" aria-label="Chart interval">
+            {INTERVALS.map((i) => (
+              <Link
+                key={i.id}
+                href={`/dashboard/markets?symbol=${symbol}&interval=${i.id}`}
+                className={`nav-item ${i.id === interval ? "nav-item-active" : ""}`}
+              >
+                {i.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
 
-      <MarketChart symbol={symbol} interval={interval} />
+        <div className="min-h-0 flex-1">
+          <MarketChart symbol={symbol} interval={interval} />
+        </div>
+      </div>
     </DashboardShell>
   );
 }

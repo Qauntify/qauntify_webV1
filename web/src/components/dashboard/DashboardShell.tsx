@@ -11,10 +11,12 @@ export async function DashboardShell({
   children,
   title,
   subtitle,
+  fullBleed = false,
 }: {
   children: React.ReactNode;
   title: string;
   subtitle?: string;
+  fullBleed?: boolean;
 }) {
   const supabase = await createClient();
   const {
@@ -43,8 +45,8 @@ export async function DashboardShell({
           </div>
         </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col lg:ml-56">
-        <header className="flex h-16 items-center justify-between border-b border-line bg-card/80 backdrop-blur-xl px-4 lg:px-8 sticky top-0 z-30 transition-all duration-300">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:ml-56">
+        <header className="flex h-16 shrink-0 items-center justify-between border-b border-line bg-card/80 backdrop-blur-xl px-4 lg:px-8 sticky top-0 z-30 transition-all duration-300">
           <div className="lg:hidden">
             <Logo />
           </div>
@@ -63,7 +65,13 @@ export async function DashboardShell({
             </Link>
           </div>
         </header>
-        <main className="min-w-0 flex-1 overflow-x-hidden p-4 lg:p-6">
+        <main
+          className={
+            fullBleed
+              ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+              : "min-w-0 flex-1 overflow-x-hidden p-4 lg:p-6"
+          }
+        >
           {children}
         </main>
       </div>

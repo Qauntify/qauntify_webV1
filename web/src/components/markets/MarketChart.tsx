@@ -36,8 +36,8 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
         textColor: "#64748b",
       },
       grid: {
-        vertLines: { color: "rgba(148, 163, 184, 0.15)" },
-        horzLines: { color: "rgba(148, 163, 184, 0.15)" },
+        vertLines: { color: "rgba(148, 163, 184, 0.12)" },
+        horzLines: { color: "rgba(148, 163, 184, 0.12)" },
       },
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false, timeVisible: true },
@@ -106,8 +106,8 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
   }, [symbol, interval]);
 
   return (
-    <div className="card-surface overflow-hidden">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line px-5 py-4">
+    <div className="flex h-full min-h-0 flex-col bg-paper">
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 border-b border-line px-4 py-3 lg:px-6">
         <div>
           <p className="font-mono text-xs uppercase tracking-wide text-slate">
             {symbol} · {interval} · USD
@@ -128,7 +128,7 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
           <p className="text-xs text-slate">Kraken public market data</p>
         )}
       </div>
-      <div ref={containerRef} className="h-[420px] w-full" />
+      <div ref={containerRef} className="min-h-0 w-full flex-1" />
     </div>
   );
 }
