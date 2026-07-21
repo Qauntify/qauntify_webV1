@@ -2,20 +2,16 @@ import { floorChat, parseDeskBrief, parsePmDecision } from "./llm";
 import { buildDeskMessages } from "./prompts";
 import { sendFloorGoldAlert } from "./telegram";
 import {
+  beginCycle,
+  endCycleProgress,
   incrementFloorCycle,
+  readFloorRunState,
   recordFloorSignal,
   setFloorRunPhase,
-  shouldStopFloorRun,
 } from "./run-control";
 import { insertFloorBrief } from "./store";
 import { loadGoldFloorContext } from "./gold-context";
 import { FLOOR_DESKS, GOLD_SYMBOL, type FloorTone } from "./types";
-
-const CYCLE_PAUSE_MS = Number(process.env.FLOOR_CYCLE_PAUSE_MS ?? "90_000");
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function pmBody(decision: ReturnType<typeof parsePmDecision>): string {
   if (decision.action !== "signal" || !decision.direction) {
@@ -30,14 +26,12 @@ function pmBody(decision: ReturnType<typeof parsePmDecision>): string {
 }
 
 async function runOneGoldCycle(runId: string): Promise<void> {
-  const cycle = incrementFloorCycle();
+  const cycle = await incrementFloorCycle();
   const context = await loadGoldFloorContext();
   const peerNotes: string[] = [];
 
   for (const desk of FLOOR_DESKS.filter((item) => item !== "pm")) {
-    if (shouldStopFloorRun()) return;
-
-    setFloorRunPhase(desk, `Cycle ${cycle}: ${desk} desk analyzing gold...`);
+    await setFloorRunPhase(desk, `Cycle ${cycle}: ${desk} desk analyzing gold...`);
     try {
       const brief = parseDeskBrief(
         await floorChat(buildDeskMessages(desk, context), { desk }),
@@ -45,18 +39,12 @@ async function runOneGoldCycle(runId: string): Promise<void> {
       await insertFloorBrief({ desk, ...brief, runId });
       peerNotes.push(`${desk} (${brief.tone}): ${brief.body}`);
     } catch {
-      await insertFloorBrief({
-        desk,
-        tone: "neutral",
-        body: `${desk} desk unavailable this cycle.`,
-        runId,
-      });
+      const fallback = `${desk} desk unavailable this cycle.`;
+      await insertFloorBrief({ desk, tone: "neutral", body: fallback, runId });
     }
   }
 
-  if (shouldStopFloorRun()) return;
-
-  setFloorRunPhase("pm", `Cycle ${cycle}: PM deciding signal or pass...`);
+  await setFloorRunPhase("pm", `Cycle ${cycle}: PM deciding signal or pass...`);
   let pmTone: FloorTone = "neutral";
   let pmText = "PM unavailable this cycle.";
 
@@ -72,12 +60,7 @@ async function runOneGoldCycle(runId: string): Promise<void> {
     );
     pmTone = decision.tone;
     pmText = pmBody(decision);
-    await insertFloorBrief({
-      desk: "pm",
-      tone: pmTone,
-      body: pmText,
-      runId,
-    });
+    await insertFloorBrief({ desk: "pm", tone: pmTone, body: pmText, runId });
 
     if (
       decision.action === "signal"
@@ -95,45 +78,44 @@ async function runOneGoldCycle(runId: string): Promise<void> {
         body: decision.body,
         createdAt: new Date().toISOString(),
       };
-      recordFloorSignal(signal);
+      await recordFloorSignal(signal);
       const alerted = await sendFloorGoldAlert({
         symbol: GOLD_SYMBOL,
         ...signal,
         rationale: decision.body,
       });
-      setFloorRunPhase(
-        "pm",
-        alerted
-          ? `Cycle ${cycle}: SIGNAL dropped — Telegram sent.`
-          : `Cycle ${cycle}: SIGNAL dropped — saved on floor.`,
-      );
+      const alertMsg = alerted
+        ? `Cycle ${cycle}: SIGNAL dropped — Telegram sent.`
+        : `Cycle ${cycle}: SIGNAL dropped — saved on floor.`;
+      await setFloorRunPhase("pm", alertMsg);
       return;
     }
 
-    setFloorRunPhase("pm", `Cycle ${cycle}: PASS — no signal this round.`);
+    await setFloorRunPhase("pm", `Cycle ${cycle}: PASS — no signal this round.`);
   } catch {
-    await insertFloorBrief({
-      desk: "pm",
-      tone: "neutral",
-      body: "PM desk unavailable this cycle.",
-      runId,
-    });
-    setFloorRunPhase("pm", `Cycle ${cycle}: PM error — pass by default.`);
+    const fallback = "PM desk unavailable this cycle.";
+    await insertFloorBrief({ desk: "pm", tone: "neutral", body: fallback, runId });
+    await setFloorRunPhase("pm", `Cycle ${cycle}: PM error — pass by default.`);
   }
 }
 
-export async function runGoldFloorLoop(runId: string): Promise<void> {
-  while (!shouldStopFloorRun()) {
-    await runOneGoldCycle(runId);
-    if (shouldStopFloorRun()) break;
+/**
+ * Runs exactly one gold-hunt cycle if the hunter is enabled and no other
+ * invocation (manual or cron) currently has one in progress. Called
+ * identically from the Run button (immediate, awaited) and the cron
+ * endpoint (on its external schedule) — this is the only place either
+ * trigger touches cycle logic.
+ */
+export async function runOneGoldCycleIfEnabled(): Promise<void> {
+  const state = await readFloorRunState();
+  if (!state.running || !state.runId) return;
 
-    setFloorRunPhase("sleeping", "Waiting before next gold hunt cycle...");
-    const steps = Math.max(1, Math.floor(CYCLE_PAUSE_MS / 1000));
-    for (let step = 0; step < steps; step += 1) {
-      if (shouldStopFloorRun()) break;
-      await sleep(1000);
-    }
+  const started = await beginCycle();
+  if (!started) return;
+
+  try {
+    await runOneGoldCycle(state.runId);
+  } finally {
+    await endCycleProgress();
   }
-
-  setFloorRunPhase("idle", "Gold hunter stopped.");
 }

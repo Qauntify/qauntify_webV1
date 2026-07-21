@@ -1,34 +1,20 @@
 import { NextResponse } from "next/server";
 
-import { floorRunSnapshot } from "@/lib/floor/run-control";
-import { FLOOR_DESKS, GOLD_SYMBOL, type FloorBrief, type FloorDesk, type FloorTone } from "@/lib/floor/types";
+import { readFloorRunState } from "@/lib/floor/run-control";
+import { GOLD_SYMBOL, type FloorRunStatus } from "@/lib/floor/types";
 import { isAdminEmail } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 type FloorBriefRow = {
-  id: string;
-  desk: FloorDesk;
-  tone: FloorTone;
+  desk: string;
+  tone: string;
   body: string;
-  run_id: string;
   created_at: string;
 };
 
-function mapFloorBrief(row: FloorBriefRow): FloorBrief {
-  return {
-    id: row.id,
-    desk: row.desk,
-    tone: row.tone,
-    body: row.body,
-    runId: row.run_id,
-    createdAt: row.created_at,
-  };
-}
-
-function scanLineFromSnapshot(): string {
-  const snapshot = floorRunSnapshot();
+function scanLineFromSnapshot(snapshot: FloorRunStatus): string {
   if (snapshot.running) {
     return snapshot.lastMessage || `Cycle ${snapshot.cycle} — ${snapshot.phase}`;
   }
@@ -52,9 +38,9 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("floor_briefs")
-    .select("id, desk, tone, body, run_id, created_at")
+    .select("desk, tone, body, created_at")
     .order("created_at", { ascending: false })
-    .limit(40);
+    .limit(60);
 
   if (error) {
     const missing =
@@ -71,22 +57,19 @@ export async function GET() {
     );
   }
 
-  const latestByDesk = new Map<FloorDesk, FloorBrief>();
-  for (const row of (data ?? []) as FloorBriefRow[]) {
-    if (!latestByDesk.has(row.desk)) latestByDesk.set(row.desk, mapFloorBrief(row));
-  }
+  const log = (data ?? [] as FloorBriefRow[]).map((row) => ({
+    ts: row.created_at,
+    desk: row.desk,
+    tone: row.tone,
+    text: row.body,
+  }));
 
-  const desks = FLOOR_DESKS.flatMap((desk) => {
-    const brief = latestByDesk.get(desk);
-    return brief ? [brief] : [];
-  });
-
-  const snapshot = floorRunSnapshot();
+  const snapshot = await readFloorRunState();
 
   return NextResponse.json({
     symbol: GOLD_SYMBOL,
-    desks,
+    log,
     lastSignal: snapshot.lastSignal,
-    scanLine: scanLineFromSnapshot(),
+    scanLine: scanLineFromSnapshot(snapshot),
   });
 }
