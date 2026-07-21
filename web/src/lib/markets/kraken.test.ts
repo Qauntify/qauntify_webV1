@@ -2,15 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import {
   canonicalMarketSymbol,
+  isGoldSymbol,
   krakenPairForSymbol,
   parseKrakenOhlcPayload,
   parseMarketInterval,
+  parseYahooChartPayload,
 } from "./kraken";
 
 describe("canonicalMarketSymbol", () => {
-  it("renames USDT quotes to USD", () => {
+  it("renames USDT quotes and PAXG to XAUUSD", () => {
     expect(canonicalMarketSymbol("btcusdt")).toBe("BTCUSD");
     expect(canonicalMarketSymbol("ETHUSD")).toBe("ETHUSD");
+    expect(canonicalMarketSymbol("PAXGUSD")).toBe("XAUUSD");
+    expect(canonicalMarketSymbol("XAUUSD")).toBe("XAUUSD");
   });
 });
 
@@ -19,6 +23,14 @@ describe("krakenPairForSymbol", () => {
     expect(krakenPairForSymbol("BTCUSD")).toBe("XBTUSD");
     expect(krakenPairForSymbol("BTCUSDT")).toBe("XBTUSD");
     expect(krakenPairForSymbol("GBPUSD")).toBe("GBPUSD");
+  });
+});
+
+describe("isGoldSymbol", () => {
+  it("detects gold aliases", () => {
+    expect(isGoldSymbol("XAUUSD")).toBe(true);
+    expect(isGoldSymbol("PAXGUSDT")).toBe(true);
+    expect(isGoldSymbol("ETHUSD")).toBe(false);
   });
 });
 
@@ -56,5 +68,40 @@ describe("parseKrakenOhlcPayload", () => {
     expect(() =>
       parseKrakenOhlcPayload({ error: ["EQuery:Unknown asset pair"], result: {} }),
     ).toThrow(/Unknown asset pair/);
+  });
+});
+
+describe("parseYahooChartPayload", () => {
+  it("parses gold futures bars", () => {
+    const candles = parseYahooChartPayload({
+      chart: {
+        result: [
+          {
+            timestamp: [1720000000],
+            indicators: {
+              quote: [
+                {
+                  open: [2300],
+                  high: [2310],
+                  low: [2290],
+                  close: [2305],
+                  volume: [12],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    expect(candles).toEqual([
+      {
+        time: 1720000000,
+        open: 2300,
+        high: 2310,
+        low: 2290,
+        close: 2305,
+        volume: 12,
+      },
+    ]);
   });
 });

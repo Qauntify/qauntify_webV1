@@ -48,7 +48,7 @@ export default async function AdminAiSettings({
                   className="input-field w-full font-mono"
                 />
                 <span className="text-xs font-normal text-slate">
-                  Comma-separated list, e.g. BTCUSD, ETHUSD, PAXGUSD, GBPUSD
+                  Comma-separated list, e.g. BTCUSD, ETHUSD, XAUUSD, GBPUSD
                 </span>
               </label>
             </section>

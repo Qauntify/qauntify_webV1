@@ -131,6 +131,7 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
         <div>
           <p className="font-mono text-xs uppercase tracking-wide text-slate">
             {symbol} · {interval} · USD
+            {symbol === "XAUUSD" ? " · COMEX gold" : ""}
           </p>
           <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">
             {lastClose != null
@@ -147,7 +148,7 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
           <p className="text-xs text-rose-700">{error}</p>
         ) : (
           <p className="text-xs text-slate">
-            {candleCount} candles · Kraken
+            {candleCount} candles · {symbol === "XAUUSD" ? "Yahoo GC=F" : "Kraken"}
           </p>
         )}
       </div>

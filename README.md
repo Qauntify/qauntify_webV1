@@ -1,7 +1,6 @@
 # Qauntify Signals Engine
 
-AI-confirmed crypto trading signals. Scans BTCUSD/ETHUSD (and related USD
-pairs) candles from Kraken, derives technical setups (EMA 9/21 crossover,
+AI-confirmed crypto trading signals. Scans BTCUSD/ETHUSD/XAUUSD/GBPUSD candles (Kraken + Yahoo gold), derives technical setups (EMA 9/21 crossover,
 RSI 14, MACD, ATR), confirms each candidate with SEA-LION using recent news
 headlines from public RSS feeds (CoinDesk, Decrypt, The Block), and stores
 confirmed signals in Supabase (Postgres).

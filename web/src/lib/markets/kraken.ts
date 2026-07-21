@@ -1,9 +1,12 @@
-/** Kraken public USD market helpers for the web app (no API key). */
+/** Public market helpers for the web app (no API key).
+
+Crypto/FX → Kraken. Gold (XAUUSD) → Yahoo Finance GC=F (COMEX gold).
+*/
 
 export const DEFAULT_MARKET_SYMBOLS = [
   "BTCUSD",
   "ETHUSD",
-  "PAXGUSD",
+  "XAUUSD",
   "GBPUSD",
 ] as const;
 
@@ -18,12 +21,18 @@ const INTERVAL_MINUTES: Record<MarketInterval, number> = {
 const KRAKEN_PAIR_BY_SYMBOL: Record<string, string> = {
   BTCUSD: "XBTUSD",
   ETHUSD: "ETHUSD",
-  PAXGUSD: "PAXGUSD",
   GBPUSD: "GBPUSD",
   BTCUSDT: "XBTUSD",
   ETHUSDT: "ETHUSD",
-  PAXGUSDT: "PAXGUSD",
   GBPUSDT: "GBPUSD",
+};
+
+const GOLD_SYMBOLS = new Set(["XAUUSD", "XAUUSDT", "PAXGUSD", "PAXGUSDT"]);
+
+const YAHOO_INTERVAL: Record<MarketInterval, { interval: string; range: string }> = {
+  "5m": { interval: "5m", range: "5d" },
+  "15m": { interval: "15m", range: "1mo" },
+  "1h": { interval: "60m", range: "3mo" },
 };
 
 export type MarketCandle = {
@@ -37,8 +46,15 @@ export type MarketCandle = {
 
 export function canonicalMarketSymbol(symbol: string): string {
   const s = symbol.trim().toUpperCase();
+  if (GOLD_SYMBOLS.has(s) || s.startsWith("PAXG") || s.startsWith("XAU")) {
+    return "XAUUSD";
+  }
   if (s.endsWith("USDT") && s.length > 4) return `${s.slice(0, -4)}USD`;
   return s;
+}
+
+export function isGoldSymbol(symbol: string): boolean {
+  return canonicalMarketSymbol(symbol) == "XAUUSD";
 }
 
 export function krakenPairForSymbol(symbol: string): string {
@@ -91,10 +107,75 @@ export function parseKrakenOhlcPayload(payload: unknown): MarketCandle[] {
   });
 }
 
-export async function fetchKrakenCandles(
+export function parseYahooChartPayload(payload: unknown): MarketCandle[] {
+  if (!payload || typeof payload !== "object") return [];
+  const chart = (payload as { chart?: { result?: unknown[]; error?: unknown } })
+    .chart;
+  const results = chart?.result;
+  if (!Array.isArray(results) || results.length === 0) {
+    throw new Error(
+      typeof chart?.error === "object" && chart?.error
+        ? JSON.stringify(chart.error)
+        : "Yahoo gold chart returned no data",
+    );
+  }
+  const result = results[0] as {
+    timestamp?: number[];
+    indicators?: { quote?: Array<Record<string, Array<number | null>>> };
+  };
+  const timestamps = result.timestamp ?? [];
+  const quote = result.indicators?.quote?.[0] ?? {};
+  const opens = quote.open ?? [];
+  const highs = quote.high ?? [];
+  const lows = quote.low ?? [];
+  const closes = quote.close ?? [];
+  const volumes = quote.volume ?? [];
+
+  const candles: MarketCandle[] = [];
+  for (let i = 0; i < timestamps.length; i += 1) {
+    const o = opens[i];
+    const h = highs[i];
+    const l = lows[i];
+    const c = closes[i];
+    if (o == null || h == null || l == null || c == null) continue;
+    candles.push({
+      time: Number(timestamps[i]),
+      open: Number(o),
+      high: Number(h),
+      low: Number(l),
+      close: Number(c),
+      volume: Number(volumes[i] ?? 0),
+    });
+  }
+  return candles;
+}
+
+async function fetchYahooGoldCandles(
+  interval: MarketInterval,
+  limit: number,
+): Promise<MarketCandle[]> {
+  const { interval: yahooInterval, range } = YAHOO_INTERVAL[interval];
+  const url = new URL("https://query1.finance.yahoo.com/v8/finance/chart/GC=F");
+  url.searchParams.set("interval", yahooInterval);
+  url.searchParams.set("range", range);
+
+  const response = await fetch(url.toString(), {
+    cache: "no-store",
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
+  if (!response.ok) {
+    throw new Error(`Yahoo gold HTTP ${response.status}`);
+  }
+  const candles = parseYahooChartPayload(await response.json());
+  const closed = candles.length > 1 ? candles.slice(0, -1) : candles;
+  if (closed.length > limit) return closed.slice(-limit);
+  return closed;
+}
+
+async function fetchKrakenOnlyCandles(
   symbol: string,
   interval: MarketInterval,
-  limit = 180,
+  limit: number,
 ): Promise<MarketCandle[]> {
   const pair = krakenPairForSymbol(symbol);
   const minutes = INTERVAL_MINUTES[interval];
@@ -109,9 +190,28 @@ export async function fetchKrakenCandles(
     throw new Error(`Kraken HTTP ${response.status}`);
   }
   const candles = parseKrakenOhlcPayload(await response.json());
-  // Drop the still-forming last bar so the chart matches engine closed bars.
-  const closed =
-    candles.length > 1 ? candles.slice(0, -1) : candles;
+  const closed = candles.length > 1 ? candles.slice(0, -1) : candles;
   if (closed.length > limit) return closed.slice(-limit);
   return closed;
+}
+
+/** @deprecated Prefer fetchMarketCandles — kept for existing imports. */
+export async function fetchKrakenCandles(
+  symbol: string,
+  interval: MarketInterval,
+  limit = 180,
+): Promise<MarketCandle[]> {
+  return fetchMarketCandles(symbol, interval, limit);
+}
+
+export async function fetchMarketCandles(
+  symbol: string,
+  interval: MarketInterval,
+  limit = 180,
+): Promise<MarketCandle[]> {
+  const canon = canonicalMarketSymbol(symbol);
+  if (isGoldSymbol(canon)) {
+    return fetchYahooGoldCandles(interval, limit);
+  }
+  return fetchKrakenOnlyCandles(canon, interval, limit);
 }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   canonicalMarketSymbol,
-  fetchKrakenCandles,
+  fetchMarketCandles,
   parseMarketInterval,
 } from "@/lib/markets/kraken";
 import { createClient } from "@/lib/supabase/server";
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const candles = await fetchKrakenCandles(symbol, interval);
+    const candles = await fetchMarketCandles(symbol, interval);
     return NextResponse.json({ symbol, interval, candles });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to fetch candles";

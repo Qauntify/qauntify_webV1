@@ -11,9 +11,14 @@ CALENDAR_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
 
 # Country field on the feed is the affected currency (USD, GBP, EUR, ...).
 SYMBOL_CURRENCIES = {
+    "BTCUSD": ("USD",),
+    "ETHUSD": ("USD",),
+    "XAUUSD": ("USD",),
+    "GBPUSD": ("GBP", "USD"),
     "BTCUSDT": ("USD",),
     "ETHUSDT": ("USD",),
     "PAXGUSDT": ("USD",),
+    "PAXGUSD": ("USD",),
     "GBPUSDT": ("GBP", "USD"),
 }
 

@@ -3,6 +3,7 @@ import pytest
 from signals.market_client import (
     canonical_symbol,
     fetch_candles,
+    is_gold_symbol,
     kraken_pair,
 )
 
@@ -27,13 +28,12 @@ class FakeSession:
         self.last_url = None
         self.last_params = None
 
-    def get(self, url, params=None, timeout=None):
+    def get(self, url, params=None, timeout=None, headers=None):
         self.last_url = url
         self.last_params = params
         return FakeResponse(self._payload, self._status)
 
 
-# Kraken OHLC row: time, open, high, low, close, vwap, volume, count
 OHLC_PAYLOAD = {
     "error": [],
     "result": {
@@ -45,17 +45,47 @@ OHLC_PAYLOAD = {
     },
 }
 
+YAHOO_GOLD_PAYLOAD = {
+    "chart": {
+        "result": [
+            {
+                "timestamp": [1720000000, 1720003600],
+                "indicators": {
+                    "quote": [
+                        {
+                            "open": [2300.0, 2305.0],
+                            "high": [2310.0, 2312.0],
+                            "low": [2295.0, 2301.0],
+                            "close": [2308.0, 2309.0],
+                            "volume": [1000, 1100],
+                        }
+                    ]
+                },
+            }
+        ],
+        "error": None,
+    }
+}
 
-def test_canonical_symbol_renames_usdt_to_usd():
+
+def test_canonical_symbol_renames_usdt_and_paxg_to_xau():
     assert canonical_symbol("btcusdt") == "BTCUSD"
     assert canonical_symbol("ETHUSD") == "ETHUSD"
+    assert canonical_symbol("PAXGUSD") == "XAUUSD"
+    assert canonical_symbol("PAXGUSDT") == "XAUUSD"
+    assert canonical_symbol("XAUUSD") == "XAUUSD"
 
 
 def test_kraken_pair_maps_usd_and_legacy_usdt():
     assert kraken_pair("BTCUSD") == "XBTUSD"
     assert kraken_pair("BTCUSDT") == "XBTUSD"
-    assert kraken_pair("PAXGUSD") == "PAXGUSD"
     assert kraken_pair("GBPUSD") == "GBPUSD"
+
+
+def test_is_gold_symbol():
+    assert is_gold_symbol("XAUUSD")
+    assert is_gold_symbol("PAXGUSD")
+    assert not is_gold_symbol("BTCUSD")
 
 
 def test_fetch_candles_parses_kraken_ohlc():
@@ -103,6 +133,23 @@ def test_fetch_candles_filters_by_start_time():
     )
     assert len(candles) == 1
     assert candles[0].open_time == 1720003600 * 1000
+
+
+def test_fetch_xauusd_uses_yahoo_gold():
+    session = FakeSession(YAHOO_GOLD_PAYLOAD)
+    candles = fetch_candles("XAUUSD", interval="1h", session=session)
+    assert "GC=F" in session.last_url
+    assert session.last_params["interval"] == "60m"
+    assert len(candles) == 2
+    assert candles[-1].close == 2309.0
+
+
+def test_fetch_legacy_paxg_routes_to_yahoo_gold():
+    session = FakeSession(YAHOO_GOLD_PAYLOAD)
+    candles = fetch_candles("PAXGUSD", interval="5m", session=session)
+    assert "GC=F" in session.last_url
+    assert session.last_params["interval"] == "5m"
+    assert candles[0].open == 2300.0
 
 
 def test_fetch_candles_raises_on_http_error():

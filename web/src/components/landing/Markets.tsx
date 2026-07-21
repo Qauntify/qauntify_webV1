@@ -3,7 +3,7 @@ import { SectionHeader } from "@/components/shared/SectionHeader";
 const MARKETS = [
   { name: "Bitcoin", symbol: "BTCUSD", live: true },
   { name: "Ethereum", symbol: "ETHUSD", live: true },
-  { name: "Gold", symbol: "PAXGUSD", live: true },
+  { name: "Gold", symbol: "XAUUSD", live: true },
   { name: "GBP", symbol: "GBPUSD", live: true },
   { name: "Stocks", symbol: "AAPL +", live: false },
   { name: "Indices", symbol: "NAS100 +", live: false },
