@@ -33,6 +33,9 @@ jobs:
           SEALION_API_KEY2: ${{ secrets.SEALION_API_KEY2 }}
           SEALION_API_KEY3: ${{ secrets.SEALION_API_KEY3 }}
           SEALION_API_KEY4: ${{ secrets.SEALION_API_KEY4 }}
+          SEALION_API_KEY5: ${{ secrets.SEALION_API_KEY5 }}
+          SEALION_API_KEY6: ${{ secrets.SEALION_API_KEY6 }}
+          SEALION_API_KEY7: ${{ secrets.SEALION_API_KEY7 }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
