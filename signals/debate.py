@@ -63,8 +63,25 @@ def _manager_prompt(setup, timeframe, technical_msg, fundamental_msg) -> str:
     )
 
 
+def _clean_message(text: str) -> str:
+    """Unwrap an analyst reply that came back as JSON (e.g. {"output": "..."})
+    into its inner text, so chat bubbles never show raw JSON."""
+    t = (text or "").strip()
+    if t.startswith("{") and t.endswith("}"):
+        try:
+            data = json.loads(t)
+            if isinstance(data, dict):
+                for value in data.values():
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+        except json.JSONDecodeError:
+            pass
+    return t
+
+
 def _ask(llm, system: str, user: str):
-    """One agent turn; None on any failure (the agent abstains)."""
+    """One agent turn; None on any failure (the agent abstains). Raw reply —
+    the Manager's JSON must reach parse_manager intact."""
     try:
         reply = llm.chat([
             {"role": "system", "content": system},
@@ -102,11 +119,12 @@ def parse_manager(text: str):
 def run_debate(setup, llm, *, timeframe: str, headlines=None,
                calendar_block=None) -> dict:
     """Run the 3-agent debate; return a transcript + Manager verdict dict."""
-    technical = _ask(llm, _TECHNICAL_SYSTEM, _technical_prompt(setup, timeframe)) \
-        or "(The Technical Analyst abstains — no response.)"
-    fundamental = _ask(
-        llm, _FUNDAMENTAL_SYSTEM,
-        _fundamental_prompt(setup.symbol, headlines, calendar_block),
+    technical = _clean_message(
+        _ask(llm, _TECHNICAL_SYSTEM, _technical_prompt(setup, timeframe)) or ""
+    ) or "(The Technical Analyst abstains — no response.)"
+    fundamental = _clean_message(
+        _ask(llm, _FUNDAMENTAL_SYSTEM,
+             _fundamental_prompt(setup.symbol, headlines, calendar_block)) or ""
     ) or "(The Fundamental Analyst abstains — no response.)"
     manager_reply = _ask(
         llm, _MANAGER_SYSTEM,

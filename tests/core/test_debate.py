@@ -64,6 +64,19 @@ def test_run_debate_is_failsoft_when_an_agent_errors():
     assert d["manager_verdict"] == "caution"
 
 
+def test_run_debate_unwraps_json_wrapped_agent_replies():
+    # Some models wrap analyst answers in JSON despite instructions — the
+    # transcript must show the inner text, not raw JSON.
+    llm = SeqLLM([
+        '{"output": "Strong bullish continuation structure."}',
+        '{"response": "Macro backdrop is quiet."}',
+        '{"verdict": "agree", "confidence": 60, "rationale": "Take it."}',
+    ])
+    d = run_debate(SETUP, llm, timeframe="1h")
+    assert d["transcript"][0]["message"] == "Strong bullish continuation structure."
+    assert d["transcript"][1]["message"] == "Macro backdrop is quiet."
+
+
 def test_parse_manager_handles_valid_json():
     v, c, r = parse_manager('{"verdict": "reject", "confidence": 20, "rationale": "News risk."}')
     assert v == "reject"
