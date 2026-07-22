@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { signout } from "@/app/auth/actions";
 import { Logo } from "@/components/shared/Logo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { isAdminEmail } from "@/lib/supabase/admin";
@@ -9,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 const links = [
   { href: "/#features", label: "Features" },
   { href: "/#signals", label: "Signals" },
+  { href: "/war-room", label: "War Room" },
   { href: "/#markets", label: "Markets" },
   { href: "/#pricing", label: "Pricing" },
   { href: "/#faq", label: "FAQ" },
@@ -35,15 +35,10 @@ export async function Nav() {
           {email ? (
             <>
               {isAdminEmail(email) ? (
-                <Link href="/admin" className="btn-ghost hidden sm:inline">
+                <Link href="/admin" className="btn-secondary !py-2 !px-4 !text-sm hidden sm:inline-flex">
                   Admin
                 </Link>
               ) : null}
-              <form action={signout}>
-                <button type="submit" className="btn-ghost hidden sm:inline">
-                  Sign out
-                </button>
-              </form>
               <Link href="/dashboard" className="btn-primary-sm">
                 Dashboard
               </Link>

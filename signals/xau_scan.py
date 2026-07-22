@@ -14,7 +14,7 @@ import requests
 
 from signals.config import load_config
 from signals.llm_client import SeaLionClient
-from signals.run import maybe_send_alert, scan_symbol
+from signals.run import maybe_run_debate, maybe_send_alert, scan_symbol
 from signals.storage import fetch_bot_settings
 
 XAU_SYMBOL = "XAUUSD"
@@ -56,6 +56,7 @@ def scan_once(cfg, settings, session=None) -> "object":
     )
     if result.signal is not None:
         maybe_send_alert(result.signal, settings, cfg)
+        maybe_run_debate(result.signal, cfg, session=session)
     return result
 
 

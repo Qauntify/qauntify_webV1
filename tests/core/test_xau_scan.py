@@ -52,6 +52,7 @@ def test_scan_once_scans_xauusd_1m_ict_fvg_and_alerts(monkeypatch):
     monkeypatch.setattr(xau_scan, "scan_symbol", fake_scan)
     monkeypatch.setattr(xau_scan, "maybe_send_alert",
                         lambda sig, settings, cfg: alerts.append(sig))
+    monkeypatch.setattr(xau_scan, "maybe_run_debate", lambda *a, **k: None)
 
     xau_scan.scan_once(_cfg(), BotSettings())
 

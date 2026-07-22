@@ -184,6 +184,43 @@ def test_scan_symbol_log_no_setup_false_writes_no_event(monkeypatch):
     assert events == []  # quiet scan logs nothing
 
 
+def _debate_signal():
+    from signals.models import CandidateSetup, Confirmation, make_signal
+    return make_signal(
+        CandidateSetup("XAUUSD", "long", 2400.0, 2396.0, 2408.0,
+                       {"strategy": "ict_fvg"}),
+        Confirmation("confirm", 75, "ok"), [], timeframe="1m")
+
+
+def test_maybe_run_debate_saves_transcript_with_signal_id(monkeypatch):
+    signal = _debate_signal()
+    saved = []
+    monkeypatch.setattr(run_module, "_debate_headlines", lambda *a, **k: None)
+    monkeypatch.setattr(run_module, "run_debate", lambda setup, llm, **kw: {
+        "symbol": setup.symbol, "timeframe": kw["timeframe"],
+        "direction": setup.direction, "transcript": [],
+        "manager_verdict": "agree", "manager_confidence": 66,
+    })
+    monkeypatch.setattr(run_module, "save_debate",
+                        lambda debate, url, key, session=None: saved.append(debate))
+
+    run_module.maybe_run_debate(signal, _config())
+    assert len(saved) == 1
+    assert saved[0]["signal_id"] == signal.id
+    assert saved[0]["manager_verdict"] == "agree"
+
+
+def test_maybe_run_debate_is_best_effort(monkeypatch):
+    signal = _debate_signal()
+    monkeypatch.setattr(run_module, "_debate_headlines", lambda *a, **k: None)
+
+    def boom(*a, **k):
+        raise RuntimeError("agent down")
+
+    monkeypatch.setattr(run_module, "run_debate", boom)
+    run_module.maybe_run_debate(signal, _config())  # must not raise
+
+
 def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None: _flat_candles())

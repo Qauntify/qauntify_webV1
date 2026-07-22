@@ -14,11 +14,13 @@ from signals.composer import confirm_setup, no_setup_rationale
 from signals.rag import retrieve_context
 from signals.config import load_config
 from signals.indicators import adx, atr, ema, macd_histogram, rsi
+from signals.debate import run_debate
 from signals.llm_client import SeaLionClient
 from signals.models import (
     DEFAULT_SIGNAL_STRATEGY,
     TIMEFRAME_MINUTES,
     TRADING_SESSIONS,
+    CandidateSetup,
     NoSignalReport,
     ScanResult,
     make_signal,
@@ -35,6 +37,7 @@ from signals.storage import (
     open_symbols_for_timeframe,
     release_engine_lock,
     save_ai_event,
+    save_debate,
     save_engine_run,
     save_signal,
     try_acquire_engine_lock,
@@ -532,6 +535,47 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     return ScanResult(signal=signal, candles=candles)
 
 
+def _debate_headlines(symbol, session=None):
+    """Best-effort RSS headlines for the War Room's Fundamental agent (uses the
+    otherwise-dormant news client; showcase only)."""
+    try:
+        from signals.news_client import fetch_headlines
+        return fetch_headlines(symbol, session=session)
+    except Exception:
+        return None
+
+
+def maybe_run_debate(signal, cfg, session=None):
+    """Best-effort AI War Room debate about a stored signal — a showcase that
+    never affects the signal. Runs the 3 agents and saves the transcript."""
+    if not cfg.supabase_url or not cfg.supabase_service_key:
+        return
+    try:
+        keys = cfg.sealion_api_keys or (cfg.sealion_api_key,)
+        llm = SeaLionClient(
+            api_key=keys[datetime.now(timezone.utc).minute % len(keys)],
+            model=cfg.sealion_model, base_url=cfg.sealion_base_url,
+            session=session,
+        )
+        setup = CandidateSetup(
+            signal.symbol, signal.direction, signal.entry, signal.stop_loss,
+            signal.take_profit, signal.indicators,
+            take_profit_2=signal.take_profit_2, take_profit_3=signal.take_profit_3,
+        )
+        debate = run_debate(
+            setup, llm, timeframe=signal.timeframe,
+            headlines=_debate_headlines(signal.symbol, session),
+            calendar_block=None,
+        )
+        debate["signal_id"] = signal.id
+        save_debate(debate, cfg.supabase_url, cfg.supabase_service_key,
+                    session=session)
+        print(f"[{signal.symbol}] war-room: {debate['manager_verdict']} "
+              f"{debate['manager_confidence']}%")
+    except Exception as exc:
+        print(f"[{signal.symbol}] war-room debate skipped ({type(exc).__name__})")
+
+
 def maybe_send_alert(signal, settings, cfg):
     """Telegram alert for a stored signal; never raises — a failed or
     skipped alert must not affect the rest of the run."""
@@ -665,6 +709,7 @@ def main():
                 if result.signal is not None:
                     stored += 1
                     maybe_send_alert(result.signal, settings, cfg)
+                    maybe_run_debate(result.signal, cfg, session=db_session)
                     outcomes.append({
                         "symbol": symbol,
                         "timeframe": trading_session.timeframe,

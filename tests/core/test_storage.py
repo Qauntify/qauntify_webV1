@@ -1,7 +1,7 @@
 import pytest
 
 from signals.models import BotSettings, CandidateSetup, Confirmation, make_signal
-from signals.storage import fetch_bot_settings, save_signal
+from signals.storage import fetch_bot_settings, save_debate, save_signal
 
 
 def _signal():
@@ -12,6 +12,25 @@ def _signal():
     )
     confirmation = Confirmation("confirm", 80, "Looks good.")
     return make_signal(setup, confirmation, ["headline one"])
+
+
+def test_save_debate_posts_row_to_agent_debates():
+    session = FakeSession()
+    debate = {
+        "signal_id": "sig-1", "symbol": "XAUUSD", "timeframe": "1h",
+        "direction": "long",
+        "transcript": [{"agent": "Manager", "avatar": "🧑‍💼", "message": "take it"}],
+        "manager_verdict": "agree", "manager_confidence": 70,
+    }
+    save_debate(debate, "https://abc.supabase.co", "service-key", session=session)
+    assert session.last_url == "https://abc.supabase.co/rest/v1/agent_debates"
+    body = session.last_json
+    assert body["symbol"] == "XAUUSD"
+    assert body["manager_verdict"] == "agree"
+    assert body["manager_confidence"] == 70
+    assert body["transcript"][0]["agent"] == "Manager"
+    assert body["signal_id"] == "sig-1"
+    assert "id" in body and "created_at" in body
 
 
 class FakeResponse:
