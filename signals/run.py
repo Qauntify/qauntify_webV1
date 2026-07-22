@@ -10,9 +10,6 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from signals.market_client import fetch_candles
-from signals.calendar_client import (
-    fetch_calendar_events,
-)
 from signals.composer import confirm_setup, no_setup_rationale
 from signals.rag import retrieve_context
 from signals.config import load_config
@@ -26,7 +23,6 @@ from signals.models import (
     ScanResult,
     make_signal,
 )
-from signals.news_client import fetch_feed_titles, fetch_headlines, filter_headlines
 from signals.outcome_tracker import track_open_signals
 from signals.session_clock import describe_market_session
 from signals.strategies import detect_setup
@@ -205,37 +201,6 @@ def _latest_indicators(ema9, ema21, rsi14, macd_hist):
     }
 
 
-def _fetch_headlines_safe(symbol, session=None):
-    try:
-        return with_retry(lambda: fetch_headlines(symbol, session=session))
-    except Exception as exc:
-        print(f"[{symbol}] news unavailable ({type(exc).__name__}), proceeding without")
-        return []
-
-
-def _fetch_feed_titles_safe(session=None):
-    """All feed titles, fetched once per run; [] when every feed is down."""
-    try:
-        return with_retry(lambda: fetch_feed_titles(session=session))
-    except Exception as exc:
-        print(f"news feeds unavailable ({type(exc).__name__}), proceeding without")
-        return []
-
-
-def _fetch_calendar_events_safe(session=None):
-    """This week's economic calendar.
-
-    Returns a list on success (may be empty). Returns None when the free
-    feed is down so the AI prompt can say "unavailable" instead of
-    pretending the day is quiet.
-    """
-    try:
-        return with_retry(lambda: fetch_calendar_events(session=session))
-    except Exception as exc:
-        print(f"economic calendar unavailable ({type(exc).__name__}), proceeding without")
-        return None
-
-
 # Just enough candles for EMA21 to warm up plus a little history — this is
 # only a trend-direction read, not a full setup scan.
 HTF_TREND_CANDLE_LIMIT = 30
@@ -290,7 +255,7 @@ def _log_ai_event(kind: str, symbol: str, cfg, *, timeframe: str,
 
 
 def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
-                timeframe=None, feed_titles=None, calendar_events=None,
+                timeframe=None,
                 session=None,
                 recent_events=None, recent_signals=None,
                 open_symbols=None, confluence_timeframe=None,
@@ -299,10 +264,8 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     a stored signal or a no-signal report.
 
     `timeframe` selects the session (e.g. "15m" scalp, "1h" swing);
-    defaults to cfg.timeframe for single-session callers. `feed_titles`
-    holds this run's already-fetched RSS titles; when None the symbol's
-    headlines are fetched directly (single-symbol / legacy use).
-    `calendar_events` is this run's economic calendar prefetch (may be []).
+    defaults to cfg.timeframe for single-session callers. The review is
+    purely technical — no news or economic-calendar inputs.
     `recent_events`/`recent_signals`/`open_symbols` are this session's
     prefetched maps; when None each check falls back to its own
     per-symbol query. `confluence_timeframe`, when given, requires a
@@ -331,11 +294,6 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     # Binance returns the current, still-forming candle last — drop it so
     # indicators and entry price are computed on closed bars only.
     candles = candles[:-1]
-
-    def headlines_for_symbol():
-        if feed_titles is not None:
-            return filter_headlines(feed_titles, symbol)
-        return _fetch_headlines_safe(symbol, session=session)
 
     closes = [c.close for c in candles]
     highs = [c.high for c in candles]
@@ -396,13 +354,23 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             }
             if htf_trend is not None:
                 indicators["htf_trend"] = htf_trend
+        elif strategy == "sr_zone":
+            if atr14[-1] is None:
+                return ScanResult(candles=candles)
+            indicators = {
+                "strategy": "sr_zone",
+                "atr": atr14[-1],
+            }
+            if adx14[-1] is not None:
+                indicators["adx"] = adx14[-1]
+            if htf_trend is not None:
+                indicators["htf_trend"] = htf_trend
         elif strategy == "ce_lwma":
             indicators = {"strategy": "ce_lwma"}
         else:
             indicators = _latest_indicators(ema9, ema21, rsi14, macd_hist)
             if indicators is None:
                 return ScanResult(candles=candles)
-        headlines = headlines_for_symbol()
         rationale = no_setup_rationale(
             symbol, timeframe, indicators, strategy=strategy,
         )
@@ -413,7 +381,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             timeframe=timeframe,
             rationale=rationale,
             indicators=indicators,
-            headlines=headlines,
+            headlines=[],
             session=session,
         )
         print(f"[{symbol}] no-signal analysis: {rationale}")
@@ -622,9 +590,6 @@ def main():
               f"session(s) ({session_label}), "
               f"swing_strategy={settings.signal_strategy}, "
               f"scalp=ce_lwma, super_scalp=ict_fvg.")
-        # RSS feeds change slower than a run: fetch them once, filter per symbol.
-        feed_titles = _fetch_feed_titles_safe(session=requests.Session())
-        calendar_events = _fetch_calendar_events_safe(session=requests.Session())
 
         def scan_one(item):
             """(index, symbol, TradingSession, recent_events, recent_signals, open_symbols)
@@ -645,7 +610,6 @@ def main():
                 return scan_symbol(
                     symbol, cfg, llm, strategy=session_strategy,
                     timeframe=trading_session.timeframe,
-                    feed_titles=feed_titles, calendar_events=calendar_events,
                     session=requests.Session(),
                     recent_events=recent_events, recent_signals=recent_signals,
                     open_symbols=open_symbols,

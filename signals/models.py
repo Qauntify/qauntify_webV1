@@ -101,7 +101,7 @@ class NoSignalReport:
     confidence: int | None = None
 
 
-SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg")
+SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone")
 DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
 TIMEFRAME_MINUTES = {"5m": 5, "15m": 15, "1h": 60}
