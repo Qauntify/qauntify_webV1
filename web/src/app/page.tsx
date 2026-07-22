@@ -1,3 +1,4 @@
+import { BacktestPanel } from "@/components/landing/BacktestPanel";
 import { Faq } from "@/components/landing/Faq";
 import { Features } from "@/components/landing/Features";
 import { Hero } from "@/components/landing/Hero";
@@ -22,6 +23,7 @@ export default async function Home() {
         <Hero latestSignal={signals[0] ?? null} />
         <div className="scroll-reveal"><StatsBand stats={stats} /></div>
         <div className="scroll-reveal"><Features /></div>
+        <div className="scroll-reveal"><BacktestPanel /></div>
         <div className="scroll-reveal"><SignalsPreview signals={signals} /></div>
         <div className="scroll-reveal"><Markets /></div>
         <div className="scroll-reveal"><Pricing /></div>
