@@ -497,8 +497,9 @@ def test_trading_sessions_define_scalp_and_swing():
     # for two weeks is meaningless.
     assert by_name["scalp"].max_open_days < by_name["swing"].max_open_days
     assert by_name["super_scalp"].max_open_days <= by_name["scalp"].max_open_days
-    # Scalp is hardcoded to CE+LWMA (no EMA HTF confluence gate).
-    assert by_name["scalp"].strategy == "ce_lwma"
+    # Scalp is hardcoded to sr_zone (no HTF confluence gate) — best backtested
+    # frequency + TP-hit rate on 15m.
+    assert by_name["scalp"].strategy == "sr_zone"
     assert by_name["scalp"].confluence_timeframe is None
     assert by_name["swing"].confluence_timeframe == "4h"
     assert by_name["swing"].strategy is None

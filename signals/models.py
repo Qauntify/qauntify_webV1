@@ -128,7 +128,8 @@ class TradingSession:
     strategy: str | None = None
 
 
-# Super scalp = 5m ICT+FVG (tight R); scalp = 15m CE+LWMA; swing = admin strategy.
+# Super scalp = 5m ICT+FVG (tight R); scalp = 15m S/R bounce (best backtested
+# frequency + TP-hit rate, no HTF gate); swing = admin strategy.
 TRADING_SESSIONS = (
     TradingSession(
         name="super_scalp", timeframe="5m", max_open_days=1,
@@ -136,7 +137,7 @@ TRADING_SESSIONS = (
     ),
     TradingSession(
         name="scalp", timeframe="15m", max_open_days=2,
-        confluence_timeframe=None, strategy="ce_lwma",
+        confluence_timeframe=None, strategy="sr_zone",
     ),
     TradingSession(
         name="swing", timeframe="1h", max_open_days=14,
