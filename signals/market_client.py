@@ -39,6 +39,7 @@ INTERVAL_MINUTES = {
 
 # Yahoo chart interval + range for each engine timeframe.
 YAHOO_INTERVAL = {
+    "1m": ("1m", "1d"),
     "5m": ("5m", "5d"),
     "15m": ("15m", "1mo"),
     "30m": ("30m", "1mo"),

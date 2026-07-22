@@ -1,0 +1,46 @@
+name: XAUUSD 1m scalper
+
+# Scans XAUUSD on 1m every ~60s using ict_fvg, confirmed with the spare
+# SEA-LION keys (KEY5-7). Only KEY5-7 are passed in, so the scalper never
+# touches the main engine's KEY1-4. One job runs a ~58-minute loop; a
+# best-effort hourly schedule restarts it (gold is closed weekends, so gaps
+# then don't matter). Free — the repo is public.
+
+on:
+  workflow_dispatch: {}
+  repository_dispatch:
+    types: [run-xau-scalper]
+  schedule:
+    - cron: "2 * * * *"
+
+concurrency:
+  group: xau-scalper
+  cancel-in-progress: true
+
+jobs:
+  scalp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 62
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Scan XAUUSD 1m every 60s
+        env:
+          SEALION_API_KEY5: ${{ secrets.SEALION_API_KEY5 }}
+          SEALION_API_KEY6: ${{ secrets.SEALION_API_KEY6 }}
+          SEALION_API_KEY7: ${{ secrets.SEALION_API_KEY7 }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          for i in $(seq 1 58); do
+            echo "--- scan $i/58 ---"
+            python -m signals.xau_scan || true
+            sleep 60
+          done

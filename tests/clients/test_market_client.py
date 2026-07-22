@@ -152,6 +152,14 @@ def test_fetch_legacy_paxg_routes_to_yahoo_gold():
     assert candles[0].open == 2300.0
 
 
+def test_fetch_xauusd_1m_uses_real_1m_interval():
+    """1m gold must resolve to a real 1m request, not the 60m fallback."""
+    session = FakeSession(YAHOO_GOLD_PAYLOAD)
+    fetch_candles("XAUUSD", interval="1m", session=session)
+    assert session.last_params["interval"] == "1m"
+    assert session.last_params["range"] == "1d"
+
+
 def test_fetch_candles_raises_on_http_error():
     session = FakeSession({}, status=500)
     with pytest.raises(RuntimeError):

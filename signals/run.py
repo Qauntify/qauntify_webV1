@@ -259,7 +259,7 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
                 session=None,
                 recent_events=None, recent_signals=None,
                 open_symbols=None, confluence_timeframe=None,
-                min_store_confidence=0):
+                min_store_confidence=0, skip_recency=False, log_no_setup=True):
     """Scan one symbol on one session's timeframe; return a ScanResult with
     a stored signal or a no-signal report.
 
@@ -271,12 +271,15 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     per-symbol query. `confluence_timeframe`, when given, requires a
     successful HTF trend read and gates setups on agreement.
     `min_store_confidence` drops LLM confirms below the admin quality bar
-    before they hit storage (not just Telegram).
+    before they hit storage (not just Telegram). `skip_recency` bypasses the
+    "evaluated recently" throttle (for the 1m scalper, which fires every
+    minute); `log_no_setup=False` suppresses the no-setup ai_event so a
+    high-frequency scan does not flood the log.
     """
     timeframe = timeframe or cfg.timeframe
 
-    if _recently_evaluated(symbol, timeframe, cfg, session=session,
-                           recent_events=recent_events):
+    if not skip_recency and _recently_evaluated(
+            symbol, timeframe, cfg, session=session, recent_events=recent_events):
         print(f"[{symbol}] {timeframe} evaluated recently, skipping this run")
         return ScanResult()
 
@@ -332,6 +335,10 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     )
     if setup is None:
         print(f"[{symbol}] no setup found ({strategy})")
+        # High-frequency callers (the 1m scalper) suppress the no-setup event
+        # so 60 quiet scans/hour don't flood the ai_events log.
+        if not log_no_setup:
+            return ScanResult(candles=candles)
         # Log only fields the active strategy cares about — do not dump EMA/RSI/MACD
         # onto ICT / CE no-setup events (those series are still computed for ema_cross).
         if strategy == "ict_smc":

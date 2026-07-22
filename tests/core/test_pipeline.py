@@ -157,6 +157,33 @@ def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
     assert events[0][0]["kind"] == "confirm"
 
 
+def test_scan_symbol_skip_recency_bypasses_guard(monkeypatch):
+    # Recency guard would normally skip, but skip_recency=True overrides it.
+    monkeypatch.setattr(run_module, "_recently_evaluated", lambda *a, **k: True)
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None: _flat_candles())
+    monkeypatch.setattr(run_module, "detect_setup", lambda *a, **k: SETUP)
+    _capture_saves(monkeypatch)
+    _capture_ai_events(monkeypatch)
+    llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 80, "rationale": "ok"}')
+
+    assert scan_symbol("XAUUSD", _config(), llm, skip_recency=False).signal is None
+    assert scan_symbol("XAUUSD", _config(), llm, skip_recency=True).signal is not None
+
+
+def test_scan_symbol_log_no_setup_false_writes_no_event(monkeypatch):
+    monkeypatch.setattr(run_module, "_recently_evaluated", lambda *a, **k: False)
+    monkeypatch.setattr(run_module, "fetch_candles",
+                        lambda symbol, interval, limit, session=None: _flat_candles())
+    monkeypatch.setattr(run_module, "detect_setup", lambda *a, **k: None)
+    events = _capture_ai_events(monkeypatch)
+    llm = FakeLLM(reply='{"rationale": "flat"}')
+
+    result = scan_symbol("XAUUSD", _config(), llm, log_no_setup=False)
+    assert result.signal is None
+    assert events == []  # quiet scan logs nothing
+
+
 def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None: _flat_candles())
