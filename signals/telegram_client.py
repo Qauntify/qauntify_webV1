@@ -29,29 +29,49 @@ def _direction_arrow(direction: str) -> str:
     return "▲" if direction == "long" else "▼"
 
 
+def _direction_dot(direction: str) -> str:
+    return "🟢" if direction == "long" else "🔴"
+
+
+def _confidence_bar(pct: int, segments: int = 10) -> str:
+    """A 10-segment ▰/▱ meter for the confidence percentage."""
+    filled = max(0, min(segments, round(pct / 100 * segments)))
+    return "▰" * filled + "▱" * (segments - filled)
+
+
+def _risk_reward(entry: float, stop: float, target: float) -> str:
+    risk = abs(entry - stop)
+    if risk == 0:
+        return "—"
+    return f"1 : {abs(target - entry) / risk:.1f}"
+
+
 def format_alert(signal: Signal) -> str:
     """Telegram HTML-mode message for one confirmed signal."""
     direction = signal.direction.upper()
-    arrow = _direction_arrow(signal.direction)
+    dot = _direction_dot(signal.direction)
     symbol = _esc(signal.symbol)
     timeframe = _esc(signal.timeframe)
     tp2 = signal.take_profit_2 or signal.take_profit
     tp3 = signal.take_profit_3 or signal.take_profit
     return (
-        f"{_header('NEW SIGNAL')}\n"
+        f"{dot} <b>{direction} SIGNAL</b>\n"
+        f"{_DIVIDER}\n"
+        f"💹 <b>{symbol}</b>  ·  <code>{timeframe}</code>\n"
         f"\n"
-        f"<b>{arrow} {direction}</b>  ·  <b>{symbol}</b>  ·  {timeframe}\n"
+        f"🎯 <b>Confidence</b>  {signal.confidence}%\n"
+        f"{_confidence_bar(signal.confidence)}\n"
         f"\n"
-        f"{_subsection('Confidence')}  {signal.confidence}%\n"
+        f"📊 <b>Trade Setup</b>\n"
+        f"📍 Entry   {_price(signal.entry)}\n"
+        f"🛑 Stop    {_price(signal.stop_loss)}\n"
+        f"🎯 TP1     {_price(signal.take_profit)}\n"
+        f"🎯 TP2     {_price(tp2)}\n"
+        f"🎯 TP3     {_price(tp3)}\n"
         f"\n"
-        f"{_subsection('Trade Levels')}\n"
-        f"Entry  {_price(signal.entry)}\n"
-        f"Stop   {_price(signal.stop_loss)}\n"
-        f"TP1    {_price(signal.take_profit)}\n"
-        f"TP2    {_price(tp2)}\n"
-        f"TP3    {_price(tp3)}\n"
+        f"⚖️ <b>Risk : Reward</b>  {_risk_reward(signal.entry, signal.stop_loss, tp3)}\n"
         f"\n"
-        f"{_subsection('Analysis')}\n"
+        f"🧠 <b>Analysis</b>\n"
         f"<i>{_esc(signal.rationale)}</i>"
     )
 
@@ -164,6 +184,16 @@ def send_no_signal_alert(report: NoSignalReport, bot_token: str, chat_id: str,
                   session=session)
 
 
+# emoji + title + optional "what's next" line, per outcome.
+_OUTCOME_META = {
+    "sl_hit": ("🛑", "STOP LOSS", ""),
+    "tp1_hit": ("✅", "TP1 HIT", "Next target: TP2 🎯"),
+    "tp2_hit": ("✅", "TP2 HIT", "Next target: TP3 🎯"),
+    "tp3_hit": ("🏆", "TP3 HIT", "Final target reached 🎉"),
+    "tp_hit": ("🏆", "TAKE PROFIT", "Target reached 🎉"),
+}
+
+
 def format_outcome_alert(signal_row: dict, outcome: str) -> str:
     """Telegram HTML-mode message for TP1/TP2/TP3 or SL hits."""
     entry = signal_row["entry"]
@@ -171,54 +201,38 @@ def format_outcome_alert(signal_row: dict, outcome: str) -> str:
     direction_label = _esc(direction.upper())
     symbol = _esc(signal_row["symbol"])
     arrow = _direction_arrow(direction)
+    dot = _direction_dot(direction)
+    emoji, title, next_hint = _OUTCOME_META.get(
+        outcome, ("•", outcome.upper().replace("_", " "), ""),
+    )
+
     if outcome == "sl_hit":
         exit_price = signal_row["stop_loss"]
-        move = (exit_price - entry) / entry * 100
-        if direction == "short":
-            move = -move
-        return (
-            f"{_header('STOP LOSS')}\n"
-            f"\n"
-            f"<b>{symbol}</b>  ·  <b>{arrow} {direction_label}</b>  ·  "
-            f"<b>{move:+.2f}%</b>\n"
-            f"\n"
-            f"{_subsection('Exit')}\n"
-            f"Entry  {_price(entry)}  →  {_price(exit_price)}"
-        )
-    tp_map = {
-        "tp1_hit": signal_row.get("take_profit_1", signal_row.get("take_profit")),
-        "tp2_hit": signal_row.get("take_profit_2"),
-        "tp3_hit": signal_row.get("take_profit_3"),
-        "tp_hit": signal_row.get("take_profit_3") or signal_row.get("take_profit"),
-    }
-    exit_price = tp_map.get(outcome) or signal_row.get("take_profit")
+    else:
+        tp_map = {
+            "tp1_hit": signal_row.get("take_profit_1", signal_row.get("take_profit")),
+            "tp2_hit": signal_row.get("take_profit_2"),
+            "tp3_hit": signal_row.get("take_profit_3"),
+            "tp_hit": signal_row.get("take_profit_3") or signal_row.get("take_profit"),
+        }
+        exit_price = tp_map.get(outcome) or signal_row.get("take_profit")
+
     move = (float(exit_price) - entry) / entry * 100
     if direction == "short":
         move = -move
-    labels = {
-        "tp1_hit": "TP1 HIT",
-        "tp2_hit": "TP2 HIT",
-        "tp3_hit": "TP3 HIT",
-        "tp_hit": "TAKE PROFIT",
-    }
-    header = labels.get(outcome, outcome.upper().replace("_", " "))
-    next_hint = {
-        "tp1_hit": "Next target: TP2",
-        "tp2_hit": "Next target: TP3",
-        "tp3_hit": "Final target reached",
-        "tp_hit": "Target reached",
-    }.get(outcome, "")
+    trend = "📈" if move >= 0 else "📉"
+
     lines = [
-        f"{_header(header)}",
-        f"",
-        f"<b>{symbol}</b>  ·  <b>{arrow} {direction_label}</b>  ·  "
-        f"<b>{move:+.2f}%</b>",
+        f"{emoji} <b>{title}</b>",
+        _DIVIDER,
+        f"{dot} <b>{symbol}</b>  ·  <b>{arrow} {direction_label}</b>  ·  "
+        f"{trend} <b>{move:+.2f}%</b>",
     ]
     if next_hint:
         lines.extend(["", f"<i>{next_hint}</i>"])
     lines.extend([
         "",
-        f"{_subsection('Exit')}",
+        f"📍 <b>Exit</b>",
         f"Entry  {_price(entry)}  →  {_price(float(exit_price))}",
     ])
     return "\n".join(lines)

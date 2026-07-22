@@ -6,6 +6,7 @@ from signals.run import maybe_send_alert, maybe_send_no_signal_alert, maybe_send
 from signals.telegram_client import (
     format_alert,
     format_no_signal_alert,
+    format_outcome_alert,
     format_run_summary,
     send_alert,
     send_no_signal_alert,
@@ -54,23 +55,47 @@ class FakeSession:
 
 def test_format_alert_contains_trade_details():
     text = format_alert(_signal())
-    assert "<b>▲ LONG</b>" in text
+    assert "🟢" in text                        # long = green
+    assert "LONG SIGNAL" in text
     assert "<b>BTCUSDT</b>" in text
     assert "1h" in text
-    assert "Entry  <code>108240</code>" in text
-    assert "Stop   <code>106900</code>" in text
-    assert "TP1    <code>110920</code>" in text
+    assert "<code>108240</code>" in text        # entry
+    assert "<code>106900</code>" in text        # stop
+    assert "<code>110920</code>" in text        # TP1
     assert "Confidence</b>  80%" in text
+    assert "▰" in text and "▱" in text          # confidence bar
+    assert "Risk" in text and "Reward" in text  # R:R line
     assert "Looks good." in text
-    assert text.startswith("<b>")
 
 
 def test_format_alert_short_uses_red_and_escapes_html():
     text = format_alert(_signal(direction="short", rationale="a<b>&c"))
-    assert text.startswith("<b>")
-    assert "<b>▼ SHORT</b>" in text
+    assert "🔴" in text                         # short = red
+    assert "SHORT SIGNAL" in text
     assert "<b>BTCUSDT</b>" in text
-    assert "a&lt;b&gt;&amp;c" in text
+    assert "a&lt;b&gt;&amp;c" in text           # rationale escaped
+
+
+def test_format_outcome_alert_tp_hit_is_positive():
+    row = {"symbol": "BTCUSD", "direction": "long", "entry": 100.0,
+           "stop_loss": 99.0, "take_profit_1": 102.0,
+           "take_profit_2": 104.0, "take_profit_3": 106.0}
+    text = format_outcome_alert(row, "tp1_hit")
+    assert "TP1 HIT" in text
+    assert "✅" in text
+    assert "🟢" in text                         # long
+    assert "+2.00%" in text
+    assert "<code>100</code>" in text and "<code>102</code>" in text
+
+
+def test_format_outcome_alert_sl_hit_is_negative():
+    row = {"symbol": "ETHUSD", "direction": "short", "entry": 100.0,
+           "stop_loss": 102.0, "take_profit_1": 98.0}
+    text = format_outcome_alert(row, "sl_hit")
+    assert "STOP LOSS" in text
+    assert "🛑" in text
+    assert "🔴" in text                         # short
+    assert "-2.00%" in text                     # short stopped out 2% against
 
 
 def test_send_alert_posts_to_bot_api():
