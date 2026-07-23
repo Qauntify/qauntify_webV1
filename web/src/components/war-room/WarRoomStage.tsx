@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Debate } from "@/lib/debates";
 
@@ -63,10 +63,13 @@ function Robot({
 }
 
 export function WarRoomStage({ debate }: { debate: Debate }) {
-  const msgs = debate.transcript.slice(0, 3);
+  // Stable reference — a fresh slice() every render would reset the effect and
+  // freeze the typewriter (it never streams).
+  const msgs = useMemo(() => debate.transcript.slice(0, 3), [debate]);
   const reduced = usePrefersReducedMotion();
   const [step, setStep] = useState(0); // active speaker index; == msgs.length when done
   const [typed, setTyped] = useState("");
+  const [thinking, setThinking] = useState(true);
   const [runId, setRunId] = useState(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -86,6 +89,7 @@ export function WarRoomStage({ debate }: { debate: Debate }) {
       }
       setStep(idx);
       setTyped("");
+      setThinking(true);
       const full = msgs[idx].message;
       let c = 0;
       const tick = () => {
@@ -93,10 +97,17 @@ export function WarRoomStage({ debate }: { debate: Debate }) {
         c += 1;
         setTyped(full.slice(0, c));
         pending.push(
-          setTimeout(c < full.length ? tick : () => play(idx + 1), c < full.length ? 16 : 950),
+          setTimeout(c < full.length ? tick : () => play(idx + 1), c < full.length ? 14 : 1000),
         );
       };
-      pending.push(setTimeout(tick, 400));
+      // The robot "thinks" first, then streams its analysis.
+      pending.push(
+        setTimeout(() => {
+          if (cancelled) return;
+          setThinking(false);
+          tick();
+        }, 900),
+      );
     };
     // Defer the first step so no setState runs synchronously in the effect body.
     pending.push(setTimeout(() => play(0), 0));
@@ -155,10 +166,19 @@ export function WarRoomStage({ debate }: { debate: Debate }) {
               <p className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-wide" style={{ color: BOT_COLORS[activeIndex] }}>
                 {msgs[activeIndex]?.avatar} {msgs[activeIndex]?.agent}
               </p>
-              <p className="text-sm leading-relaxed text-ink">
-                {typed}
-                <span className="wr-caret">▌</span>
-              </p>
+              {thinking ? (
+                <p className="flex items-center gap-1.5" style={{ color: BOT_COLORS[activeIndex] }}>
+                  <span className="wr-dot" />
+                  <span className="wr-dot" />
+                  <span className="wr-dot" />
+                  <span className="ml-1 font-mono text-xs text-slate">thinking…</span>
+                </p>
+              ) : (
+                <p className="text-sm leading-relaxed text-ink">
+                  {typed}
+                  <span className="wr-caret">▌</span>
+                </p>
+              )}
             </>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">

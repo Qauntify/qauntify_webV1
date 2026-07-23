@@ -893,3 +893,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .wr-robot, .wr-robot *, .wr-active *, .wr-caret, .wr-speaking, .wr-live-dot, .wr-stamp { animation: none !important; }
 }
+
+/* War Room thinking-dots */
+@keyframes wr-think { 0%, 80%, 100% { transform: scale(0.55); opacity: 0.35; } 40% { transform: scale(1); opacity: 1; } }
+.wr-dot { display: inline-block; width: 7px; height: 7px; border-radius: 9999px; background: currentColor; animation: wr-think 1.2s ease-in-out infinite; }
+.wr-dot:nth-child(2) { animation-delay: 0.18s; }
+.wr-dot:nth-child(3) { animation-delay: 0.36s; }
+@media (prefers-reduced-motion: reduce) { .wr-dot { animation: none !important; } }
