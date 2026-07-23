@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
@@ -13,14 +14,26 @@ export const metadata: Metadata = {
 
 export const revalidate = 20;
 
-export default async function WarRoomPage() {
+const TABS = [
+  { id: "war-room", label: "War Room 🤖", href: "/dashboard/war-room" },
+  { id: "earlier", label: "Earlier debates", href: "/dashboard/war-room?tab=earlier" },
+] as const;
+
+export default async function WarRoomPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const debates = await getDebates(8);
+  const { tab } = await searchParams;
+  const currentTab = tab === "earlier" ? "earlier" : "war-room";
+
+  const debates = await getDebates(12);
   const [featured, ...rest] = debates;
 
   return (
@@ -36,20 +49,30 @@ export default async function WarRoomPage() {
           </p>
         </div>
 
-        {featured ? (
-          <>
+        <nav className="flex gap-2 border-b border-line pb-4">
+          {TABS.map((t) => (
+            <Link
+              key={t.id}
+              href={t.href}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                currentTab === t.id
+                  ? "bg-ink text-paper shadow-md"
+                  : "text-slate hover:bg-card hover:text-ink"
+              }`}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+
+        {currentTab === "war-room" ? (
+          featured ? (
             <WarRoomStage debate={featured} />
-            {rest.length > 0 ? (
-              <>
-                <h3 className="mb-3 mt-2 text-sm font-semibold text-ink">
-                  Earlier debates
-                </h3>
-                <DebateBoard debates={rest} />
-              </>
-            ) : null}
-          </>
+          ) : (
+            <DebateBoard debates={[]} />
+          )
         ) : (
-          <DebateBoard debates={[]} />
+          <DebateBoard debates={rest} />
         )}
 
         <p className="text-xs text-slate">
