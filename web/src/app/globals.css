@@ -863,3 +863,33 @@ body {
   0% { transform: translateX(-120%); }
   100% { transform: translateX(280%); }
 }
+
+/* ── AI War Room: animated cartoon robots ── */
+@keyframes wr-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes wr-blink { 0%, 90%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.12); } }
+@keyframes wr-pulse { 0%, 100% { transform: scale(0.82); opacity: 0.5; } 50% { transform: scale(1.18); opacity: 1; } }
+@keyframes wr-talk { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.35); } }
+@keyframes wr-caret { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes wr-stamp-in { 0% { opacity: 0; transform: scale(2.2) rotate(-14deg); } 55% { opacity: 1; transform: scale(0.92) rotate(-5deg); } 100% { transform: scale(1) rotate(-4deg); } }
+@keyframes wr-live { 0%, 100% { opacity: 0.35; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.1); } }
+
+.wr-stage {
+  background:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
+    repeating-linear-gradient(0deg, transparent, transparent 22px, color-mix(in srgb, var(--line) 40%, transparent) 23px);
+}
+.wr-robot { animation: wr-bob 3.2s ease-in-out infinite; will-change: transform; transition: filter 0.3s ease; }
+.wr-robot .wr-eye { transform-box: fill-box; transform-origin: center; animation: wr-blink 4.5s infinite; }
+.wr-robot .wr-antenna { transform-box: fill-box; transform-origin: center; animation: wr-pulse 1.9s ease-in-out infinite; }
+.wr-active { filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--bot) 55%, transparent)); }
+.wr-active .wr-core { transform-box: fill-box; transform-origin: center; animation: wr-pulse 1s ease-in-out infinite; }
+.wr-active .wr-mouth { transform-box: fill-box; transform-origin: center; animation: wr-talk 0.28s ease-in-out infinite; }
+.wr-caret { animation: wr-caret 0.9s step-end infinite; color: var(--accent); }
+.wr-speaking { animation: wr-caret 1s ease-in-out infinite; }
+.wr-live-dot { display: inline-block; height: 8px; width: 8px; border-radius: 9999px; background: var(--long); animation: wr-live 1.4s ease-in-out infinite; }
+.wr-stamp { animation: wr-stamp-in 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+.wr-stamp-label { color: var(--stamp); border: 2px solid var(--stamp); border-radius: 8px; padding: 2px 10px; display: inline-block; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wr-robot, .wr-robot *, .wr-active *, .wr-caret, .wr-speaking, .wr-live-dot, .wr-stamp { animation: none !important; }
+}

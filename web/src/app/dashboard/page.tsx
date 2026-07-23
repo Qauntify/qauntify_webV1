@@ -6,6 +6,7 @@ import { SignalsGrid } from "@/components/dashboard/SignalsGrid";
 import { StatsBar } from "@/components/dashboard/StatsBar";
 import { Notice } from "@/components/shared/Notice";
 import { DebateBoard } from "@/components/war-room/DebateBoard";
+import { WarRoomStage } from "@/components/war-room/WarRoomStage";
 import { getDebates } from "@/lib/debates";
 import { getSignals, getStats } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
@@ -42,6 +43,7 @@ const SESSIONS = [
 
 async function WarRoomSection() {
   const debates = await getDebates(8);
+  const [featured, ...rest] = debates;
   return (
     <section>
       <div className="mb-4">
@@ -52,7 +54,21 @@ async function WarRoomSection() {
           the AI&apos;s reasoning; not financial advice.
         </p>
       </div>
-      <DebateBoard debates={debates} />
+      {featured ? (
+        <>
+          <WarRoomStage debate={featured} />
+          {rest.length > 0 ? (
+            <>
+              <h3 className="mb-3 mt-6 text-sm font-semibold text-ink">
+                Earlier debates
+              </h3>
+              <DebateBoard debates={rest} />
+            </>
+          ) : null}
+        </>
+      ) : (
+        <DebateBoard debates={[]} />
+      )}
     </section>
   );
 }
