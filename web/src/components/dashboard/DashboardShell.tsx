@@ -57,6 +57,9 @@ export async function DashboardShell({
             ) : null}
           </div>
           <div className="flex items-center gap-2 lg:hidden">
+            <Link href="/dashboard/war-room" className="btn-ghost text-sm">
+              War Room
+            </Link>
             <Link href="/dashboard/markets" className="btn-ghost text-sm">
               Markets
             </Link>

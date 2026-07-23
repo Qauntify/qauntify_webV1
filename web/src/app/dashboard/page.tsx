@@ -5,9 +5,6 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { SignalsGrid } from "@/components/dashboard/SignalsGrid";
 import { StatsBar } from "@/components/dashboard/StatsBar";
 import { Notice } from "@/components/shared/Notice";
-import { DebateBoard } from "@/components/war-room/DebateBoard";
-import { WarRoomStage } from "@/components/war-room/WarRoomStage";
-import { getDebates } from "@/lib/debates";
 import { getSignals, getStats } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 
@@ -40,39 +37,6 @@ const SESSIONS = [
     emptyHint: "Swing setups are checked every ~10 minutes on the 1h chart.",
   },
 ] as const;
-
-async function WarRoomSection() {
-  const debates = await getDebates(8);
-  const [featured, ...rest] = debates;
-  return (
-    <section>
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-ink">AI War Room 🤖⚔️🧑‍💼</h2>
-        <p className="text-xs text-slate">
-          Three robots debate every confirmed signal — a Technical and a
-          Fundamental analyst argue, then the Manager decides. Illustration of
-          the AI&apos;s reasoning; not financial advice.
-        </p>
-      </div>
-      {featured ? (
-        <>
-          <WarRoomStage debate={featured} />
-          {rest.length > 0 ? (
-            <>
-              <h3 className="mb-3 mt-6 text-sm font-semibold text-ink">
-                Earlier debates
-              </h3>
-              <DebateBoard debates={rest} />
-            </>
-          ) : null}
-        </>
-      ) : (
-        <DebateBoard debates={[]} />
-      )}
-    </section>
-  );
-}
-
 
 async function SessionSection({
   title,
@@ -142,9 +106,7 @@ export default async function Dashboard({
         ? "scalping"
         : tab === "super-scalping"
           ? "super-scalping"
-          : tab === "war-room"
-            ? "war-room"
-            : "all";
+          : "all";
 
   return (
     <DashboardShell
@@ -207,21 +169,9 @@ export default async function Dashboard({
           >
             Swing (1h)
           </Link>
-          <Link
-            href="/dashboard?tab=war-room"
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-              currentTab === "war-room"
-                ? "bg-ink text-paper shadow-md"
-                : "text-slate hover:bg-card hover:text-ink"
-            }`}
-          >
-            War Room 🤖
-          </Link>
         </nav>
 
-        {currentTab === "war-room" ? (
-          <WarRoomSection />
-        ) : currentTab === "all" ? (
+        {currentTab === "all" ? (
           SESSIONS.map((s) => (
             <SessionSection key={s.timeframe} accessToken={accessToken} {...s} />
           ))

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/dashboard", label: "Signals", match: "signals" },
+  { href: "/dashboard/war-room", label: "War Room", match: "war-room" },
   { href: "/dashboard/markets", label: "Markets", match: "markets" },
 ] as const;
 
@@ -19,16 +20,22 @@ export function DashboardNav({
     <nav className="flex flex-col gap-1 p-3">
       {links.map((l) => {
         const active =
-          l.match === "markets"
-            ? pathname.startsWith("/dashboard/markets")
-            : pathname === "/dashboard" || pathname.startsWith("/dashboard?");
+          l.match === "signals"
+            ? pathname === "/dashboard" || pathname.startsWith("/dashboard?")
+            : pathname.startsWith(l.href);
         return (
           <Link
             key={l.href}
             href={l.href}
             className={`nav-item ${active ? "nav-item-active" : ""}`}
           >
-            {l.match === "markets" ? <CandlesIcon /> : <ChartIcon />}
+            {l.match === "markets" ? (
+              <CandlesIcon />
+            ) : l.match === "war-room" ? (
+              <RobotIcon />
+            ) : (
+              <ChartIcon />
+            )}
             {l.label}
           </Link>
         );
@@ -48,6 +55,18 @@ function ChartIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <path d="M3 3v18h18" />
       <path d="M7 16l4-8 4 5 5-9" />
+    </svg>
+  );
+}
+
+function RobotIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="5" y="8" width="14" height="11" rx="3" />
+      <path d="M12 3v3" />
+      <circle cx="12" cy="3" r="1" fill="currentColor" />
+      <path d="M9 13h.01M15 13h.01" />
+      <path d="M2 12v3M22 12v3" />
     </svg>
   );
 }
