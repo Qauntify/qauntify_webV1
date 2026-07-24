@@ -152,6 +152,10 @@ def detect_setup(symbol, candles, atr14, htf_trend=None):
                 "fvg_top": gap_top,
                 "atr": atr_value,
                 "tp_r": [SUPER_SCALP_TP1_R, SUPER_SCALP_TP2_R, SUPER_SCALP_TP3_R],
+                "sweep_time": window[sweep_i].open_time,
+                "choch_time": window[choch_i].open_time,
+                "fvg_start_time": window[max(fvg_i - 2, 0)].open_time,
+                "retest_time": window[retest_i].open_time,
             }
             if htf_trend is not None:
                 indicators["htf_trend"] = htf_trend
@@ -208,6 +212,10 @@ def detect_setup(symbol, candles, atr14, htf_trend=None):
                 "fvg_top": gap_top,
                 "atr": atr_value,
                 "tp_r": [SUPER_SCALP_TP1_R, SUPER_SCALP_TP2_R, SUPER_SCALP_TP3_R],
+                "sweep_time": window[sweep_i].open_time,
+                "choch_time": window[choch_i].open_time,
+                "fvg_start_time": window[max(fvg_i - 2, 0)].open_time,
+                "retest_time": window[retest_i].open_time,
             }
             if htf_trend is not None:
                 indicators["htf_trend"] = htf_trend

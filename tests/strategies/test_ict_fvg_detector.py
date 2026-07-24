@@ -103,3 +103,14 @@ def test_router_dispatches_ict_fvg():
     )
     assert setup is not None
     assert setup.indicators["strategy"] == "ict_fvg"
+
+
+def test_detect_ict_fvg_stores_event_timestamps():
+    candles = _bullish_ict_fvg_series()
+    atr14 = [4.0] * len(candles)
+    setup = detect_setup("BTCUSDT", candles, atr14)
+    assert setup is not None
+    ind = setup.indicators
+    for key in ("sweep_time", "choch_time", "fvg_start_time", "retest_time"):
+        assert key in ind, f"missing {key}"
+        assert isinstance(ind[key], int)
