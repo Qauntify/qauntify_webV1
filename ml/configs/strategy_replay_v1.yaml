@@ -1,0 +1,38 @@
+version: replay_v1
+
+input:
+  cleaned_dataset_root: ml/data/processed/cleaned_candles
+  manifest_path: ml/data/processed/cleaned_candles/dataset_manifest.json
+
+output:
+  candidates_root: ml/data/processed/candidates
+  reports_root: ml/data/reports
+
+symbols:
+  - XAUUSD
+
+# These are the repository's default active production streams. Selectable
+# strategies that are not active by default are deliberately excluded.
+strategies:
+  - name: ict_fvg
+    timeframe: M5
+    confluence_timeframe: M15
+    minimum_history: 60
+  - name: sr_zone
+    timeframe: M15
+    minimum_history: 60
+  - name: ema_cross
+    timeframe: H1
+    confluence_timeframe: H4
+    minimum_history: 60
+
+closed_candles_only: true
+fail_on_invalid_candidate: true
+fail_on_duplicate_candidate_id: true
+partition_columns:
+  - symbol
+  - timeframe
+  - strategy_name
+  - year
+compression: zstd
+

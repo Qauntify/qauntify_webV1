@@ -1,0 +1,31 @@
+version: feature_v1
+
+input:
+  candidates_root: ml/data/processed/candidates
+  candidate_manifest_path: ml/data/processed/candidates/candidate_manifest.json
+  candles_root: ml/data/processed/cleaned_candles
+  candle_manifest_path: ml/data/processed/cleaned_candles/dataset_manifest.json
+
+output:
+  features_root: ml/data/processed/features
+  reports_root: ml/data/reports
+
+causality:
+  boundary: source_candle_close
+  include_source_candle: true
+  forbid_candles_at_or_after_candidate_timestamp: true
+
+lookbacks:
+  volatility: 20
+  range: 20
+  structure: 120
+  fvg: 20
+
+partition_columns:
+  - strategy_name
+  - timeframe
+  - year
+compression: zstd
+fail_on_missing_candidate: true
+fail_on_duplicate_candidate_id: true
+

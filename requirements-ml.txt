@@ -1,0 +1,12 @@
+# Install requirements.txt as well when running offline training workflows.
+-r requirements-ml-data.txt
+-r requirements-training.txt
+jupyter
+numpy
+scikit-learn
+tensorflow
+matplotlib
+lightgbm
+optuna
+shap
+ta
