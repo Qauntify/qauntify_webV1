@@ -76,6 +76,51 @@ def format_alert(signal: Signal) -> str:
     )
 
 
+def format_caption(signal: Signal) -> str:
+    """Compact <=1024-char caption for the chart photo. The image carries the
+    'why', so the long analysis text is dropped here."""
+    direction = signal.direction.upper()
+    dot = _direction_dot(signal.direction)
+    tp2 = signal.take_profit_2 or signal.take_profit
+    tp3 = signal.take_profit_3 or signal.take_profit
+    return (
+        f"{dot} <b>{direction} SIGNAL</b>\n"
+        f"💹 <b>{_esc(signal.symbol)}</b> · <code>{_esc(signal.timeframe)}</code>\n"
+        f"🎯 Confidence {signal.confidence}%\n"
+        f"📍 Entry {_price(signal.entry)}  🛑 SL {_price(signal.stop_loss)}\n"
+        f"🎯 TP {_price(signal.take_profit)} / {_price(tp2)} / {_price(tp3)}\n"
+        f"⚖️ R:R {_risk_reward(signal.entry, signal.stop_loss, tp3)}"
+    )
+
+
+def send_photo(photo_url: str, caption: str, bot_token: str, chat_id: str,
+               session=None) -> None:
+    """Send one photo message; raises on failure so the caller can retry."""
+    session = session or requests.Session()
+    response = session.post(
+        f"https://api.telegram.org/bot{bot_token}/sendPhoto",
+        json={
+            "chat_id": chat_id,
+            "photo": photo_url,
+            "caption": caption,
+            "parse_mode": "HTML",
+        },
+        timeout=20,
+    )
+    if response.status_code >= 400:
+        detail = ""
+        try:
+            detail = (response.json() or {}).get("description") or ""
+        except Exception:
+            detail = (response.text or "")[:200]
+        raise requests.HTTPError(
+            f"{response.status_code} Telegram photo failed"
+            + (f": {detail}" if detail else ""),
+            response=response,
+        )
+    response.raise_for_status()
+
+
 def _indicator_line(indicators: dict) -> str:
     if indicators.get("strategy") == "sr_zone" or "zone_low" in indicators:
         parts = []
@@ -173,8 +218,13 @@ def send_message(text: str, bot_token: str, chat_id: str,
 
 def send_alert(signal: Signal, bot_token: str, chat_id: str,
                session=None) -> None:
-    """Send one confirmed-signal alert."""
-    send_message(format_alert(signal), bot_token, chat_id, session=session)
+    """Send one confirmed-signal alert — a photo when a chart was rendered,
+    otherwise the text message."""
+    if getattr(signal, "chart_url", None):
+        send_photo(signal.chart_url, format_caption(signal), bot_token, chat_id,
+                   session=session)
+    else:
+        send_message(format_alert(signal), bot_token, chat_id, session=session)
 
 
 def send_no_signal_alert(report: NoSignalReport, bot_token: str, chat_id: str,

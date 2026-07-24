@@ -357,3 +357,47 @@ def test_format_run_summary_tags_lines_with_timeframe():
     ])
     assert "BTCUSDT [15m]  ·  CONFIRMED  ·  LONG 82%" in text
     assert "BTCUSDT [1h]  ·  NO SIGNAL" in text
+
+
+from signals.models import Signal
+from signals.telegram_client import format_caption, send_alert
+
+
+def _chart_signal(chart_url=None):
+    return Signal(id="s1", symbol="XAUUSD", timeframe="5m", direction="long",
+                  entry=2006.8, stop_loss=2001.8, take_profit=2009.3,
+                  take_profit_2=2011.8, take_profit_3=2014.3, confidence=72,
+                  rationale="x" * 2000, indicators={}, news_headlines=[],
+                  created_at="t", chart_url=chart_url)
+
+
+class _ChartRec:
+    def __init__(self):
+        self.calls = []
+
+    def post(self, url, json=None, timeout=None):
+        self.calls.append({"url": url, "json": json})
+
+        class _R:
+            status_code = 200
+
+            def raise_for_status(self_inner):
+                return None
+        return _R()
+
+
+def test_caption_stays_under_telegram_limit():
+    assert len(format_caption(_chart_signal())) <= 1024
+
+
+def test_send_alert_uses_photo_when_chart_present():
+    rec = _ChartRec()
+    send_alert(_chart_signal(chart_url="http://x/s1.png"), "tok", "chat", session=rec)
+    assert rec.calls[0]["url"].endswith("/sendPhoto")
+    assert rec.calls[0]["json"]["photo"] == "http://x/s1.png"
+
+
+def test_send_alert_falls_back_to_message_without_chart():
+    rec = _ChartRec()
+    send_alert(_chart_signal(chart_url=None), "tok", "chat", session=rec)
+    assert rec.calls[0]["url"].endswith("/sendMessage")
