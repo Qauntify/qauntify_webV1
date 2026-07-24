@@ -334,6 +334,20 @@ function SignalDetailModal({
             <DetailRow label="Risk / reward" value={riskReward(signal)} tone="accent" />
           </div>
 
+          {signal.chartUrl && (
+            <div className="mt-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">
+                Setup chart
+              </p>
+              <img
+                src={signal.chartUrl}
+                alt={`${signal.symbol} ${signal.timeframe} ${signal.direction} setup`}
+                loading="lazy"
+                className="w-full rounded-lg border border-slate/15"
+              />
+            </div>
+          )}
+
           <div className="mt-5 rounded-lg border border-line bg-accent-soft/30 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-slate">
               AI rationale
