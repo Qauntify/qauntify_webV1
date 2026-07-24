@@ -16,6 +16,7 @@ _INERT_RUN_STORAGE_DEFAULTS = {
     "signals.run.save_ai_event": lambda *a, **k: None,
     "signals.run.save_signal": lambda *a, **k: None,
     "signals.run.save_engine_run": lambda *a, **k: None,
+    "signals.run.attach_chart": lambda signal, *a, **k: signal,
 }
 
 

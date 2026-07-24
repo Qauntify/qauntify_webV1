@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from signals.market_client import fetch_candles
+from signals.chart.pipeline import attach_chart
 from signals.composer import confirm_setup, no_setup_rationale
 from signals.rag import retrieve_context
 from signals.config import load_config
@@ -493,6 +494,11 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         ), candles=candles)
 
     signal = make_signal(setup, confirmation, [], timeframe=timeframe)
+    signal = attach_chart(
+        signal, candles,
+        supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
+        session=session,
+    )
     try:
         with_retry(lambda: save_signal(
             signal, cfg.supabase_url, cfg.supabase_service_key, session=session,
