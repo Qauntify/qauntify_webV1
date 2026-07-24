@@ -67,3 +67,13 @@ def test_ema_cross_plan_has_ema_series():
     series_roles = {a["role"] for a in plan if a["kind"] == "series"}
     assert series_roles == {"ema-fast", "ema-slow"}
     assert any(a["kind"] == "marker" and a["time"] == candles[25].open_time for a in plan)
+
+
+def test_ce_lwma_plan_has_lwma_and_trail():
+    candles = [_Candle(open_time=i, open=100, high=101, low=99, close=100,
+                       volume=1.0) for i in range(210)]
+    ind = {"strategy": "ce_lwma", "ce_trail": 99.5, "lwma200": 100.0,
+           "zone": "discount"}
+    plan = build_chart_plan(candles, _signal(ind))
+    assert any(a["kind"] == "series" and a["role"] == "lwma" for a in plan)
+    assert any(a["role"] == "trail" for a in plan)
