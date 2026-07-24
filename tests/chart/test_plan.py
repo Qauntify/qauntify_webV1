@@ -36,3 +36,12 @@ def test_ict_fvg_plan_has_fvg_zone_and_markers():
     assert len(fvg) == 1 and fvg[0]["kind"] == "zone"
     markers = [a for a in plan if a["kind"] == "marker"]
     assert {m["order"] for m in markers} == {1, 2, 3}
+
+
+def test_ict_smc_plan_has_structure_markers():
+    ind = {"strategy": "ict_smc", "choch_level": 101.0, "choch_time": 200,
+           "sweep_level": 99.0, "sweep_low": 98.5, "sweep_time": 170}
+    plan = build_chart_plan([], _signal(ind))
+    markers = [a for a in plan if a["kind"] == "marker"]
+    assert {m["order"] for m in markers} == {1, 2}
+    assert not [a for a in plan if a["role"] == "fvg"]  # ict_smc draws no FVG

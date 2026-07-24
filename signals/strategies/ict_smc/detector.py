@@ -129,6 +129,8 @@ def detect_setup(symbol, candles, atr14, adx14=None, htf_trend=None):
             "choch_level": swing_high,
             "sweep_low": bar.low,
             "atr": atr_value,
+            "sweep_time": window[sweep_i].open_time,
+            "choch_time": window[choch_i].open_time,
         }
         if adx14 is not None and adx14[-1] is not None:
             indicators["adx"] = adx14[-1]
@@ -178,6 +180,8 @@ def detect_setup(symbol, candles, atr14, adx14=None, htf_trend=None):
             "choch_level": swing_low,
             "sweep_high": bar.high,
             "atr": atr_value,
+            "sweep_time": window[sweep_i].open_time,
+            "choch_time": window[choch_i].open_time,
         }
         if adx14 is not None and adx14[-1] is not None:
             indicators["adx"] = adx14[-1]
