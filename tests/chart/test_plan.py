@@ -1,5 +1,6 @@
 from signals.chart.plan import build_chart_plan
 from signals.models import Signal
+from signals.models import Candle as _Candle
 
 
 def _signal(indicators, direction="long"):
@@ -55,3 +56,14 @@ def test_sr_zone_plan_has_full_width_zone():
     assert len(zones) == 1
     assert zones[0]["start_time"] is None  # full chart width
     assert "support" in zones[0]["label"]
+
+
+def test_ema_cross_plan_has_ema_series():
+    candles = [_Candle(open_time=i, open=100, high=101, low=99, close=100 + i * 0.1,
+                       volume=1.0) for i in range(30)]
+    ind = {"ema9": 101.0, "ema21": 100.0, "rsi": 55.0, "macd_hist": 0.2,
+           "cross_time": candles[25].open_time}
+    plan = build_chart_plan(candles, _signal(ind))
+    series_roles = {a["role"] for a in plan if a["kind"] == "series"}
+    assert series_roles == {"ema-fast", "ema-slow"}
+    assert any(a["kind"] == "marker" and a["time"] == candles[25].open_time for a in plan)

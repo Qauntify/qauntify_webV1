@@ -94,6 +94,7 @@ def detect_setup(symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
         if stop >= entry or not _risk_ok(entry, stop, atr_value):
             return None
         tp1, tp2, tp3 = take_profits_from_risk(entry, stop, "long")
+        indicators["cross_time"] = candles[cross_up].open_time
         return CandidateSetup(
             symbol, "long", entry, stop, tp1, indicators,
             take_profit_2=tp2, take_profit_3=tp3,
@@ -111,6 +112,7 @@ def detect_setup(symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
         if stop <= entry or not _risk_ok(entry, stop, atr_value):
             return None
         tp1, tp2, tp3 = take_profits_from_risk(entry, stop, "short")
+        indicators["cross_time"] = candles[cross_down].open_time
         return CandidateSetup(
             symbol, "short", entry, stop, tp1, indicators,
             take_profit_2=tp2, take_profit_3=tp3,
