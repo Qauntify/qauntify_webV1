@@ -333,3 +333,13 @@ as $$
     order by c.embedding <=> query_embedding
     limit greatest(match_count, 1);
 $$;
+
+-- Annotated setup charts: PNG URL + structured annotation/candle data.
+alter table public.signals add column if not exists chart_url text;
+alter table public.signals add column if not exists chart_data jsonb;
+
+-- Public bucket for rendered signal charts. Objects are uploaded with the
+-- service key (bypasses RLS) and read via the public object path.
+insert into storage.buckets (id, name, public)
+values ('signal-charts', 'signal-charts', true)
+on conflict (id) do nothing;
