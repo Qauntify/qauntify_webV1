@@ -1,0 +1,43 @@
+version: training_v1
+
+input:
+  features_root: ml/data/processed/features
+  feature_manifest_path: ml/data/processed/features/feature_manifest.json
+  outcomes_root: ml/data/processed/outcomes
+  outcome_manifest_path: ml/data/processed/outcomes/outcome_manifest.json
+
+output:
+  dataset_root: ml/data/datasets/training_v1
+  reports_root: ml/data/reports
+
+targets:
+  multiclass: outcome_class
+  regression: net_realized_r
+  binary:
+    name: binary_success
+    rule: net_realized_r_strictly_greater_than_zero
+  right_censored_policy: retain_but_supervised_ineligible
+
+chronological_split:
+  train_fraction: 0.70
+  validation_fraction: 0.15
+  test_fraction: 0.15
+  embargo_days: 14
+  purge_label_windows: true
+
+walk_forward:
+  folds: 5
+  initial_train_fraction: 0.50
+  validation_fraction: 0.10
+  embargo_days: 14
+  expanding_window: true
+  purge_label_windows: true
+
+partition_columns:
+  - split
+  - strategy_name
+  - timeframe
+  - year
+compression: zstd
+fail_on_any_join_mismatch: true
+

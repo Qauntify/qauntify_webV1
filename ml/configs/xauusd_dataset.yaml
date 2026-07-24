@@ -1,0 +1,31 @@
+dataset_name: ZombitX64/xauusd-gold-price-historical-data-2004-2025
+revision: main
+symbol: XAUUSD
+
+output_root: ml/data/processed/cleaned_candles
+report_root: ml/data/reports
+cache_root: ml/data/raw/huggingface-cache
+
+partition_columns:
+  - symbol
+  - timeframe
+  - year
+
+compression: zstd
+remove_exact_duplicates: true
+fail_on_invalid_ohlc: true
+fail_on_unknown_timeframe: true
+
+# The Hub dataset does not expose a trustworthy timeframe column after its
+# JSONL files are combined. Timeframe is therefore derived only from these
+# verified repository filenames. Unknown or missing files fail safely.
+source_timeframes:
+  XAU_1m_data.jsonl: M1
+  XAU_5m_data.jsonl: M5
+  XAU_15m_data.jsonl: M15
+  XAU_30m_data.jsonl: M30
+  XAU_1h_data.jsonl: H1
+  XAU_4h_data.jsonl: H4
+  XAU_1d_data.jsonl: D1
+  XAU_1w_data.jsonl: W1
+  XAU_1Month_data.jsonl: MN1
