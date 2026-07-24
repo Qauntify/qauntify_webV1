@@ -171,6 +171,8 @@ class Signal:
     created_at: str
     take_profit_2: float | None = None
     take_profit_3: float | None = None
+    chart_url: str | None = None
+    chart_data: dict | None = None
 
     @property
     def take_profit_1(self) -> float:
