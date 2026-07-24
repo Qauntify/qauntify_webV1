@@ -45,3 +45,13 @@ def test_ict_smc_plan_has_structure_markers():
     markers = [a for a in plan if a["kind"] == "marker"]
     assert {m["order"] for m in markers} == {1, 2}
     assert not [a for a in plan if a["role"] == "fvg"]  # ict_smc draws no FVG
+
+
+def test_sr_zone_plan_has_full_width_zone():
+    ind = {"strategy": "sr_zone", "side": "support", "zone_low": 2000.0,
+           "zone_high": 2003.0, "touches": 3}
+    plan = build_chart_plan([], _signal(ind))
+    zones = [a for a in plan if a["role"] == "sr"]
+    assert len(zones) == 1
+    assert zones[0]["start_time"] is None  # full chart width
+    assert "support" in zones[0]["label"]
