@@ -87,6 +87,27 @@ def _draw(ax, plan, x_of, last_x):
                         linewidth=1.2, zorder=2)
 
 
+def _price_bounds(candles, plan, pad_frac=0.04):
+    """(low, high) y-limits covering the candles AND every drawn price level.
+
+    mplfinance auto-scales the y-axis to the candles only, so entry/SL/TP or
+    zones that sit outside the candle range (a TP is usually above price) get
+    clipped off the top or bottom. Widen the range so the whole trade is
+    visible, with a little padding.
+    """
+    lo = min(c.low for c in candles)
+    hi = max(c.high for c in candles)
+    for a in plan:
+        if a["kind"] in ("level", "marker"):
+            lo = min(lo, a["price"])
+            hi = max(hi, a["price"])
+        elif a["kind"] == "zone":
+            lo = min(lo, a["price_bottom"], a["price_top"])
+            hi = max(hi, a["price_bottom"], a["price_top"])
+    pad = (hi - lo) * pad_frac or 1.0
+    return lo - pad, hi + pad
+
+
 def render_chart(candles, plan, signal) -> bytes:
     """Render the last RENDER_BARS candles + annotations to PNG bytes."""
     view = candles[-RENDER_BARS:]
@@ -108,6 +129,7 @@ def render_chart(candles, plan, signal) -> bytes:
     )
     ax = axes[0]
     _draw(ax, plan, x_of, last_x)
+    ax.set_ylim(*_price_bounds(view, plan))
     ax.set_title(
         f"{signal.symbol} · {signal.timeframe} · "
         f"{signal.direction.upper()} · {signal.confidence}%",

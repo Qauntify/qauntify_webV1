@@ -1,5 +1,5 @@
 from signals.chart.annotations import level, marker, series, zone
-from signals.chart.render import render_chart
+from signals.chart.render import _price_bounds, render_chart
 from signals.models import Candle, Signal
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -38,3 +38,15 @@ def test_render_chart_returns_png_bytes():
 def test_render_chart_handles_empty_plan():
     png = render_chart(_candles(), [], _signal())
     assert png[:8] == _PNG_MAGIC
+
+
+def test_price_bounds_expands_to_include_targets_above_candles():
+    candles = _candles()  # highs top out around ~103.4
+    plan = [
+        level(200.0, "TP3", "target", style="dashed"),  # far above the candles
+        level(50.0, "SL", "stop", style="dashed"),      # far below the candles
+    ]
+    lo, hi = _price_bounds(candles, plan)
+    assert hi > 200.0  # TP3 is inside the view (with padding), not clipped
+    assert lo < 50.0   # SL is inside the view too
+
