@@ -14,7 +14,7 @@
 
 **Create:**
 - `web/src/lib/track-record.ts` — types + pure derivation functions + `getTrackRecord` fetch.
-- `web/tests/track-record.test.ts` — vitest unit tests for the pure functions.
+- `web/tests/lib/track-record.test.ts` — vitest unit tests for the pure functions.
 - `web/src/lib/relative-time.ts` — `relativeTime(iso)` helper (shared by page + table).
 - `web/src/components/track-record/{StatTiles,EquityCurve,Breakdown,Heatmap,RecentTrades,MethodologyNote}.tsx`.
 - `web/src/app/track-record/page.tsx` — the public page.
@@ -61,11 +61,11 @@ git commit -m "feat(track-record): anon RLS policy for closed trades"
 
 **Files:**
 - Create: `web/src/lib/track-record.ts`
-- Test: `web/tests/track-record.test.ts`
+- Test: `web/tests/lib/track-record.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `web/tests/track-record.test.ts`:
+Create `web/tests/lib/track-record.test.ts`:
 
 ```typescript
 import { describe, it, expect } from "vitest";
@@ -390,7 +390,7 @@ Expected: PASS (all `track-record.test.ts` cases).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add web/src/lib/track-record.ts web/tests/track-record.test.ts
+git add web/src/lib/track-record.ts web/tests/lib/track-record.test.ts
 git commit -m "feat(track-record): pure derivation functions + tests"
 ```
 
