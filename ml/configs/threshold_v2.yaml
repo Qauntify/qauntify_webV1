@@ -1,0 +1,30 @@
+version: threshold_v2
+base_config: ml/configs/catboost_v1.yaml
+training_dataset_root: ml/data/datasets/training_v1
+tuning_root: artifacts/tuning/tuning_v1
+output_root: artifacts/thresholding/threshold_v2
+
+# Approved threshold_v2 assumptions.
+minimum_accepted_candidates_per_fold: 100
+trading_cost_r: 0.02
+cost_sensitivity_r: [0.03, 0.05]
+
+calibration:
+  methods: [sigmoid, isotonic]
+  selection_metric: brier_score
+  cross_fit_folds: 5
+
+threshold_search:
+  start: 0.50
+  stop: 0.56
+  step: 0.002
+  minimum_coverage: 0.05
+  minimum_positive_folds: 4
+  stability_penalty: 0.50
+
+combined_filters:
+  regression_positive: [false, true]
+  approved_strategy_timeframe_segments: [false, true]
+
+segment_dimensions: [strategy_name, timeframe, direction, confidence_bucket]
+threshold_v1_probability: 0.50

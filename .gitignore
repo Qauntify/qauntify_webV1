@@ -16,6 +16,8 @@ ml/data/features/*
 ml/data/datasets/*
 artifacts/candidates/*
 artifacts/experiments/
+artifacts/tuning/
+artifacts/thresholding/
 
 # Keep the repository structure visible while ignoring generated contents.
 !ml/data/raw/.gitkeep
