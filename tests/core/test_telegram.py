@@ -432,3 +432,26 @@ def test_long_analysis_falls_back_to_followup_message():
     assert rec.calls[1]["url"].endswith("/sendMessage")
     assert "Analysis" in rec.calls[1]["json"]["text"]
     assert "y" * 200 in rec.calls[1]["json"]["text"]
+
+
+def _outcome_row(outcome_chart_url=None):
+    return {"symbol": "XAUUSD", "direction": "long", "entry": 100.0,
+            "stop_loss": 98.0, "take_profit": 103.0, "take_profit_1": 101.0,
+            "take_profit_2": 102.0, "take_profit_3": 103.0,
+            "outcome_chart_url": outcome_chart_url}
+
+
+def test_outcome_alert_uses_photo_when_chart_present():
+    from signals.telegram_client import send_outcome_alert
+    rec = _ChartRec()
+    send_outcome_alert(_outcome_row("http://x/s1-outcome.png"), "tp3_hit",
+                       "tok", "chat", session=rec)
+    assert rec.calls[0]["url"].endswith("/sendPhoto")
+    assert rec.calls[0]["json"]["photo"] == "http://x/s1-outcome.png"
+
+
+def test_outcome_alert_falls_back_to_message_without_chart():
+    from signals.telegram_client import send_outcome_alert
+    rec = _ChartRec()
+    send_outcome_alert(_outcome_row(None), "sl_hit", "tok", "chat", session=rec)
+    assert rec.calls[0]["url"].endswith("/sendMessage")

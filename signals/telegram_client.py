@@ -310,9 +310,14 @@ def format_outcome_alert(signal_row: dict, outcome: str) -> str:
 
 def send_outcome_alert(signal_row: dict, outcome: str, bot_token: str,
                        chat_id: str, session=None) -> None:
-    """Send one TP/SL-hit alert."""
-    send_message(format_outcome_alert(signal_row, outcome), bot_token,
-                 chat_id, session=session)
+    """Send one TP/SL-hit alert — a photo when an outcome chart exists,
+    otherwise the text message."""
+    text = format_outcome_alert(signal_row, outcome)
+    url = signal_row.get("outcome_chart_url")
+    if url:
+        send_photo(url, text, bot_token, chat_id, session=session)
+    else:
+        send_message(text, bot_token, chat_id, session=session)
 
 
 def format_run_summary(run_id: str, timeframe: str, outcomes: list[dict]) -> str:
