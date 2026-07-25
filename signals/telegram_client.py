@@ -77,8 +77,9 @@ def format_alert(signal: Signal) -> str:
 
 
 def format_caption(signal: Signal) -> str:
-    """Compact <=1024-char caption for the chart photo. The image carries the
-    'why', so the long analysis text is dropped here."""
+    """Compact caption essentials for the chart photo (symbol, levels, R:R).
+    `send_alert` appends the AI analysis on top of this when it fits under the
+    caption limit, or sends it as a follow-up message when it doesn't."""
     direction = signal.direction.upper()
     dot = _direction_dot(signal.direction)
     tp2 = signal.take_profit_2 or signal.take_profit
@@ -216,15 +217,34 @@ def send_message(text: str, bot_token: str, chat_id: str,
     response.raise_for_status()
 
 
+# Telegram caps photo captions at 1024 UTF-16 units; stay conservative since
+# emojis count as 2. Longer analysis is sent as a separate follow-up message.
+_CAPTION_LIMIT = 1000
+
+
+def _analysis_text(signal: Signal) -> str:
+    return f"🧠 <b>Analysis</b>\n<i>{_esc(signal.rationale)}</i>"
+
+
 def send_alert(signal: Signal, bot_token: str, chat_id: str,
                session=None) -> None:
-    """Send one confirmed-signal alert — a photo when a chart was rendered,
-    otherwise the text message."""
-    if getattr(signal, "chart_url", None):
-        send_photo(signal.chart_url, format_caption(signal), bot_token, chat_id,
-                   session=session)
-    else:
+    """Send one confirmed-signal alert. With a chart: a photo whose caption is
+    the setup essentials plus the AI analysis (or, if that overflows the caption
+    limit, the essentials as the caption and the analysis as a follow-up
+    message). Without a chart: the full text alert."""
+    if not getattr(signal, "chart_url", None):
         send_message(format_alert(signal), bot_token, chat_id, session=session)
+        return
+
+    caption = format_caption(signal)
+    analysis = _analysis_text(signal) if signal.rationale else ""
+    if analysis and len(caption) + len(analysis) + 2 <= _CAPTION_LIMIT:
+        send_photo(signal.chart_url, f"{caption}\n\n{analysis}", bot_token,
+                   chat_id, session=session)
+    else:
+        send_photo(signal.chart_url, caption, bot_token, chat_id, session=session)
+        if analysis:
+            send_message(analysis, bot_token, chat_id, session=session)
 
 
 def send_no_signal_alert(report: NoSignalReport, bot_token: str, chat_id: str,

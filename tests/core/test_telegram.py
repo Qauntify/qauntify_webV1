@@ -401,3 +401,34 @@ def test_send_alert_falls_back_to_message_without_chart():
     rec = _ChartRec()
     send_alert(_chart_signal(chart_url=None), "tok", "chat", session=rec)
     assert rec.calls[0]["url"].endswith("/sendMessage")
+
+
+def _chart_signal_with_rationale(rationale, chart_url="http://x/sig.png"):
+    return Signal(id="s", symbol="XAUUSD", timeframe="5m", direction="long",
+                  entry=2006.8, stop_loss=2001.8, take_profit=2009.3,
+                  take_profit_2=2011.8, take_profit_3=2014.3, confidence=72,
+                  rationale=rationale, indicators={}, news_headlines=[],
+                  created_at="t", chart_url=chart_url)
+
+
+def test_photo_caption_includes_analysis_when_short():
+    rec = _ChartRec()
+    sig = _chart_signal_with_rationale("Swept the low then CHoCH up into the FVG.")
+    send_alert(sig, "tok", "chat", session=rec)
+    assert len(rec.calls) == 1
+    assert rec.calls[0]["url"].endswith("/sendPhoto")
+    cap = rec.calls[0]["json"]["caption"]
+    assert "Analysis" in cap
+    assert "CHoCH up into the FVG" in cap
+
+
+def test_long_analysis_falls_back_to_followup_message():
+    rec = _ChartRec()
+    sig = _chart_signal_with_rationale("y" * 2000)
+    send_alert(sig, "tok", "chat", session=rec)
+    assert len(rec.calls) == 2
+    assert rec.calls[0]["url"].endswith("/sendPhoto")
+    assert "yyyy" not in rec.calls[0]["json"]["caption"]  # essentials only
+    assert rec.calls[1]["url"].endswith("/sendMessage")
+    assert "Analysis" in rec.calls[1]["json"]["text"]
+    assert "y" * 200 in rec.calls[1]["json"]["text"]
