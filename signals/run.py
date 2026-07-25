@@ -258,6 +258,31 @@ def _log_ai_event(kind: str, symbol: str, cfg, *, timeframe: str,
         print(f"[{symbol}] failed to store ai_events ({type(exc).__name__}), continuing")
 
 
+def _reject(symbol, cfg, *, timeframe, report_kind, event_kind, rationale,
+            indicators, candles, setup=None, confidence=None, session=None):
+    """Log a no-setup/reject ai_event and return the matching ScanResult.
+
+    Trade fields (direction/entry/stop_loss/take_profit) come from `setup` when
+    present, else None. `report_kind` is the NoSignalReport kind ("no_setup" /
+    "rejected"); `event_kind` is the ai_events kind ("no_setup" / "reject").
+    """
+    direction = setup.direction if setup is not None else None
+    entry = setup.entry if setup is not None else None
+    stop_loss = setup.stop_loss if setup is not None else None
+    take_profit = setup.take_profit if setup is not None else None
+    _log_ai_event(
+        event_kind, symbol, cfg, timeframe=timeframe, rationale=rationale,
+        indicators=indicators, headlines=[], direction=direction, entry=entry,
+        stop_loss=stop_loss, take_profit=take_profit, confidence=confidence,
+        session=session,
+    )
+    return ScanResult(no_signal=NoSignalReport(
+        symbol=symbol, timeframe=timeframe, kind=report_kind, rationale=rationale,
+        indicators=indicators, direction=direction, entry=entry,
+        stop_loss=stop_loss, take_profit=take_profit, confidence=confidence,
+    ), candles=candles)
+
+
 def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
                 timeframe=None,
                 session=None,
@@ -385,24 +410,12 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         rationale = no_setup_rationale(
             symbol, timeframe, indicators, strategy=strategy,
         )
-        _log_ai_event(
-            "no_setup",
-            symbol,
-            cfg,
-            timeframe=timeframe,
-            rationale=rationale,
-            indicators=indicators,
-            headlines=[],
-            session=session,
-        )
         print(f"[{symbol}] no-signal analysis: {rationale}")
-        return ScanResult(no_signal=NoSignalReport(
-            symbol=symbol,
-            timeframe=timeframe,
-            kind="no_setup",
-            rationale=rationale,
-            indicators=indicators,
-        ), candles=candles)
+        return _reject(
+            symbol, cfg, timeframe=timeframe, report_kind="no_setup",
+            event_kind="no_setup", rationale=rationale, indicators=indicators,
+            candles=candles, session=session,
+        )
 
     tp1, tp2, tp3 = setup.resolved_take_profits()
     print(f"[{symbol}] candidate {setup.direction}: entry={setup.entry} "
@@ -429,69 +442,27 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         rag_block=rag_block or None,
     )
     if confirmation.verdict != "confirm":
-        _log_ai_event(
-            "reject",
-            symbol,
-            cfg,
-            timeframe=timeframe,
-            rationale=confirmation.rationale,
-            indicators=setup.indicators,
-            headlines=[],
-            direction=setup.direction,
-            entry=setup.entry,
-            stop_loss=setup.stop_loss,
-            take_profit=setup.take_profit,
-            confidence=confirmation.confidence,
-            session=session,
-        )
         print(f"[{symbol}] rejected by LLM: {confirmation.rationale}")
-        return ScanResult(no_signal=NoSignalReport(
-            symbol=symbol,
-            timeframe=timeframe,
-            kind="rejected",
-            rationale=confirmation.rationale,
-            indicators=setup.indicators,
-            direction=setup.direction,
-            entry=setup.entry,
-            stop_loss=setup.stop_loss,
-            take_profit=setup.take_profit,
-            confidence=confirmation.confidence,
-        ), candles=candles)
+        return _reject(
+            symbol, cfg, timeframe=timeframe, report_kind="rejected",
+            event_kind="reject", rationale=confirmation.rationale,
+            indicators=setup.indicators, candles=candles, setup=setup,
+            confidence=confirmation.confidence, session=session,
+        )
 
     if confirmation.confidence < min_store_confidence:
         rationale = (
             f"Confidence {confirmation.confidence} below store threshold "
             f"{min_store_confidence}: {confirmation.rationale}"
         )
-        _log_ai_event(
-            "reject",
-            symbol,
-            cfg,
-            timeframe=timeframe,
-            rationale=rationale,
-            indicators=setup.indicators,
-            headlines=[],
-            direction=setup.direction,
-            entry=setup.entry,
-            stop_loss=setup.stop_loss,
-            take_profit=setup.take_profit,
-            confidence=confirmation.confidence,
-            session=session,
-        )
         print(f"[{symbol}] confirm below store threshold "
               f"({confirmation.confidence} < {min_store_confidence})")
-        return ScanResult(no_signal=NoSignalReport(
-            symbol=symbol,
-            timeframe=timeframe,
-            kind="rejected",
-            rationale=rationale,
-            indicators=setup.indicators,
-            direction=setup.direction,
-            entry=setup.entry,
-            stop_loss=setup.stop_loss,
-            take_profit=setup.take_profit,
-            confidence=confirmation.confidence,
-        ), candles=candles)
+        return _reject(
+            symbol, cfg, timeframe=timeframe, report_kind="rejected",
+            event_kind="reject", rationale=rationale,
+            indicators=setup.indicators, candles=candles, setup=setup,
+            confidence=confirmation.confidence, session=session,
+        )
 
     signal = make_signal(setup, confirmation, [], timeframe=timeframe)
     signal = attach_chart(
