@@ -49,6 +49,7 @@ export type Signal = {
   closedAt: string | null;
   status: SignalStatus;
   chartUrl: string | null;
+  outcomeChartUrl: string | null;
 };
 
 export type Stats = {
@@ -82,6 +83,7 @@ type SignalRow = {
   closed_at?: string | null;
   status?: string;
   chart_url?: string | null;
+  outcome_chart_url?: string | null;
 };
 
 function parseStatus(value: string | undefined): SignalStatus {
@@ -250,6 +252,7 @@ function parseRow(row: SignalRow): Signal | null {
     closedAt: typeof row.closed_at === "string" ? row.closed_at : null,
     status: parseStatus(row.status),
     chartUrl: typeof row.chart_url === "string" ? row.chart_url : null,
+    outcomeChartUrl: typeof row.outcome_chart_url === "string" ? row.outcome_chart_url : null,
   };
 }
 

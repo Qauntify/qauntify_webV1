@@ -348,6 +348,20 @@ function SignalDetailModal({
             </div>
           )}
 
+          {signal.outcomeChartUrl && (
+            <div className="mt-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">
+                Outcome
+              </p>
+              <img
+                src={signal.outcomeChartUrl}
+                alt={`${signal.symbol} ${signal.timeframe} ${signal.direction} outcome`}
+                loading="lazy"
+                className="w-full rounded-lg border border-slate/15"
+              />
+            </div>
+          )}
+
           <div className="mt-5 rounded-lg border border-line bg-accent-soft/30 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-slate">
               AI rationale

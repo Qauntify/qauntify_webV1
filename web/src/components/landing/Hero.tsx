@@ -22,6 +22,7 @@ const SAMPLE_SIGNAL: Signal = {
   closedAt: null,
   status: "open",
   chartUrl: null,
+  outcomeChartUrl: null,
 };
 
 export function Hero({ latestSignal }: { latestSignal: Signal | null }) {
