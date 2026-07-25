@@ -21,6 +21,8 @@ const SIGNAL: Signal = {
   createdAt: new Date().toISOString(),
   closedAt: null,
   status: "open",
+  chartUrl: null,
+  outcomeChartUrl: null,
 };
 
 describe("TradeTicket", () => {

@@ -26,6 +26,8 @@ const CLOSED: Signal = {
   createdAt: "2026-07-06T09:00:00.000Z",
   closedAt: "2026-07-07T10:00:00.000Z",
   status: "tp_hit",
+  chartUrl: null,
+  outcomeChartUrl: null,
 };
 
 describe("export-closed-signals helpers", () => {
