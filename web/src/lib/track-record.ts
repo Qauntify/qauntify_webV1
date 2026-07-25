@@ -179,3 +179,42 @@ export function toClosedTrade(row: RawRow): ClosedTrade | null {
     outcomeChartUrl: typeof row.outcome_chart_url === "string" ? row.outcome_chart_url : null,
   };
 }
+
+async function fetchClosedRows(accessToken?: string): Promise<RawRow[] | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return null;
+  const base = url.replace(/\/$/, "");
+  const query =
+    "select=id,symbol,timeframe,direction,entry,stop_loss,take_profit," +
+    "take_profit_1,take_profit_2,take_profit_3,status,created_at,closed_at," +
+    "indicators,outcome_chart_url" +
+    "&status=in.(tp_hit,tp3_hit,sl_hit)&order=closed_at.asc.nullslast";
+  try {
+    const res = await fetch(`${base}/rest/v1/signals?${query}`, {
+      headers: { apikey: anonKey, Authorization: `Bearer ${accessToken ?? anonKey}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return Array.isArray(rows) ? (rows as RawRow[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getTrackRecord(accessToken?: string): Promise<TrackRecord> {
+  const rows = await fetchClosedRows(accessToken);
+  const trades = (rows ?? [])
+    .map(toClosedTrade)
+    .filter((t): t is ClosedTrade => t !== null);
+  return {
+    summary: summarize(trades),
+    equity: equityCurve(trades),
+    byStrategy: breakdown(trades, (t) => t.strategy),
+    bySymbol: breakdown(trades, (t) => t.symbol),
+    byTimeframe: breakdown(trades, (t) => t.timeframe),
+    daily: dailyNet(trades),
+    recent: recentTrades(trades, 20),
+  };
+}
