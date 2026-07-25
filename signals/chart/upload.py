@@ -5,10 +5,10 @@ BUCKET = "signal-charts"
 
 
 def upload_chart(png: bytes, signal_id: str, supabase_url: str,
-                 service_key: str, session=None) -> str:
-    """Upsert `{signal_id}.png` into the public bucket; return its public URL."""
+                 service_key: str, session=None, suffix: str = "") -> str:
+    """Upsert `{signal_id}{suffix}.png` into the public bucket; return its URL."""
     session = session or requests.Session()
-    path = f"{signal_id}.png"
+    path = f"{signal_id}{suffix}.png"
     response = session.post(
         f"{supabase_url}/storage/v1/object/{BUCKET}/{path}",
         headers={

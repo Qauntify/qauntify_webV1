@@ -26,3 +26,25 @@ def test_upload_chart_posts_png_and_returns_public_url():
     assert call["headers"]["Content-Type"] == "image/png"
     assert call["data"] == b"\x89PNG"
     assert url == "https://proj.supabase.co/storage/v1/object/public/signal-charts/sig-123.png"
+
+
+def test_upload_chart_suffix_changes_object_key():
+    from signals.chart.upload import upload_chart
+
+    class _Resp:
+        status_code = 200
+        def raise_for_status(self):
+            return None
+
+    class _Sess:
+        def __init__(self):
+            self.calls = []
+        def post(self, url, headers=None, data=None, timeout=None):
+            self.calls.append(url)
+            return _Resp()
+
+    s = _Sess()
+    url = upload_chart(b"\x89PNG", "sig-9", "https://p.supabase.co", "k",
+                       session=s, suffix="-outcome")
+    assert s.calls[0].endswith("/signal-charts/sig-9-outcome.png")
+    assert url.endswith("/public/signal-charts/sig-9-outcome.png")
