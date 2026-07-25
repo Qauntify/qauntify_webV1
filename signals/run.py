@@ -283,6 +283,25 @@ def _reject(symbol, cfg, *, timeframe, report_kind, event_kind, rationale,
     ), candles=candles)
 
 
+def _no_setup_indicators(strategy, atr14, adx14, htf_trend,
+                         ema9, ema21, rsi14, macd_hist):
+    """Indicators to attach to a no-setup ai_event, or None while a required
+    series is still warming up (mirrors the previous per-strategy branches)."""
+    if strategy in ("ict_smc", "ict_fvg", "sr_zone"):
+        if atr14[-1] is None:
+            return None
+        indicators = {"strategy": strategy, "atr": atr14[-1]}
+        # ict_fvg intentionally omits ADX (matches prior behavior).
+        if strategy != "ict_fvg" and adx14[-1] is not None:
+            indicators["adx"] = adx14[-1]
+        if htf_trend is not None:
+            indicators["htf_trend"] = htf_trend
+        return indicators
+    if strategy == "ce_lwma":
+        return {"strategy": "ce_lwma"}
+    return _latest_indicators(ema9, ema21, rsi14, macd_hist)
+
+
 def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
                 timeframe=None,
                 session=None,
@@ -370,43 +389,11 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             return ScanResult(candles=candles)
         # Log only fields the active strategy cares about — do not dump EMA/RSI/MACD
         # onto ICT / CE no-setup events (those series are still computed for ema_cross).
-        if strategy == "ict_smc":
-            if atr14[-1] is None:
-                return ScanResult(candles=candles)
-            indicators = {
-                "strategy": "ict_smc",
-                "atr": atr14[-1],
-            }
-            if adx14[-1] is not None:
-                indicators["adx"] = adx14[-1]
-            if htf_trend is not None:
-                indicators["htf_trend"] = htf_trend
-        elif strategy == "ict_fvg":
-            if atr14[-1] is None:
-                return ScanResult(candles=candles)
-            indicators = {
-                "strategy": "ict_fvg",
-                "atr": atr14[-1],
-            }
-            if htf_trend is not None:
-                indicators["htf_trend"] = htf_trend
-        elif strategy == "sr_zone":
-            if atr14[-1] is None:
-                return ScanResult(candles=candles)
-            indicators = {
-                "strategy": "sr_zone",
-                "atr": atr14[-1],
-            }
-            if adx14[-1] is not None:
-                indicators["adx"] = adx14[-1]
-            if htf_trend is not None:
-                indicators["htf_trend"] = htf_trend
-        elif strategy == "ce_lwma":
-            indicators = {"strategy": "ce_lwma"}
-        else:
-            indicators = _latest_indicators(ema9, ema21, rsi14, macd_hist)
-            if indicators is None:
-                return ScanResult(candles=candles)
+        indicators = _no_setup_indicators(
+            strategy, atr14, adx14, htf_trend, ema9, ema21, rsi14, macd_hist,
+        )
+        if indicators is None:
+            return ScanResult(candles=candles)
         rationale = no_setup_rationale(
             symbol, timeframe, indicators, strategy=strategy,
         )
