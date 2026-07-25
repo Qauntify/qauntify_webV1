@@ -296,3 +296,25 @@ def test_latest_signals_since_empty_symbols_skips_request():
         "https://abc.supabase.co", "key", session=ExplodingSession(),
     )
     assert result == {}
+
+
+def test_set_outcome_chart_url_patches_row():
+    from signals.storage import set_outcome_chart_url
+
+    class _Resp:
+        status_code = 200
+        def raise_for_status(self):
+            return None
+
+    class _Sess:
+        def __init__(self):
+            self.calls = []
+        def patch(self, url, headers=None, json=None, timeout=None):
+            self.calls.append({"url": url, "json": json})
+            return _Resp()
+
+    s = _Sess()
+    set_outcome_chart_url("sig-1", "http://x/sig-1-outcome.png",
+                          "https://p.supabase.co", "key", session=s)
+    assert "id=eq.sig-1" in s.calls[0]["url"]
+    assert s.calls[0]["json"] == {"outcome_chart_url": "http://x/sig-1-outcome.png"}

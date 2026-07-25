@@ -183,7 +183,7 @@ def list_open_signals(supabase_url: str, service_key: str, session=None):
             "?status=in.(open,tp1_hit,tp2_hit)"
             "&select=id,symbol,timeframe,direction,entry,stop_loss,"
             "take_profit,take_profit_1,take_profit_2,take_profit_3,"
-            "tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at"
+            "tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at,chart_data"
             "&order=created_at.asc",
             headers={
                 "apikey": service_key,
@@ -259,6 +259,24 @@ def update_signal_outcome(signal_id: str, status: str, at: str,
             "Prefer": "return=minimal",
         },
         json=payload,
+        timeout=15,
+    )
+    response.raise_for_status()
+
+
+def set_outcome_chart_url(signal_id: str, url: str, supabase_url: str,
+                          service_key: str, session=None) -> None:
+    """PATCH just the outcome_chart_url on one signal row."""
+    session = session or requests.Session()
+    response = session.patch(
+        f"{supabase_url}/rest/v1/signals?id=eq.{signal_id}",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+        json={"outcome_chart_url": url},
         timeout=15,
     )
     response.raise_for_status()
