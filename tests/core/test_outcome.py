@@ -383,3 +383,46 @@ def test_distinct_tp_ladder_kept():
         "take_profit_3": 106.0,
     }
     assert _targets(row) == [102.0, 104.0, 106.0]
+
+
+def test_terminal_outcome_attaches_and_stores_chart_url(monkeypatch):
+    import signals.outcome_tracker as ot
+    from datetime import datetime, timezone
+    from signals.models import Candle
+
+    # created_at must be recent so the candles below fall inside the trade's
+    # life window; open_times are anchored to it so check_outcome_events sees
+    # them (it skips any candle with open_time < created_ms).
+    created = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    created_ms = int(datetime.fromisoformat(created).timestamp() * 1000)
+
+    row = {"id": "s1", "symbol": "XAUUSD", "timeframe": "5m",
+           "direction": "long", "entry": 100.0, "stop_loss": 98.0,
+           "take_profit": 103.0, "take_profit_1": 101.0,
+           "take_profit_2": 102.0, "take_profit_3": 103.0,
+           "status": "open", "created_at": created,
+           "chart_data": {"candles": []}}
+
+    # First candle drops to the stop -> terminal sl_hit. candles_covering does
+    # fetch_candles(...)[:-1], so return one extra (forming) candle.
+    def _candles(*a, **k):
+        return [Candle(open_time=created_ms + i * 300000, open=100,
+                       high=100.5, low=97.5, close=98, volume=0.0)
+                for i in range(3)]
+
+    monkeypatch.setattr(ot, "list_open_signals", lambda *a, **k: [row])
+    monkeypatch.setattr(ot, "fetch_candles", _candles)
+    monkeypatch.setattr(ot, "update_signal_outcome", lambda *a, **k: None)
+    stored = {}
+    monkeypatch.setattr(ot, "attach_outcome_chart",
+                        lambda *a, **k: "http://x/s1-outcome.png")
+    monkeypatch.setattr(ot, "set_outcome_chart_url",
+                        lambda sid, url, *a, **k: stored.update({sid: url}))
+
+    class _Cfg:
+        supabase_url = "u"; supabase_service_key = "k"
+        telegram_bot_token = ""; telegram_channel_id = ""
+
+    closed = ot.track_open_signals(_Cfg())
+    assert stored.get("s1") == "http://x/s1-outcome.png"
+    assert closed and closed[0][0].get("outcome_chart_url") == "http://x/s1-outcome.png"

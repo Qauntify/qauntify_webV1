@@ -7,9 +7,10 @@ Telegram fires once per newly crossed level.
 """
 from datetime import datetime, timedelta, timezone
 
+from signals.chart.outcome_pipeline import attach_outcome_chart
 from signals.market_client import fetch_candles
 from signals.models import OPEN_POLL_STATUSES, TRADING_SESSIONS
-from signals.storage import list_open_signals, update_signal_outcome
+from signals.storage import list_open_signals, update_signal_outcome, set_outcome_chart_url
 from signals.telegram_client import send_outcome_alert
 
 _SESSION_BY_TIMEFRAME = {s.timeframe: s for s in TRADING_SESSIONS}
@@ -189,6 +190,23 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
                   f"{row['direction']} from {row['entry']}")
             latest = outcome
             row = {**row, "status": outcome}
+            if outcome in ("tp3_hit", "tp_hit", "sl_hit"):
+                chart_url = attach_outcome_chart(
+                    row, outcome, window,
+                    supabase_url=cfg.supabase_url,
+                    service_key=cfg.supabase_service_key,
+                    session=session,
+                )
+                if chart_url:
+                    row = {**row, "outcome_chart_url": chart_url}
+                    try:
+                        set_outcome_chart_url(
+                            row["id"], chart_url, cfg.supabase_url,
+                            cfg.supabase_service_key, session=session,
+                        )
+                    except Exception as exc:
+                        print(f"[{symbol}] failed to store outcome_chart_url "
+                              f"({type(exc).__name__}), continuing")
             if (outcome in ("tp1_hit", "tp2_hit", "tp3_hit", "tp_hit", "sl_hit")
                     and cfg.telegram_bot_token and cfg.telegram_channel_id):
                 try:
