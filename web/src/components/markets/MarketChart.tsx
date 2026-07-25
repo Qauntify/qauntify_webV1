@@ -46,7 +46,11 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
         borderVisible: false,
         autoScale: true,
       },
-      timeScale: { borderVisible: false, timeVisible: true },
+      timeScale: {
+        borderVisible: false,
+        timeVisible: true,
+        fixLeftEdge: true,
+      },
       crosshair: { mode: 1 },
     });
     const series = chart.addCandlestickSeries({
