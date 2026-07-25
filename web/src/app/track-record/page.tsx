@@ -1,12 +1,8 @@
 import { Footer } from "@/components/shared/Footer";
 import { Nav } from "@/components/shared/Nav";
-import { Breakdown } from "@/components/track-record/Breakdown";
-import { EquityCurve } from "@/components/track-record/EquityCurve";
-import { Heatmap } from "@/components/track-record/Heatmap";
 import { MethodologyNote } from "@/components/track-record/MethodologyNote";
-import { PnLCalendar } from "@/components/track-record/PnLCalendar";
-import { RecentTrades } from "@/components/track-record/RecentTrades";
 import { StatTiles } from "@/components/track-record/StatTiles";
+import { TrackRecordTabs } from "@/components/track-record/TrackRecordTabs";
 import { getTrackRecord } from "@/lib/track-record";
 import { relativeTime } from "@/lib/relative-time";
 
@@ -42,26 +38,13 @@ export default async function TrackRecordPage() {
           ) : (
             <div className="space-y-4">
               <StatTiles summary={tr.summary} />
-              <div className="rounded-xl border border-line bg-card p-4">
-                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate/70">Cumulative R (all closed trades)</div>
-                <EquityCurve points={tr.equity} />
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Breakdown title="By strategy" rows={tr.byStrategy} />
-                <Breakdown title="By symbol" rows={tr.bySymbol} />
-              </div>
-              <div className="rounded-xl border border-line bg-card p-4">
-                <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate/70">Daily net (last ~13 weeks)</div>
-                <Heatmap daily={tr.daily} />
-              </div>
-              <div className="rounded-xl border border-line bg-card p-4">
-                <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate/70">Monthly P&amp;L (net R per day)</div>
-                <PnLCalendar daily={tr.daily} />
-              </div>
-              <div className="rounded-xl border border-line bg-card p-4">
-                <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate/70">Recent closed trades</div>
-                <RecentTrades trades={tr.recent} />
-              </div>
+              <TrackRecordTabs
+                equity={tr.equity}
+                byStrategy={tr.byStrategy}
+                bySymbol={tr.bySymbol}
+                daily={tr.daily}
+                recent={tr.recent}
+              />
               <MethodologyNote />
             </div>
           )}
