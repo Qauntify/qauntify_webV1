@@ -51,7 +51,7 @@ def test_build_outcome_plan_win_has_ticks_flag_and_zone():
     roles = [a["role"] for a in plan]
     assert roles.count("target") >= 3  # TP1/TP2/TP3 levels
     labels = [a.get("label") for a in plan if a["kind"] == "marker"]
-    assert "TP1 ✓" in labels and "TP2 ✓" in labels and "✅ TP3 HIT" in labels
+    assert "TP1 ✓" in labels and "TP2 ✓" in labels and "✓ TP3 HIT" in labels
     assert any(a["kind"] == "zone" and a["role"] == "win" for a in plan)
 
 
@@ -63,5 +63,5 @@ def test_build_outcome_plan_loss_shows_partial_and_stop():
     plan = build_outcome_plan(row, "sl_hit", candles, 0)
     labels = [a.get("label") for a in plan if a["kind"] == "marker"]
     assert "TP1 ✓" in labels  # honest: banked TP1 before reversing
-    assert "🛑 SL HIT" in labels
+    assert "✗ SL HIT" in labels
     assert any(a["kind"] == "zone" and a["role"] == "loss" for a in plan)

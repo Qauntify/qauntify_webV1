@@ -78,12 +78,12 @@ def build_outcome_plan(signal_row, outcome, candles, entry_time):
         top = tp3 if tp3 is not None else tp1
         t = first_cross(post, top, direction, "tp")
         if t is not None:
-            plan.append(marker(t, top, "✅ TP3 HIT", "win"))
+            plan.append(marker(t, top, "✓ TP3 HIT", "win"))
         plan.append(zone(top, entry, entry_time, "Captured move", "win"))
     else:
         t = first_cross(post, stop, direction, "sl")
         if t is not None:
-            plan.append(marker(t, stop, "🛑 SL HIT", "loss"))
+            plan.append(marker(t, stop, "✗ SL HIT", "loss"))
         plan.append(zone(entry, stop, entry_time, "Loss", "loss"))
 
     return plan

@@ -164,7 +164,7 @@ def _outcome_title(signal_row, outcome) -> str:
     risk = abs(entry - stop) or 1e-9
     r = abs(exit_price - entry) / risk * (1 if win else -1)
     move = (exit_price - entry) / entry * 100 * (1 if direction == "long" else -1)
-    tag = "✅ TP3 HIT" if win else "🛑 SL HIT"
+    tag = "✓ TP3 HIT" if win else "✗ SL HIT"
     return (f"{signal_row['symbol']} · {signal_row.get('timeframe', '')} · "
             f"{direction.upper()} · {tag} · {r:+.1f}R ({move:+.2f}%)")
 
