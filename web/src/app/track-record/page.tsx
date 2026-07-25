@@ -4,6 +4,7 @@ import { Breakdown } from "@/components/track-record/Breakdown";
 import { EquityCurve } from "@/components/track-record/EquityCurve";
 import { Heatmap } from "@/components/track-record/Heatmap";
 import { MethodologyNote } from "@/components/track-record/MethodologyNote";
+import { PnLCalendar } from "@/components/track-record/PnLCalendar";
 import { RecentTrades } from "@/components/track-record/RecentTrades";
 import { StatTiles } from "@/components/track-record/StatTiles";
 import { getTrackRecord } from "@/lib/track-record";
@@ -52,6 +53,10 @@ export default async function TrackRecordPage() {
               <div className="rounded-xl border border-line bg-card p-4">
                 <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate/70">Daily net (last ~13 weeks)</div>
                 <Heatmap daily={tr.daily} />
+              </div>
+              <div className="rounded-xl border border-line bg-card p-4">
+                <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate/70">Monthly P&amp;L (net R per day)</div>
+                <PnLCalendar daily={tr.daily} />
               </div>
               <div className="rounded-xl border border-line bg-card p-4">
                 <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate/70">Recent closed trades</div>
