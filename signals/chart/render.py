@@ -22,8 +22,10 @@ ROLE_LINE = {
     "choch": "#a78bfa", "liquidity": "#f59e0b", "entry": "#e2e8f0",
     "stop": "#fb7185", "target": "#34d399", "trail": "#f59e0b",
     "ema-fast": "#38bdf8", "ema-slow": "#f59e0b", "lwma": "#a78bfa",
+    "win": "#34d399", "loss": "#fb7185",
 }
-ROLE_FILL = {"fvg": "#14b8a6", "sr": "#38bdf8", "premium": "#fb7185", "discount": "#2dd4bf"}
+ROLE_FILL = {"fvg": "#14b8a6", "sr": "#38bdf8", "premium": "#fb7185",
+             "discount": "#2dd4bf", "win": "#34d399", "loss": "#fb7185"}
 _DASH = {"solid": "-", "dashed": (0, (5, 4)), "dotted": (0, (1, 3))}
 
 
@@ -108,13 +110,11 @@ def _price_bounds(candles, plan, pad_frac=0.04):
     return lo - pad, hi + pad
 
 
-def render_chart(candles, plan, signal) -> bytes:
-    """Render the last RENDER_BARS candles + annotations to PNG bytes."""
-    view = candles[-RENDER_BARS:]
-    df = _frame(view)
-    x_of = {c.open_time: i for i, c in enumerate(view)}
-    last_x = len(view) - 1
-
+def _base_plot(candles):
+    """Build the styled candlestick figure. Returns (fig, ax, x_of, last_x)
+    where x_of maps a candle open_time to its integer x-position."""
+    df = _frame(candles)
+    x_of = {c.open_time: i for i, c in enumerate(candles)}
     mc = mpf.make_marketcolors(up="#2dd4bf", down="#fb7185",
                                wick="inherit", edge="inherit")
     style = mpf.make_mpf_style(
@@ -127,7 +127,20 @@ def render_chart(candles, plan, signal) -> bytes:
         df, type="candle", style=style, figsize=FIG_SIZE, returnfig=True,
         volume=False, xrotation=0, datetime_format="%H:%M", tight_layout=True,
     )
-    ax = axes[0]
+    return fig, axes[0], x_of, len(candles) - 1
+
+
+def _to_png(fig) -> bytes:
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=FIG_DPI, facecolor=_BG, bbox_inches="tight")
+    plt.close(fig)
+    return buf.getvalue()
+
+
+def render_chart(candles, plan, signal) -> bytes:
+    """Render the last RENDER_BARS candles + annotations to PNG bytes."""
+    view = candles[-RENDER_BARS:]
+    fig, ax, x_of, last_x = _base_plot(view)
     _draw(ax, plan, x_of, last_x)
     ax.set_ylim(*_price_bounds(view, plan))
     ax.set_title(
@@ -135,8 +148,38 @@ def render_chart(candles, plan, signal) -> bytes:
         f"{signal.direction.upper()} · {signal.confidence}%",
         color="#e2e8f0", fontsize=14, fontweight="bold", loc="left",
     )
+    return _to_png(fig)
 
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=FIG_DPI, facecolor=_BG, bbox_inches="tight")
-    plt.close(fig)
-    return buf.getvalue()
+
+OUTCOME_MAX_BARS = 120
+
+
+def _outcome_title(signal_row, outcome) -> str:
+    entry = float(signal_row["entry"])
+    stop = float(signal_row["stop_loss"])
+    direction = signal_row["direction"]
+    win = outcome in ("tp3_hit", "tp_hit")
+    exit_price = (float(signal_row.get("take_profit_3") or signal_row.get("take_profit"))
+                  if win else stop)
+    risk = abs(entry - stop) or 1e-9
+    r = abs(exit_price - entry) / risk * (1 if win else -1)
+    move = (exit_price - entry) / entry * 100 * (1 if direction == "long" else -1)
+    tag = "✅ TP3 HIT" if win else "🛑 SL HIT"
+    return (f"{signal_row['symbol']} · {signal_row.get('timeframe', '')} · "
+            f"{direction.upper()} · {tag} · {r:+.1f}R ({move:+.2f}%)")
+
+
+def render_outcome_chart(candles, plan, signal_row, entry_time, outcome) -> bytes:
+    """Render an outcome (result) chart: price path + fills + HIT/STOP flag."""
+    view = candles[-OUTCOME_MAX_BARS:]
+    fig, ax, x_of, last_x = _base_plot(view)
+    entry_x = x_of.get(entry_time)
+    if entry_x is not None:
+        ax.axvspan(-0.5, entry_x - 0.5, color="#94a3b8", alpha=0.06, zorder=0)
+        ax.axvline(entry_x, color="#64748b", linestyle=(0, (2, 3)),
+                   linewidth=1, zorder=1)
+    _draw(ax, plan, x_of, last_x)
+    ax.set_ylim(*_price_bounds(view, plan))
+    ax.set_title(_outcome_title(signal_row, outcome), color="#e2e8f0",
+                 fontsize=14, fontweight="bold", loc="left")
+    return _to_png(fig)
