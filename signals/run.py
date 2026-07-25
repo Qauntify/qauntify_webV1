@@ -6,6 +6,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from typing import NamedTuple
 
 import requests
 
@@ -302,6 +303,70 @@ def _no_setup_indicators(strategy, atr14, adx14, htf_trend,
     return _latest_indicators(ema9, ema21, rsi14, macd_hist)
 
 
+class MarketData(NamedTuple):
+    candles: list
+    ema9: list
+    ema21: list
+    rsi14: list
+    macd_hist: list
+    atr14: list
+    adx14: list
+    htf_trend: object
+    h1_candles: object
+
+
+def _load_market_data(symbol, timeframe, strategy, cfg, *,
+                      confluence_timeframe=None, session=None):
+    """Fetch closed candles + indicators (+ H1 for ce_lwma / HTF trend for
+    confluence). Returns (MarketData, candles) on success, (None, None) when the
+    initial candle fetch fails, or (None, candles) when a required H1/HTF fetch
+    fails after candles were already fetched."""
+    candle_limit = max(cfg.candle_limit, 220) if strategy == "ce_lwma" else cfg.candle_limit
+    try:
+        candles = with_retry(
+            lambda: fetch_candles(symbol, timeframe, candle_limit, session=session)
+        )
+    except Exception as exc:
+        print(f"[{symbol}] market data unavailable, skipping: {exc}")
+        return None, None
+
+    candles = candles[:-1]
+    closes = [c.close for c in candles]
+    highs = [c.high for c in candles]
+    lows = [c.low for c in candles]
+    ema9 = ema(closes, 9)
+    ema21 = ema(closes, 21)
+    rsi14 = rsi(closes, 14)
+    macd_hist = macd_histogram(closes)
+    atr14 = atr(highs, lows, closes, 14)
+    adx14 = adx(highs, lows, closes, 14)
+    htf_trend = None
+    h1_candles = None
+    if strategy == "ce_lwma":
+        try:
+            h1_raw = with_retry(
+                lambda: fetch_candles(symbol, "1h", max(cfg.candle_limit, 80),
+                                      session=session)
+            )
+            h1_candles = h1_raw[:-1]
+        except Exception as exc:
+            print(f"[{symbol}] H1 CE data unavailable ({type(exc).__name__}), "
+                  "skipping")
+            return None, candles
+    elif confluence_timeframe:
+        try:
+            htf_trend = _fetch_htf_trend(symbol, confluence_timeframe, cfg,
+                                         session=session)
+        except Exception as exc:
+            print(f"[{symbol}] HTF confluence required but unavailable "
+                  f"({type(exc).__name__}), skipping")
+            return None, candles
+
+    return MarketData(candles=candles, ema9=ema9, ema21=ema21, rsi14=rsi14,
+                      macd_hist=macd_hist, atr14=atr14, adx14=adx14,
+                      htf_trend=htf_trend, h1_candles=h1_candles), candles
+
+
 def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
                 timeframe=None,
                 session=None,
@@ -331,51 +396,17 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         print(f"[{symbol}] {timeframe} evaluated recently, skipping this run")
         return ScanResult()
 
-    # CE+LWMA needs 200 M15 bars for LWMA warm-up; other strategies use cfg.
-    candle_limit = max(cfg.candle_limit, 220) if strategy == "ce_lwma" else cfg.candle_limit
-    try:
-        candles = with_retry(
-            lambda: fetch_candles(symbol, timeframe, candle_limit,
-                                  session=session)
-        )
-    except Exception as exc:
-        print(f"[{symbol}] market data unavailable, skipping: {exc}")
-        return ScanResult()
-
-    # Binance returns the current, still-forming candle last — drop it so
-    # indicators and entry price are computed on closed bars only.
-    candles = candles[:-1]
-
-    closes = [c.close for c in candles]
-    highs = [c.high for c in candles]
-    lows = [c.low for c in candles]
-    ema9 = ema(closes, 9)
-    ema21 = ema(closes, 21)
-    rsi14 = rsi(closes, 14)
-    macd_hist = macd_histogram(closes)
-    atr14 = atr(highs, lows, closes, 14)
-    adx14 = adx(highs, lows, closes, 14)
-    htf_trend = None
-    h1_candles = None
-    if strategy == "ce_lwma":
-        try:
-            h1_raw = with_retry(
-                lambda: fetch_candles(symbol, "1h", max(cfg.candle_limit, 80),
-                                      session=session)
-            )
-            h1_candles = h1_raw[:-1]
-        except Exception as exc:
-            print(f"[{symbol}] H1 CE data unavailable ({type(exc).__name__}), "
-                  "skipping")
-            return ScanResult(candles=candles)
-    elif confluence_timeframe:
-        try:
-            htf_trend = _fetch_htf_trend(symbol, confluence_timeframe, cfg,
-                                         session=session)
-        except Exception as exc:
-            print(f"[{symbol}] HTF confluence required but unavailable "
-                  f"({type(exc).__name__}), skipping")
-            return ScanResult(candles=candles)
+    market, candles = _load_market_data(
+        symbol, timeframe, strategy, cfg,
+        confluence_timeframe=confluence_timeframe, session=session,
+    )
+    if market is None:
+        return ScanResult(candles=candles)
+    candles = market.candles
+    ema9, ema21 = market.ema9, market.ema21
+    rsi14, macd_hist = market.rsi14, market.macd_hist
+    atr14, adx14 = market.atr14, market.adx14
+    htf_trend, h1_candles = market.htf_trend, market.h1_candles
 
     setup = detect_setup(
         strategy, symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
