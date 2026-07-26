@@ -1,0 +1,33 @@
+version: training_v2_segmented_temporal
+base_config: ml/configs/catboost_v1.yaml
+training_dataset_root: ml/data/datasets/training_v1
+artifacts_root: artifacts/training/training_v2_segmented_temporal
+random_seed: 42
+tasks: [binary, regression]
+segments:
+  - {id: ict_fvg_m5, strategy_name: ict_fvg, timeframe: M5}
+  - {id: sr_zone_m15, strategy_name: sr_zone, timeframe: M15}
+excluded_segments:
+  - {strategy_name: ema_cross, timeframe: H1, reason: insufficient_rows}
+outer_folds: 5
+inner_calibration:
+  folds: 3
+  initial_train_fraction: 0.55
+  validation_fraction: 0.10
+  embargo_days: 14
+  methods: [sigmoid, isotonic]
+  isotonic_minimum_rows: 1000
+  minimum_class_rows: 50
+thresholds: {start: 0.40, stop: 0.60, step: 0.005}
+safeguards:
+  minimum_coverage: 0.05
+  minimum_positive_folds: 4
+  minimum_candidates_per_fold: 100
+  maximum_fold_candidate_share: 0.50
+  maximum_year_profit_share: 0.50
+  primary_cost_r: 0.02
+  sensitivity_costs_r: [0.03, 0.05]
+smoke:
+  train_rows_per_segment: 300
+  validation_rows_per_segment: 100
+  iterations: 5
