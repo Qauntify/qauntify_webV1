@@ -41,3 +41,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # LLM confirmation-gate A/B: fraction of REJECTED setups recorded as
+          # shadow signals. Shadows are outcome-tracked but never delivered —
+          # RLS containment was verified before this was switched on. Set to
+          # "0.0" to stop collecting; nothing else needs to change.
+          # See docs/superpowers/specs/2026-07-26-ai-gate-ab-design.md
+          SHADOW_SAMPLE_RATE: "0.25"
