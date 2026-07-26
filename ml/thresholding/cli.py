@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from ml.thresholding.config import load_threshold_config
+from ml.thresholding.diagnostics import run_validation_diagnostics
 from ml.thresholding.policy import select_and_lock_policy
 from ml.thresholding.test_evaluation import evaluate_untouched_test_once
 
@@ -23,7 +24,7 @@ def _config(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Validation-only threshold_v2 policy workflow")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("audit", "select", "evaluate-test"):
+    for name in ("audit", "select", "diagnose", "evaluate-test"):
         item = sub.add_parser(name)
         item.add_argument("--config", type=Path, required=True)
         item.add_argument("--dataset-root", type=Path)
@@ -40,6 +41,8 @@ def main(argv=None):
                   "reason": "Set assumptions, complete validation selection, and lock one policy first"}
     elif args.command == "select":
         result = select_and_lock_policy(config, output_dir=args.output_dir)
+    elif args.command == "diagnose":
+        result = run_validation_diagnostics(config, output_dir=args.output_dir)
     else:
         result = evaluate_untouched_test_once(config, output_dir=args.output_dir, confirmed=args.confirm_untouched_test)
     print(json.dumps(result, indent=2, sort_keys=True))
