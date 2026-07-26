@@ -2,6 +2,8 @@
 
 Usage: python -m signals.run
 """
+import os
+import random
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -284,6 +286,45 @@ def _reject(symbol, cfg, *, timeframe, report_kind, event_kind, rationale,
     ), candles=candles)
 
 
+# Fraction of LLM-rejected setups recorded as shadow signals for the
+# confirmation-gate A/B (docs/superpowers/specs/2026-07-26-ai-gate-ab-design.md).
+#
+# Defaults to 0.0 — OFF. A shadow row is only safe once the RLS migration at
+# the end of supabase/schema.sql has been applied AND
+# scripts/verify_shadow_rls.py passes; until then a shadow would be publicly
+# visible on the track record. Set SHADOW_SAMPLE_RATE=0.25 to start the
+# experiment. Rejects arrive ~7x faster than confirms and the confirmed arm is
+# the statistical bottleneck, so sampling here costs no experiment time while
+# keeping storage and outcome-tracker load roughly flat.
+SHADOW_SAMPLE_RATE = float(os.environ.get("SHADOW_SAMPLE_RATE", "0.0"))
+
+
+def _shadow_sampled() -> bool:
+    """Whether to record this rejected setup.
+
+    Random, and deliberately NOT keyed on confidence, symbol or strategy —
+    sampling on any of those would bias the very arm being measured.
+    """
+    return random.random() < SHADOW_SAMPLE_RATE
+
+
+def _save_shadow(setup, confirmation, cfg, *, timeframe, session):
+    """Record an LLM-rejected setup so the gate's accuracy is measurable.
+
+    A shadow signal is outcome-tracked exactly like a real one but is filtered
+    out of every user-facing read path — it is not a recommendation. Failures
+    are swallowed: the experiment must never break a live scan.
+    """
+    if not _shadow_sampled():
+        return
+    try:
+        shadow = make_signal(setup, confirmation, [], timeframe=timeframe)
+        save_signal(shadow, cfg.supabase_url, cfg.supabase_service_key,
+                    session=session, shadow=True)
+    except Exception as exc:
+        print(f"shadow save failed ({type(exc).__name__}) — continuing")
+
+
 def _no_setup_indicators(strategy, atr14, adx14, htf_trend,
                          ema9, ema21, rsi14, macd_hist):
     """Indicators to attach to a no-setup ai_event, or None while a required
@@ -461,6 +502,10 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     )
     if confirmation.verdict != "confirm":
         print(f"[{symbol}] rejected by LLM: {confirmation.rationale}")
+        # Record the counterfactual before discarding it — this is the only
+        # point at which a rejected setup's outcome can still be observed.
+        _save_shadow(setup, confirmation, cfg,
+                     timeframe=timeframe, session=session)
         return _reject(
             symbol, cfg, timeframe=timeframe, report_kind="rejected",
             event_kind="reject", rationale=confirmation.rationale,

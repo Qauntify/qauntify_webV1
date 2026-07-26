@@ -926,3 +926,69 @@ def test_scan_symbol_scalp_throttle_is_shorter_than_swing(monkeypatch):
 
     assert swing_result == run_module.ScanResult()  # still throttled
     assert scalp_result.no_signal is not None  # 20 min clears the 15m window
+
+
+# --- LLM confirmation-gate A/B (shadow signals) ------------------------------
+
+def test_shadow_sampling_is_off_by_default():
+    """A shadow row is unsafe until the RLS migration is applied and verified,
+    so the experiment must not start merely by deploying the code."""
+    import signals.run as run
+    assert run.SHADOW_SAMPLE_RATE == 0.0
+    assert run._shadow_sampled() is False
+
+
+def test_save_shadow_records_a_rejected_setup(monkeypatch):
+    import signals.run as run
+    from signals.models import CandidateSetup, Confirmation
+
+    saved = []
+    monkeypatch.setattr(run, "_shadow_sampled", lambda: True)
+    monkeypatch.setattr(
+        run, "save_signal",
+        lambda sig, *a, shadow=False, **k: saved.append((sig.symbol, shadow)),
+    )
+    setup = CandidateSetup("BTCUSD", "long", 100.0, 99.0, 102.0, {})
+    cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
+    run._save_shadow(setup, Confirmation("reject", 30, "no"), cfg,
+                     timeframe="15m", session=None)
+    assert saved == [("BTCUSD", True)]
+
+
+def test_save_shadow_skips_when_not_sampled(monkeypatch):
+    import signals.run as run
+    from signals.models import CandidateSetup, Confirmation
+
+    saved = []
+    monkeypatch.setattr(run, "_shadow_sampled", lambda: False)
+    monkeypatch.setattr(run, "save_signal",
+                        lambda *a, **k: saved.append(a))
+    setup = CandidateSetup("BTCUSD", "long", 100.0, 99.0, 102.0, {})
+    cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
+    run._save_shadow(setup, Confirmation("reject", 30, "no"), cfg,
+                     timeframe="15m", session=None)
+    assert saved == []
+
+
+def test_shadow_save_failure_never_breaks_the_scan(monkeypatch):
+    import signals.run as run
+    from signals.models import CandidateSetup, Confirmation
+
+    def _boom(*a, **k):
+        raise RuntimeError("supabase down")
+
+    monkeypatch.setattr(run, "_shadow_sampled", lambda: True)
+    monkeypatch.setattr(run, "save_signal", _boom)
+    setup = CandidateSetup("BTCUSD", "long", 100.0, 99.0, 102.0, {})
+    cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
+    run._save_shadow(setup, Confirmation("reject", 30, "no"), cfg,
+                     timeframe="15m", session=None)  # must not raise
+
+
+def test_shadow_sampling_cannot_be_keyed_on_trade_attributes():
+    """Sampling on confidence, symbol or strategy would bias the arm being
+    measured. Enforced structurally: the sampler receives no arguments, so it
+    has nothing to bias on."""
+    import inspect
+    import signals.run as run
+    assert list(inspect.signature(run._shadow_sampled).parameters) == []

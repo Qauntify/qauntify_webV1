@@ -189,7 +189,12 @@ async function fetchClosedRows(accessToken?: string): Promise<RawRow[] | null> {
     "select=id,symbol,timeframe,direction,entry,stop_loss,take_profit," +
     "take_profit_1,take_profit_2,take_profit_3,status,created_at,closed_at," +
     "indicators,outcome_chart_url" +
-    "&status=in.(tp_hit,tp3_hit,sl_hit)&order=closed_at.asc.nullslast";
+    "&status=in.(tp_hit,tp3_hit,sl_hit)" +
+    // Shadow rows are LLM-rejected setups kept only to measure the gate; they
+    // are not recommendations and must never reach the public track record.
+    // RLS already blocks them — this is defence in depth.
+    "&shadow=is.false" +
+    "&order=closed_at.asc.nullslast";
   try {
     const res = await fetch(`${base}/rest/v1/signals?${query}`, {
       headers: { apikey: anonKey, Authorization: `Bearer ${accessToken ?? anonKey}` },

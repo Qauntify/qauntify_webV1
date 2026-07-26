@@ -11,13 +11,19 @@ from signals.market_client import canonical_symbol
 
 
 def save_signal(signal: Signal, supabase_url: str, service_key: str,
-                session=None) -> None:
-    """Insert one signal row; raises on any failure so the caller can retry."""
+                session=None, *, shadow: bool = False) -> None:
+    """Insert one signal row; raises on any failure so the caller can retry.
+
+    `shadow=True` marks a setup the LLM gate REJECTED, stored so the gate's
+    accuracy can be measured. Shadow rows are outcome-tracked but filtered out
+    of every user-facing read path — they are not recommendations.
+    """
     session = session or requests.Session()
     payload = asdict(signal)
     # Mirror TP1 into take_profit_1 for the multi-TP schema while keeping
     # legacy `take_profit` populated for older readers.
     payload["take_profit_1"] = signal.take_profit
+    payload["shadow"] = shadow
     response = session.post(
         f"{supabase_url}/rest/v1/signals",
         headers={
@@ -214,7 +220,7 @@ def open_symbols_for_timeframe(symbols, timeframe: str, supabase_url: str,
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
         f"?status=in.(open,tp1_hit,tp2_hit)&timeframe=eq.{timeframe}"
-        f"&symbol=in.({symbols_filter})&select=symbol",
+        f"&symbol=in.({symbols_filter})&shadow=is.false&select=symbol",
         headers={
             "apikey": service_key,
             "Authorization": f"Bearer {service_key}",
@@ -292,7 +298,8 @@ def latest_signal(symbol: str, supabase_url: str, service_key: str,
     timeframe_filter = f"&timeframe=eq.{timeframe}" if timeframe else ""
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
-        f"?symbol=eq.{symbol}{timeframe_filter}&select=direction,created_at"
+        f"?symbol=eq.{symbol}{timeframe_filter}&shadow=is.false"
+        "&select=direction,created_at"
         "&order=created_at.desc&limit=1",
         headers={
             "apikey": service_key,
@@ -374,7 +381,7 @@ def latest_signals_since(symbols, timeframe: str, since: str,
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
         f"?symbol=in.({symbols_filter})&timeframe=eq.{timeframe}"
-        f"&created_at=gte.{quote(since, safe='')}"
+        f"&created_at=gte.{quote(since, safe='')}&shadow=is.false"
         "&select=symbol,direction,created_at&order=symbol.asc,created_at.desc",
         headers={
             "apikey": service_key,
@@ -389,17 +396,25 @@ def latest_signals_since(symbols, timeframe: str, since: str,
     return latest
 
 
-def list_closed_signals(supabase_url: str, service_key: str, session=None):
+def list_closed_signals(supabase_url: str, service_key: str, session=None,
+                        *, include_shadow: bool = False):
     """Every signal that has reached a terminal status (tp_hit/sl_hit/
     expired), for calibration reporting — win rate and expectancy can only
-    be computed once an outcome is known. Raises on any failure."""
+    be computed once an outcome is known. Raises on any failure.
+
+    Shadow rows (LLM-rejected setups recorded for the gate A/B) are excluded by
+    default, so existing calibration reporting is unaffected by them. The gate
+    report passes `include_shadow=True` because it needs both arms.
+    """
     session = session or requests.Session()
+    shadow_filter = "" if include_shadow else "&shadow=is.false"
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
         "?status=in.(tp_hit,tp3_hit,sl_hit,expired)"
+        f"{shadow_filter}"
         "&select=symbol,timeframe,direction,entry,stop_loss,take_profit,"
         "take_profit_1,take_profit_2,take_profit_3,confidence,indicators,"
-        "status,created_at,closed_at"
+        "status,created_at,closed_at,shadow,tp1_hit_at,tp2_hit_at,tp3_hit_at"
         "&order=created_at.asc",
         headers={
             "apikey": service_key,

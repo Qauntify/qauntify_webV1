@@ -107,6 +107,12 @@ function supabaseConfig(): { url: string; anonKey: string } | null {
   return { url: url.replace(/\/$/, ""), anonKey };
 }
 
+// Shadow rows are LLM-rejected setups stored only to measure the confirmation
+// gate. They are not recommendations, so every signals read excludes them.
+// RLS already blocks them for anon and member roles — this is defence in depth,
+// applied centrally so no caller can forget it.
+const EXCLUDE_SHADOW = "&shadow=is.false";
+
 async function fetchRows(
   query: string,
   accessToken?: string,
@@ -115,7 +121,7 @@ async function fetchRows(
   if (!config) return null;
   try {
     const response = await fetch(
-      `${config.url}/rest/v1/signals?${query}`,
+      `${config.url}/rest/v1/signals?${query}${EXCLUDE_SHADOW}`,
       {
         headers: {
           apikey: config.anonKey,
@@ -173,7 +179,7 @@ async function fetchRowsPaginated(
   const rangeEnd = offset + pageSize - 1;
   try {
     const response = await fetch(
-      `${config.url}/rest/v1/signals?${query}`,
+      `${config.url}/rest/v1/signals?${query}${EXCLUDE_SHADOW}`,
       {
         headers: {
           apikey: config.anonKey,

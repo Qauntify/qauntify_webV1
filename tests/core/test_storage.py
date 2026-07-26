@@ -318,3 +318,61 @@ def test_set_outcome_chart_url_patches_row():
                           "https://p.supabase.co", "key", session=s)
     assert "id=eq.sig-1" in s.calls[0]["url"]
     assert s.calls[0]["json"] == {"outcome_chart_url": "http://x/sig-1-outcome.png"}
+
+
+def test_save_signal_marks_shadow_rows():
+    """Shadow rows are LLM-rejected setups recorded for the gate A/B."""
+    session = FakeSession()
+    save_signal(_signal(), "https://abc.supabase.co", "service-key",
+                session=session, shadow=True)
+    assert session.last_json["shadow"] is True
+
+
+def test_save_signal_defaults_to_visible():
+    """Anything not explicitly a shadow must be deliverable as normal."""
+    session = FakeSession()
+    save_signal(_signal(), "https://abc.supabase.co", "service-key",
+                session=session)
+    assert session.last_json["shadow"] is False
+
+
+def _query_of(session):
+    return session.last_url
+
+
+def test_dedup_queries_ignore_shadow_rows():
+    """A shadow signal must never suppress a real one.
+
+    open_symbols_for_timeframe / latest_signal / latest_signals_since drive the
+    duplicate guard and run with the service-role key, which bypasses RLS. If
+    they saw shadows, an LLM-rejected setup stored as 'open' would make the
+    engine skip a genuine confirmed setup for that symbol — the experiment
+    would silently change what gets traded.
+    """
+    from signals.storage import (
+        latest_signal, latest_signals_since, open_symbols_for_timeframe,
+    )
+
+    s1 = FakeGetSession(payload=[])
+    open_symbols_for_timeframe(["BTCUSD"], "15m", "https://abc.supabase.co",
+                               "k", session=s1)
+    assert "shadow=is.false" in _query_of(s1)
+
+    s2 = FakeGetSession(payload=[])
+    latest_signal("BTCUSD", "https://abc.supabase.co", "k",
+                  timeframe="15m", session=s2)
+    assert "shadow=is.false" in _query_of(s2)
+
+    s3 = FakeGetSession(payload=[])
+    latest_signals_since(["BTCUSD"], "15m", "2026-07-01T00:00:00Z",
+                         "https://abc.supabase.co", "k", session=s3)
+    assert "shadow=is.false" in _query_of(s3)
+
+
+def test_outcome_polling_still_sees_shadow_rows():
+    """Shadows MUST be polled — that is how their outcome gets recorded."""
+    from signals.storage import list_open_signals
+
+    session = FakeGetSession(payload=[])
+    list_open_signals("https://abc.supabase.co", "k", session=session)
+    assert "shadow" not in _query_of(session)
