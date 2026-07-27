@@ -6,7 +6,12 @@ from urllib.parse import quote
 
 import requests
 
-from signals.models import BotSettings, DEFAULT_SIGNAL_STRATEGY, SIGNAL_STRATEGIES, Signal
+from signals.models import (
+    ADMIN_SELECTABLE_STRATEGIES,
+    BotSettings,
+    DEFAULT_SIGNAL_STRATEGY,
+    Signal,
+)
 from signals.market_client import canonical_symbol
 
 
@@ -463,7 +468,7 @@ def fetch_bot_settings(supabase_url: str, service_key: str,
         store_raw = row.get("min_store_confidence", 0)
         store_confidence = int(store_raw if store_raw is not None else 0)
         strategy = row.get("signal_strategy", DEFAULT_SIGNAL_STRATEGY)
-        if strategy not in SIGNAL_STRATEGIES:
+        if strategy not in ADMIN_SELECTABLE_STRATEGIES:
             strategy = DEFAULT_SIGNAL_STRATEGY
         if not symbols or not 0 <= alert_confidence <= 100:
             raise ValueError("empty symbols or confidence out of range")

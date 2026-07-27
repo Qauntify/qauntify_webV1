@@ -101,7 +101,22 @@ class NoSignalReport:
     confidence: int | None = None
 
 
+# Every strategy the router can dispatch to.
 SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone")
+
+# The subset the admin page may store in bot_settings.signal_strategy, which
+# only controls the SWING session — the scalp sessions pin their own strategy
+# in TRADING_SESSIONS and ignore the toggle, so offering those here would be a
+# control that silently does nothing.
+#
+# This tuple is the source of truth for three places that must agree:
+#   - the bot_settings_signal_strategy_check constraint in supabase/migrations
+#   - SIGNAL_STRATEGIES in web/src/lib/supabase/admin.ts (the admin dropdown)
+#   - fetch_bot_settings below
+# tests/core/test_strategy_choices.py pins them together. Validating against
+# the full list instead let Python accept a value the database would reject.
+ADMIN_SELECTABLE_STRATEGIES = ("ema_cross", "ict_smc", "sr_zone")
+
 DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
 TIMEFRAME_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "1h": 60}
