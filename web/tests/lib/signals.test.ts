@@ -65,7 +65,7 @@ describe("getSignals", () => {
     await getSignals(5);
     const [url, options] = fetchFn.mock.calls[0];
     expect(url).toBe(
-      "https://abc.supabase.co/rest/v1/signals?select=*&order=created_at.desc&limit=5",
+      "https://abc.supabase.co/rest/v1/signals?select=*&order=created_at.desc&limit=5&shadow=is.false",
     );
     expect(options.headers.apikey).toBe("anon-key");
     expect(options.headers.Authorization).toBe("Bearer anon-key");
@@ -77,7 +77,7 @@ describe("getSignals", () => {
     await getSignals(10, undefined, "15m");
     const [url] = fetchFn.mock.calls[0];
     expect(url).toBe(
-      "https://abc.supabase.co/rest/v1/signals?select=*&timeframe=eq.15m&order=created_at.desc&limit=10",
+      "https://abc.supabase.co/rest/v1/signals?select=*&timeframe=eq.15m&order=created_at.desc&limit=10&shadow=is.false",
     );
   });
 
