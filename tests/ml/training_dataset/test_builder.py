@@ -97,6 +97,10 @@ def test_split_assignments_are_deterministic_under_input_shuffle():
 
 
 def test_export_manifest_checksum_integrity(monkeypatch, tmp_path):
+    # Only this test reaches the Parquet writer, so it alone needs the
+    # optional training stack (requirements-training.txt). The rest of the
+    # module is pure pandas and must keep running without it.
+    pytest.importorskip("pyarrow", reason="needs requirements-training.txt")
     frame = strict_join(*inputs(100))
     splits, policy = chronological_splits(frame, config())
     walk = walk_forward_splits(frame, config())
