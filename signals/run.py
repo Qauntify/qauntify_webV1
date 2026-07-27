@@ -678,17 +678,11 @@ def maybe_send_alert(signal, settings, cfg):
               f"({type(exc).__name__}), continuing")
 
 
-def maybe_send_no_signal_alert(report, cfg):
-    """Intentionally a no-op: no-signal / rejected scans are not pushed.
-    Confirmed signals and SL/TP hits are the only Telegram alerts."""
-    return
-
-
-def maybe_send_run_summary(run_id: str, timeframe: str, outcomes: list[dict], cfg) -> None:
-    """Intentionally a no-op: per-run summaries are logged/stored only,
-    not pushed to Telegram."""
-    return
-
+# Telegram carries confirmed signals and TP/SL outcomes only. No-signal and
+# rejected scans, and per-run summaries, stay in Supabase and the logs — they
+# are noise in a channel people act on. The formatters for both still exist in
+# signals.telegram_client for ad-hoc use; this module deliberately never calls
+# them, and tests/core/test_telegram.py asserts that.
 
 OUTCOME_LABELS = {
     "tp_hit": "TP HIT",
