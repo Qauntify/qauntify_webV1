@@ -46,4 +46,4 @@ jobs:
           # RLS containment was verified before this was switched on. Set to
           # "0.0" to stop collecting; nothing else needs to change.
           # See docs/superpowers/specs/2026-07-26-ai-gate-ab-design.md
-          SHADOW_SAMPLE_RATE: "0.25"
+          SHADOW_SAMPLE_RATE: "0.0"
