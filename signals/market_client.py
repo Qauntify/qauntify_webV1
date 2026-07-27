@@ -130,6 +130,44 @@ def _fetch_kraken_candles(symbol, interval, limit, start_time, session):
     ]
 
 
+def _resample(candles, minutes):
+    """Fold candles into `minutes`-wide buckets aligned to the UTC epoch.
+
+    Yahoo publishes no 4h gold series, so a 4h request is served from its
+    hourly one and aggregated here. Buckets are keyed on floor(open_time /
+    width) rather than on the first bar of the response, so the same wall-clock
+    bar always lands in the same bucket regardless of when the fetch ran.
+
+    A partial trailing bucket is kept — callers drop the still-forming bar
+    themselves (backtest.py does this with `[:-1]`), and silently discarding it
+    here would hide a bar they expect to see.
+    """
+    width = minutes * 60_000
+    out: list[Candle] = []
+    for candle in candles:
+        bucket = candle.open_time - (candle.open_time % width)
+        if out and out[-1].open_time == bucket:
+            prev = out[-1]
+            out[-1] = Candle(
+                open_time=bucket,
+                open=prev.open,
+                high=max(prev.high, candle.high),
+                low=min(prev.low, candle.low),
+                close=candle.close,
+                volume=prev.volume + candle.volume,
+            )
+        else:
+            out.append(Candle(
+                open_time=bucket,
+                open=candle.open,
+                high=candle.high,
+                low=candle.low,
+                close=candle.close,
+                volume=candle.volume,
+            ))
+    return out
+
+
 def _fetch_yahoo_gold_candles(interval, limit, start_time, session):
     yahoo_interval, yahoo_range = YAHOO_INTERVAL.get(interval, ("60m", "3mo"))
     response = session.get(
@@ -175,6 +213,10 @@ def _fetch_yahoo_gold_candles(interval, limit, start_time, session):
                 volume=float(vol),
             )
         )
+    # YAHOO_INTERVAL maps "4h" to Yahoo's hourly series because no 4h gold
+    # series exists. Without this fold a 4h request returns 1h bars.
+    if interval == "4h":
+        candles = _resample(candles, INTERVAL_MINUTES["4h"])
     return candles
 
 
