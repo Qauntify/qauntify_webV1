@@ -19,6 +19,10 @@ Assumptions (documented so results are read correctly):
 Usage: python -m signals.backtest
 """
 from signals.indicators import adx, atr, ema, macd_histogram, rsi
+# Re-exported: the R model lives in signals.r_model so the live reporting paths
+# and this backtester cannot drift apart. Imported here for call-site
+# compatibility.
+from signals.r_model import scaled_r  # noqa: F401
 from signals.strategies import detect_setup
 
 # Default per-strategy timeframe (matches the live sessions) and warm-up bars
@@ -123,30 +127,6 @@ def simulate_scaled(direction, entry, stop, tps, future_candles):
         if reached >= len(tps):
             return reached, False, idx
     return reached, False, len(future_candles)
-
-
-def scaled_r(direction, entry, stop, tps, reached, stopped):
-    """Realized R for a 1/len-at-each-target scale-out with the stop trailed to
-    breakeven once the first target is booked.
-
-    - Nothing reached + stopped → full -1R.
-    - Each reached target books its slice at that target's R.
-    - The unbooked remainder exits at breakeven (0R) on a later stop or expiry.
-    """
-    risk = abs(entry - stop)
-    if risk == 0 or not tps:
-        return 0.0
-
-    def r_of(price):
-        return (price - entry) / risk if direction == "long" else (entry - price) / risk
-
-    portion = 1.0 / len(tps)
-    booked = sum(portion * r_of(tps[k]) for k in range(reached))
-    if reached >= len(tps):
-        return booked
-    if reached == 0 and stopped:
-        return -1.0
-    return booked  # remainder trails out at breakeven → contributes 0R
 
 
 def summarize(r_multiples):

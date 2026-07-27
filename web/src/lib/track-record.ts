@@ -12,7 +12,8 @@ export type ClosedTrade = {
   strategy: string;
   entry: number;
   stopLoss: number;
-  target: number; // realized win-exit price (TP3, or legacy take_profit)
+  targets: number[]; // TP1..TP3 present on the row, in order
+  reached: number; // how many of them were banked before the trade ended
   status: ClosedStatus;
   closedAt: string; // closed_at ?? created_at
   outcomeChartUrl: string | null;
@@ -22,8 +23,10 @@ export type Summary = {
   total: number;
   wins: number;
   losses: number;
+  breakeven: number;
   winRate: number;
   netR: number;
+  grossR: number;
   avgR: number;
   bestStreak: number;
   updatedAt: string | null;
@@ -46,16 +49,90 @@ export type TrackRecord = {
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-const WIN = new Set<ClosedStatus>(["tp_hit", "tp3_hit"]);
-export function isWin(t: ClosedTrade): boolean {
-  return WIN.has(t.status);
+// ---------------------------------------------------------------------------
+// The R model. Port of signals/r_model.py — keep the two in step.
+//
+// One third of the position is booked at each of TP1/TP2/TP3, and the stop
+// moves to breakeven once TP1 is banked. So a trade that runs all the way to
+// the last target returns (1 + 2 + 3) / 3 = +2R, not +3R, and a trade that
+// tags TP1 then reverses returns +0.33R, not −1R. This page used to credit the
+// full +3R for a winner and a full −1R for any stop, which flattered the
+// headline number against the model the engine actually publishes.
+// ---------------------------------------------------------------------------
+
+export function scaledR(
+  direction: "long" | "short",
+  entry: number,
+  stopLoss: number,
+  targets: number[],
+  reached: number,
+  stopped: boolean,
+): number {
+  const risk = Math.abs(entry - stopLoss);
+  if (risk === 0 || targets.length === 0) return 0;
+  const rOf = (price: number) =>
+    direction === "long" ? (price - entry) / risk : (entry - price) / risk;
+  const portion = 1 / targets.length;
+  let booked = 0;
+  for (let k = 0; k < reached; k += 1) booked += portion * rOf(targets[k]);
+  if (reached >= targets.length) return booked;
+  if (reached === 0 && stopped) return -1;
+  return booked; // remainder trails out at breakeven → contributes 0R
 }
 
+// Round-trip cost (spread + commission) in basis points of notional.
+// MUST match COST_BPS in signals/r_model.py — pinned by a test in both.
+const COST_BPS: Record<string, number> = {
+  BTCUSD: 20,
+  ETHUSD: 20,
+  XAUUSD: 2,
+  GBPUSD: 1.5,
+};
+const DEFAULT_COST_BPS = 20;
+
+/** Mirror of signals.market_client.canonical_symbol for legacy stored rows. */
+export function canonicalSymbol(symbol: string): string {
+  const s = (symbol ?? "").trim().toUpperCase();
+  if (s.startsWith("PAXG") || s.startsWith("XAU")) return "XAUUSD";
+  if (s.endsWith("USDT") && s.length > 4) return `${s.slice(0, -4)}USD`;
+  return s;
+}
+
+/**
+ * Round-trip cost expressed in R. Cost is a fraction of PRICE while R is a
+ * fraction of the stop distance, so the same venue is much more expensive on a
+ * tight stop than a wide one.
+ */
+export function costR(symbol: string, entry: number, stopLoss: number): number {
+  const risk = Math.abs(entry - stopLoss);
+  if (risk === 0) return 0;
+  const bps = COST_BPS[canonicalSymbol(symbol)] ?? DEFAULT_COST_BPS;
+  return ((bps / 10_000) * Math.abs(entry)) / risk;
+}
+
+/** Realized R before costs. */
+export function grossR(t: ClosedTrade): number {
+  return scaledR(
+    t.direction, t.entry, t.stopLoss, t.targets, t.reached,
+    t.status === "sl_hit",
+  );
+}
+
+/** Realized R after costs — the number quoted publicly. */
 export function tradeR(t: ClosedTrade): number {
   const risk = Math.abs(t.entry - t.stopLoss);
   if (risk === 0) return 0;
-  if (t.status === "sl_hit") return -1;
-  return Math.abs(t.target - t.entry) / risk;
+  return grossR(t) - costR(t.symbol, t.entry, t.stopLoss);
+}
+
+/**
+ * A win is a trade that finished above water, not one that reached a
+ * particular status. Under a scale-out model those differ: banking TP1 and
+ * then reversing is a small win, and a "winner" whose targets did not cover
+ * its costs is a loss.
+ */
+export function isWin(t: ClosedTrade): boolean {
+  return tradeR(t) > 0;
 }
 
 function byClosedAsc(a: ClosedTrade, b: ClosedTrade): number {
@@ -64,8 +141,11 @@ function byClosedAsc(a: ClosedTrade, b: ClosedTrade): number {
 
 export function summarize(trades: ClosedTrade[]): Summary {
   const total = trades.length;
-  const wins = trades.filter(isWin).length;
-  const netR = trades.reduce((s, t) => s + tradeR(t), 0);
+  const rs = trades.map(tradeR);
+  const wins = rs.filter((r) => r > 0).length;
+  const losses = rs.filter((r) => r < 0).length;
+  const netR = rs.reduce((s, r) => s + r, 0);
+  const grossTotal = trades.reduce((s, t) => s + grossR(t), 0);
   const sorted = [...trades].sort(byClosedAsc);
   let bestStreak = 0;
   let cur = 0;
@@ -77,12 +157,16 @@ export function summarize(trades: ClosedTrade[]): Summary {
       cur = 0;
     }
   }
+  const decided = wins + losses;
   return {
     total,
     wins,
-    losses: total - wins,
-    winRate: total ? Math.round((wins / total) * 100) : 0,
+    losses,
+    breakeven: total - decided,
+    // Decided outcomes only — a trade that finished exactly flat is neither.
+    winRate: decided ? Math.round((wins / decided) * 100) : 0,
     netR: round1(netR),
+    grossR: round1(grossTotal),
     avgR: total ? round2(netR / total) : 0,
     bestStreak,
     updatedAt: sorted.length ? sorted[sorted.length - 1].closedAt : null,
@@ -147,6 +231,9 @@ type RawRow = {
   status?: string;
   created_at: string;
   closed_at?: string | null;
+  tp1_hit_at?: string | null;
+  tp2_hit_at?: string | null;
+  tp3_hit_at?: string | null;
   indicators?: Record<string, unknown> | null;
   outcome_chart_url?: string | null;
 };
@@ -161,10 +248,21 @@ export function toClosedTrade(row: RawRow): ClosedTrade | null {
       : "ema9" in ind
         ? "ema_cross"
         : "—";
-  const target =
-    status === "tp_hit"
-      ? Number(row.take_profit)
-      : Number(row.take_profit_3 ?? row.take_profit_1 ?? row.take_profit);
+  const targets = [
+    row.take_profit ?? row.take_profit_1,
+    row.take_profit_2,
+    row.take_profit_3,
+  ]
+    .filter((t): t is number => t !== null && t !== undefined)
+    .map(Number);
+  // How many targets were banked, read from the hit timestamps rather than the
+  // final status: a trade that took TP1 and then reversed ends as "sl_hit" but
+  // is not a full loss. A terminal win means every target was reached.
+  const banked = [row.tp1_hit_at, row.tp2_hit_at, row.tp3_hit_at].filter(Boolean).length;
+  const reached =
+    status === "tp_hit" || status === "tp3_hit"
+      ? targets.length
+      : Math.min(banked, targets.length);
   return {
     id: row.id,
     symbol: row.symbol,
@@ -173,7 +271,8 @@ export function toClosedTrade(row: RawRow): ClosedTrade | null {
     strategy,
     entry: Number(row.entry),
     stopLoss: Number(row.stop_loss),
-    target,
+    targets,
+    reached,
     status,
     closedAt: typeof row.closed_at === "string" ? row.closed_at : row.created_at,
     outcomeChartUrl: typeof row.outcome_chart_url === "string" ? row.outcome_chart_url : null,
@@ -188,6 +287,8 @@ async function fetchClosedRows(accessToken?: string): Promise<RawRow[] | null> {
   const query =
     "select=id,symbol,timeframe,direction,entry,stop_loss,take_profit," +
     "take_profit_1,take_profit_2,take_profit_3,status,created_at,closed_at," +
+    // The tp*_hit_at timestamps are what make a partial win scoreable.
+    "tp1_hit_at,tp2_hit_at,tp3_hit_at," +
     "indicators,outcome_chart_url" +
     "&status=in.(tp_hit,tp3_hit,sl_hit)" +
     // Shadow rows are LLM-rejected setups kept only to measure the gate; they

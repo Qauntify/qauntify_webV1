@@ -2,10 +2,28 @@ import type { Summary } from "@/lib/track-record";
 
 export function StatTiles({ summary }: { summary: Summary }) {
   const tone = (n: number) => (n >= 0 ? "text-emerald-400" : "text-rose-400");
+  const signed = (n: number) => `${n >= 0 ? "+" : ""}${n}R`;
+  // Net is the headline everywhere; gross sits underneath it so the cost drag
+  // is legible rather than hidden.
   const tiles = [
-    { label: "Win rate", value: `${summary.winRate}%`, sub: `${summary.wins} / ${summary.total} closed`, cls: "text-emerald-400" },
-    { label: "Net R", value: `${summary.netR >= 0 ? "+" : ""}${summary.netR}R`, sub: `across ${summary.total} trades`, cls: tone(summary.netR) },
-    { label: "Avg / trade", value: `${summary.avgR >= 0 ? "+" : ""}${summary.avgR}R`, sub: "expectancy", cls: tone(summary.avgR) },
+    {
+      label: "Win rate",
+      value: `${summary.winRate}%`,
+      sub: `${summary.wins}W / ${summary.losses}L of ${summary.total} closed`,
+      cls: "text-emerald-400",
+    },
+    {
+      label: "Net R",
+      value: signed(summary.netR),
+      sub: `${signed(summary.grossR)} before costs`,
+      cls: tone(summary.netR),
+    },
+    {
+      label: "Avg / trade",
+      value: signed(summary.avgR),
+      sub: "expectancy, net of costs",
+      cls: tone(summary.avgR),
+    },
     { label: "Best streak", value: `${summary.bestStreak}`, sub: "wins in a row", cls: "text-ink" },
   ];
   return (

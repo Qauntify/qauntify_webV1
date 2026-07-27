@@ -14,7 +14,8 @@ const daily: DailyNet[] = [{ date: "2026-07-01", net: 1.5 }];
 const recent: ClosedTrade[] = [
   {
     id: "s1", symbol: "XAUUSD", timeframe: "5m", direction: "long",
-    strategy: "ict_fvg", entry: 100, stopLoss: 98, target: 103,
+    strategy: "ict_fvg", entry: 100, stopLoss: 98,
+    targets: [102, 104, 106], reached: 3,
     status: "tp3_hit", closedAt: "2026-07-02T00:00:00Z", outcomeChartUrl: null,
   },
 ];

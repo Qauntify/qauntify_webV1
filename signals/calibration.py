@@ -4,7 +4,11 @@ grouped by strategy, symbol, timeframe, and confidence bucket.
 Closes the loop between outcome_tracker's recorded results (tp_hit/sl_hit/
 expired) and the parameters that produced them, so strategy or threshold
 changes can be checked against real history instead of guessed.
+
+R comes from signals.r_model — the scale-out model, net of costs — so these
+numbers mean the same thing as the ones on the public track record.
 """
+from signals.r_model import cost_r, gross_r, net_r
 
 
 def _strategy_of(row: dict) -> str:
@@ -20,63 +24,46 @@ def _confidence_bucket(confidence) -> str:
 
 
 def _r_multiple(row: dict) -> float:
-    """Realized R-multiple for one closed signal.
+    """Realized R-multiple for one closed signal, net of costs.
 
-    Full TP3 / legacy tp_hit: +target/risk (usually +3R or legacy distance).
-    Pure sl_hit (no TP banked): -1.
-    sl_hit after TP1/TP2 timestamps: net R after banking those levels then
-    stopping (TP1-then-SL → 0R, TP2-then-SL → +1R).
-    expired: 0.
+    Thin wrapper over signals.r_model.net_r that maps the unscoreable case
+    (missing levels) to 0.0, since a grouped average has nowhere to put None.
     """
-    status = row["status"]
-    entry, stop = row["entry"], row["stop_loss"]
-    risk = abs(entry - stop)
-    if risk == 0:
-        return 0.0
-
-    if status == "expired":
-        return 0.0
-
-    if status in ("tp_hit", "tp3_hit"):
-        target = row.get("take_profit_3") or row.get("take_profit")
-        return abs(float(target) - entry) / risk
-
-    if status == "sl_hit":
-        if row.get("tp2_hit_at"):
-            return 1.0
-        if row.get("tp1_hit_at"):
-            return 0.0
-        return -1.0
-
-    # Still-open partials should not appear in closed calibration inputs.
-    return 0.0
+    r = net_r(row)
+    return 0.0 if r is None else r
 
 
 def _bucket_stats(rows: list) -> dict:
-    wins = sum(
-        1 for r in rows
-        if r["status"] in ("tp_hit", "tp3_hit")
-        or (r["status"] == "sl_hit" and r.get("tp1_hit_at"))
-    )
-    losses = sum(
-        1 for r in rows
-        if r["status"] == "sl_hit" and not r.get("tp1_hit_at")
-    )
-    expired = sum(1 for r in rows if r["status"] == "expired")
+    """Win/loss counts and average R for one group of closed signals.
+
+    A win is a trade that finished ABOVE water — under the scale-out model
+    that includes banking TP1 and then reversing, and excludes a trade whose
+    banked targets did not cover its costs. Counting statuses instead would
+    disagree with avg_r, which is how a 60%-win-rate strategy can quietly
+    lose money.
+    """
+    scored = [(r, _r_multiple(r)) for r in rows]
+    wins = sum(1 for _, r in scored if r > 0)
+    losses = sum(1 for _, r in scored if r < 0)
+    breakeven = sum(1 for _, r in scored if r == 0)
+    expired = sum(1 for row in rows if row["status"] == "expired")
     decided = wins + losses
-    decided_rows = [
-        r for r in rows
-        if r["status"] in ("tp_hit", "tp3_hit", "sl_hit")
-    ]
     return {
         "count": len(rows),
         "wins": wins,
         "losses": losses,
+        "breakeven": breakeven,
         "expired": expired,
         "win_rate": wins / decided if decided else None,
-        "avg_r": (
-            sum(_r_multiple(r) for r in decided_rows) / len(decided_rows)
-            if decided_rows else None
+        "avg_r": (sum(r for _, r in scored) / len(scored)) if scored else None,
+        "avg_gross_r": (
+            sum((gross_r(row) or 0.0) for row in rows) / len(rows)
+            if rows else None
+        ),
+        "avg_cost_r": (
+            sum(cost_r(row.get("symbol", ""), row["entry"], row["stop_loss"])
+                for row in rows) / len(rows)
+            if rows else None
         ),
     }
 
