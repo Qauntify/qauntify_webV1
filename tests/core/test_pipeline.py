@@ -926,3 +926,137 @@ def test_scan_symbol_scalp_throttle_is_shorter_than_swing(monkeypatch):
 
     assert swing_result == run_module.ScanResult()  # still throttled
     assert scalp_result.no_signal is not None  # 20 min clears the 15m window
+
+
+# --- LLM confirmation-gate A/B (shadow signals) ------------------------------
+
+def test_shadow_sampling_is_off_by_default():
+    """A shadow row is unsafe until the RLS migration is applied and verified,
+    so the experiment must not start merely by deploying the code."""
+    import signals.run as run
+    assert run.SHADOW_SAMPLE_RATE == 0.0
+    assert run._shadow_sampled() is False
+
+
+def test_save_shadow_records_a_rejected_setup(monkeypatch):
+    import signals.run as run
+    from signals.models import CandidateSetup, Confirmation
+
+    saved = []
+    monkeypatch.setattr(run, "_shadow_sampled", lambda: True)
+    monkeypatch.setattr(
+        run, "save_signal",
+        lambda sig, *a, shadow=False, **k: saved.append((sig.symbol, shadow)),
+    )
+    setup = CandidateSetup("BTCUSD", "long", 100.0, 99.0, 102.0, {})
+    cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
+    run._save_shadow(setup, Confirmation("reject", 30, "no"), cfg,
+                     timeframe="15m", session=None)
+    assert saved == [("BTCUSD", True)]
+
+
+def test_save_shadow_skips_when_not_sampled(monkeypatch):
+    import signals.run as run
+    from signals.models import CandidateSetup, Confirmation
+
+    saved = []
+    monkeypatch.setattr(run, "_shadow_sampled", lambda: False)
+    monkeypatch.setattr(run, "save_signal",
+                        lambda *a, **k: saved.append(a))
+    setup = CandidateSetup("BTCUSD", "long", 100.0, 99.0, 102.0, {})
+    cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
+    run._save_shadow(setup, Confirmation("reject", 30, "no"), cfg,
+                     timeframe="15m", session=None)
+    assert saved == []
+
+
+def test_shadow_save_failure_never_breaks_the_scan(monkeypatch):
+    import signals.run as run
+    from signals.models import CandidateSetup, Confirmation
+
+    def _boom(*a, **k):
+        raise RuntimeError("supabase down")
+
+    monkeypatch.setattr(run, "_shadow_sampled", lambda: True)
+    monkeypatch.setattr(run, "save_signal", _boom)
+    setup = CandidateSetup("BTCUSD", "long", 100.0, 99.0, 102.0, {})
+    cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
+    run._save_shadow(setup, Confirmation("reject", 30, "no"), cfg,
+                     timeframe="15m", session=None)  # must not raise
+
+
+def test_shadow_sampling_cannot_be_keyed_on_trade_attributes():
+    """Sampling on confidence, symbol or strategy would bias the arm being
+    measured. Enforced structurally: the sampler receives no arguments, so it
+    has nothing to bias on."""
+    import inspect
+    import signals.run as run
+    assert list(inspect.signature(run._shadow_sampled).parameters) == []
+
+
+# --- limit-entry S/R paper trial ---------------------------------------------
+
+def test_paper_sr_limit_is_off_by_default():
+    """A paper trial must not begin merely by deploying the code."""
+    import signals.run as run
+    assert run.PAPER_SR_LIMIT is False
+
+
+def test_paper_sr_limit_does_nothing_when_disabled(monkeypatch):
+    import signals.run as run
+    saved = []
+    monkeypatch.setattr(run, "PAPER_SR_LIMIT", False)
+    monkeypatch.setattr(run, "save_signal", lambda *a, **k: saved.append(a))
+    run._record_paper_sr_limit("BTCUSD", object(), object(),
+                               timeframe="1h", session=None)
+    assert saved == []
+
+
+def test_paper_sr_limit_only_runs_on_its_own_timeframe(monkeypatch):
+    """Only 1h measured net positive; 15m limit entry still loses."""
+    import signals.run as run
+    saved = []
+    monkeypatch.setattr(run, "PAPER_SR_LIMIT", True)
+    monkeypatch.setattr(run, "save_signal", lambda *a, **k: saved.append(a))
+    run._record_paper_sr_limit("BTCUSD", object(), object(),
+                               timeframe="15m", session=None)
+    assert saved == []
+
+
+def test_paper_sr_limit_records_shadow_tagged_with_its_experiment(monkeypatch):
+    import signals.run as run
+    from signals.models import CandidateSetup
+
+    captured = {}
+
+    def _fake_save(sig, url, key, session=None, shadow=False, experiment=None):
+        captured.update(shadow=shadow, experiment=experiment)
+
+    monkeypatch.setattr(run, "PAPER_SR_LIMIT", True)
+    monkeypatch.setattr(run, "save_signal", _fake_save)
+    monkeypatch.setattr(
+        "signals.strategies.sr_limit.detect_setup",
+        lambda *a, **k: CandidateSetup("BTCUSD", "long", 100.0, 99.0, 102.0,
+                                       {"strategy": "sr_limit"}),
+    )
+    market = type("M", (), {"candles": [], "atr14": [1.0], "adx14": None,
+                            "htf_trend": None})()
+    cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
+    run._record_paper_sr_limit("BTCUSD", market, cfg,
+                               timeframe="1h", session=None)
+    assert captured == {"shadow": True, "experiment": "sr_limit"}
+
+
+def test_paper_failure_never_breaks_the_scan(monkeypatch):
+    import signals.run as run
+
+    def _boom(*a, **k):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(run, "PAPER_SR_LIMIT", True)
+    monkeypatch.setattr("signals.strategies.sr_limit.detect_setup", _boom)
+    market = type("M", (), {"candles": [], "atr14": [1.0], "adx14": None,
+                            "htf_trend": None})()
+    cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
+    run._record_paper_sr_limit("BTCUSD", market, cfg,
+                               timeframe="1h", session=None)  # must not raise

@@ -355,3 +355,96 @@ create policy "anon closed-trade access"
     on public.signals for select
     to anon
     using (status in ('tp_hit', 'tp3_hit', 'sl_hit'));
+
+-- ---------------------------------------------------------------------------
+-- Shadow signals (LLM confirmation-gate A/B)
+--
+-- The gate rejects ~87% of the setups the rules engine finds, and nothing has
+-- ever measured whether the discarded ones were worse. A rejected setup never
+-- became a signal, so its outcome was never observable.
+--
+-- A shadow signal IS a rejected setup, stored with full levels and polled by
+-- the outcome tracker so its result can be compared against delivered trades.
+-- It is NOT a recommendation and must never reach a user.
+--
+-- RLS policies OR-combine, so every policy on signals is re-created below with
+-- the shadow filter. Leaving any single one unfiltered would expose shadows
+-- regardless of the others.
+-- ---------------------------------------------------------------------------
+
+alter table public.signals
+    add column if not exists shadow boolean not null default false;
+
+-- Partial index: every user-facing read filters shadow = false.
+create index if not exists signals_visible_idx
+    on public.signals (created_at desc)
+    where shadow = false;
+
+drop policy if exists "anon preview access" on public.signals;
+create policy "anon preview access"
+    on public.signals for select
+    to anon
+    using (shadow = false and created_at > now() - interval '24 hours');
+
+drop policy if exists "anon closed-trade access" on public.signals;
+create policy "anon closed-trade access"
+    on public.signals for select
+    to anon
+    using (shadow = false and status in ('tp_hit', 'tp3_hit', 'sl_hit'));
+
+drop policy if exists "member full access" on public.signals;
+create policy "member full access"
+    on public.signals for select
+    to authenticated
+    using (shadow = false);
+
+-- get_signal_stats is security invoker, so the policies above already hide
+-- shadows from anon/authenticated callers. The filter is repeated here because
+-- the web app calls this RPC server-side, where the service-role key bypasses
+-- RLS entirely and would otherwise count shadows into the public stat tiles.
+drop function if exists public.get_signal_stats(text);
+create or replace function public.get_signal_stats(p_timeframe text default null)
+returns table (
+    total int,
+    avg_confidence int,
+    longs int,
+    shorts int,
+    tp_hits int,
+    partial_wins int,
+    sl_hits int
+)
+language sql
+stable
+security invoker
+as $$
+    select
+        count(*)::int as total,
+        coalesce(round(avg(confidence)), 0)::int as avg_confidence,
+        count(*) filter (where direction = 'long')::int as longs,
+        count(*) filter (where direction = 'short')::int as shorts,
+        count(*) filter (where status in ('tp_hit', 'tp3_hit'))::int as tp_hits,
+        count(*) filter (
+            where status = 'sl_hit' and tp1_hit_at is not null
+        )::int as partial_wins,
+        count(*) filter (
+            where status = 'sl_hit' and tp1_hit_at is null
+        )::int as sl_hits
+    from public.signals
+    where shadow = false
+      and (p_timeframe is null or timeframe = p_timeframe);
+$$;
+
+grant execute on function public.get_signal_stats(text) to anon, authenticated;
+
+-- Which experiment a shadow row belongs to. `shadow` is the containment flag
+-- (never deliver, already covered by the RLS policies above); `experiment`
+-- says WHICH study, so results never get pooled across unrelated trials.
+--   'gate_ab'  — LLM confirmation-gate A/B (rejected setups)
+--   'sr_limit' — limit-entry S/R paper trial at 1h
+-- NULL for ordinary delivered signals.
+alter table public.signals
+    add column if not exists experiment text;
+
+create index if not exists signals_experiment_idx
+    on public.signals (experiment)
+    where experiment is not null;

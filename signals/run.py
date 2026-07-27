@@ -2,6 +2,8 @@
 
 Usage: python -m signals.run
 """
+import os
+import random
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -23,6 +25,7 @@ from signals.models import (
     TIMEFRAME_MINUTES,
     TRADING_SESSIONS,
     CandidateSetup,
+    Confirmation,
     NoSignalReport,
     ScanResult,
     make_signal,
@@ -284,6 +287,82 @@ def _reject(symbol, cfg, *, timeframe, report_kind, event_kind, rationale,
     ), candles=candles)
 
 
+# Fraction of LLM-rejected setups recorded as shadow signals for the
+# confirmation-gate A/B (docs/superpowers/specs/2026-07-26-ai-gate-ab-design.md).
+#
+# Defaults to 0.0 — OFF. A shadow row is only safe once the RLS migration at
+# the end of supabase/schema.sql has been applied AND
+# scripts/verify_shadow_rls.py passes; until then a shadow would be publicly
+# visible on the track record. Set SHADOW_SAMPLE_RATE=0.25 to start the
+# experiment. Rejects arrive ~7x faster than confirms and the confirmed arm is
+# the statistical bottleneck, so sampling here costs no experiment time while
+# keeping storage and outcome-tracker load roughly flat.
+SHADOW_SAMPLE_RATE = float(os.environ.get("SHADOW_SAMPLE_RATE", "0.0"))
+
+
+def _shadow_sampled() -> bool:
+    """Whether to record this rejected setup.
+
+    Random, and deliberately NOT keyed on confidence, symbol or strategy —
+    sampling on any of those would bias the very arm being measured.
+    """
+    return random.random() < SHADOW_SAMPLE_RATE
+
+
+def _save_shadow(setup, confirmation, cfg, *, timeframe, session):
+    """Record an LLM-rejected setup so the gate's accuracy is measurable.
+
+    A shadow signal is outcome-tracked exactly like a real one but is filtered
+    out of every user-facing read path — it is not a recommendation. Failures
+    are swallowed: the experiment must never break a live scan.
+    """
+    if not _shadow_sampled():
+        return
+    try:
+        shadow = make_signal(setup, confirmation, [], timeframe=timeframe)
+        save_signal(shadow, cfg.supabase_url, cfg.supabase_service_key,
+                    session=session, shadow=True, experiment="gate_ab")
+    except Exception as exc:
+        print(f"shadow save failed ({type(exc).__name__}) — continuing")
+
+
+# Paper trial: limit-entry S/R at 1h, the only configuration that measured net
+# positive once each entry style was paired with the fee tier it can actually
+# achieve (+0.065R at maker rates; market entry is always taker). Recorded, not
+# delivered — it exists to check the backtest result on forward data before any
+# signal-lifecycle work. OFF by default.
+PAPER_SR_LIMIT = os.environ.get("PAPER_SR_LIMIT", "").lower() in ("1", "true")
+PAPER_SR_LIMIT_TIMEFRAME = "1h"
+
+
+def _record_paper_sr_limit(symbol, market, cfg, *, timeframe, session):
+    """Record a limit-entry S/R setup as an undelivered paper signal.
+
+    Deliberately skips the LLM, Telegram and chart rendering: this measures the
+    rules, and adding the gate would confound it with the other live
+    experiment. Failures are swallowed — a paper trial must never break a scan.
+    """
+    if not PAPER_SR_LIMIT or timeframe != PAPER_SR_LIMIT_TIMEFRAME:
+        return
+    try:
+        from signals.strategies.sr_limit import detect_setup as detect_limit
+
+        setup = detect_limit(
+            symbol, market.candles, market.atr14,
+            adx14=market.adx14, htf_trend=market.htf_trend,
+        )
+        if setup is None:
+            return
+        paper = make_signal(
+            setup, Confirmation("confirm", 0, "paper trial — not delivered"),
+            [], timeframe=timeframe,
+        )
+        save_signal(paper, cfg.supabase_url, cfg.supabase_service_key,
+                    session=session, shadow=True, experiment="sr_limit")
+    except Exception as exc:
+        print(f"paper sr_limit save failed ({type(exc).__name__}) — continuing")
+
+
 def _no_setup_indicators(strategy, atr14, adx14, htf_trend,
                          ema9, ema21, rsi14, macd_hist):
     """Indicators to attach to a no-setup ai_event, or None while a required
@@ -408,6 +487,11 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     atr14, adx14 = market.atr14, market.adx14
     htf_trend, h1_candles = market.htf_trend, market.h1_candles
 
+    # Paper trial runs off the same market data, before and independently of
+    # the live strategy — it must not influence what gets delivered.
+    _record_paper_sr_limit(symbol, market, cfg,
+                           timeframe=timeframe, session=session)
+
     setup = detect_setup(
         strategy, symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
         adx14=adx14, htf_trend=htf_trend, h1_candles=h1_candles,
@@ -461,6 +545,10 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     )
     if confirmation.verdict != "confirm":
         print(f"[{symbol}] rejected by LLM: {confirmation.rationale}")
+        # Record the counterfactual before discarding it — this is the only
+        # point at which a rejected setup's outcome can still be observed.
+        _save_shadow(setup, confirmation, cfg,
+                     timeframe=timeframe, session=session)
         return _reject(
             symbol, cfg, timeframe=timeframe, report_kind="rejected",
             event_kind="reject", rationale=confirmation.rationale,
