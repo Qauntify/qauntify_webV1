@@ -22,7 +22,7 @@ from signals.indicators import adx, atr, ema, macd_histogram, rsi
 # Re-exported: the R model lives in signals.r_model so the live reporting paths
 # and this backtester cannot drift apart. Imported here for call-site
 # compatibility.
-from signals.r_model import scaled_r  # noqa: F401
+from signals.r_model import cost_r, scaled_r  # noqa: F401
 from signals.strategies import detect_setup
 
 # Default per-strategy timeframe (matches the live sessions) and warm-up bars
@@ -147,6 +147,20 @@ def summarize(r_multiples):
     }
 
 
+def net_r_multiples(symbol, r_multiples, entries, stops):
+    """Per-trade R after the round-trip cost for that trade's stop distance.
+
+    Cost is a fraction of PRICE while R is a fraction of the stop distance, so
+    it has to be charged per trade rather than as one average — a tight-stop
+    scalp and a wide-stop swing on the same symbol pay very different amounts
+    in R. `r_model` stays the single definition of what a trade cost.
+    """
+    return [
+        r - cost_r(symbol, entry, stop)
+        for r, entry, stop in zip(r_multiples, entries, stops)
+    ]
+
+
 def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
                       htf_candles=None, htf_minutes=None):
     """Backtest one strategy on one symbol's candle history.
@@ -162,6 +176,8 @@ def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
         stats = summarize([])
         stats["tp1_rate"] = 0.0
         stats["tp3_rate"] = 0.0
+        stats["net_expectancy_r"] = 0.0
+        stats["net_total_r"] = 0.0
         return stats
     if htf_candles and htf_minutes:
         trends = htf_trend_series(candles, htf_candles, htf_minutes)
@@ -178,6 +194,8 @@ def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
     adx14 = adx(highs, lows, closes, 14)
 
     r_multiples = []
+    entries = []
+    stops = []
     tp1_hits = 0
     tp3_hits = 0
     i = warmup
@@ -201,6 +219,8 @@ def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
             scaled_r(setup.direction, setup.entry, setup.stop_loss, tps,
                      reached, stopped)
         )
+        entries.append(setup.entry)
+        stops.append(setup.stop_loss)
         tp1_hits += 1 if reached >= 1 else 0
         tp3_hits += 1 if reached >= len(tps) else 0
         i = end + bars  # resume after the closed trade (non-overlapping)
@@ -209,6 +229,9 @@ def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
     trades = stats["trades"]
     stats["tp1_rate"] = tp1_hits / trades if trades else 0.0
     stats["tp3_rate"] = tp3_hits / trades if trades else 0.0
+    net = net_r_multiples(symbol, r_multiples, entries, stops)
+    stats["net_expectancy_r"] = sum(net) / trades if trades else 0.0
+    stats["net_total_r"] = sum(net)
     return stats
 
 

@@ -1,6 +1,7 @@
 """Unit tests for the rules-only backtester's fill simulation + stats."""
 from signals.backtest import (
     htf_trend_series,
+    net_r_multiples,
     realized_r,
     scaled_r,
     simulate_scaled,
@@ -157,3 +158,27 @@ def test_htf_trend_series_none_before_any_htf_close():
     htf = [_tc(i * step, 100 + i) for i in range(30)]
     primary = [_tc(0, 100)]  # before the first htf bar has even closed
     assert htf_trend_series(primary, htf, 240) == [None]
+
+
+def test_net_r_subtracts_the_round_trip_cost():
+    """BTCUSD is 20 bps of notional. Entry 100 with a stop 2 away means risk 2,
+    so the cost in R is 0.0020 * 100 / 2 = 0.1R."""
+    assert net_r_multiples("BTCUSD", [1.0], [100.0], [98.0]) == [0.9]
+
+
+def test_cost_in_r_shrinks_as_the_stop_widens():
+    """The same venue is far more expensive on a tight stop than a wide one —
+    the reason a 0.5R scalp ladder needs its net number quoted."""
+    tight = net_r_multiples("BTCUSD", [1.0], [100.0], [99.0])   # risk 1 → 0.2R
+    wide = net_r_multiples("BTCUSD", [1.0], [100.0], [90.0])    # risk 10 → 0.02R
+    assert tight[0] < wide[0]
+    assert abs(tight[0] - 0.8) < 1e-9
+    assert abs(wide[0] - 0.98) < 1e-9
+
+
+def test_net_r_costs_a_loss_as_well_as_a_win():
+    assert abs(net_r_multiples("BTCUSD", [-1.0], [100.0], [98.0])[0] + 1.1) < 1e-9
+
+
+def test_net_r_is_empty_for_no_trades():
+    assert net_r_multiples("BTCUSD", [], [], []) == []
