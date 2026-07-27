@@ -1,4 +1,6 @@
-from signals.indicators import adx, atr, ema, macd_histogram, rsi
+import pytest
+
+from signals.indicators import adx, atr, bollinger, ema, macd_histogram, rsi
 
 
 def test_ema_constant_series_equals_constant():
@@ -163,3 +165,45 @@ def test_chandelier_exit_flips_on_close_through_trail():
     assert direction[-1] == -1
     # There was a bullish stretch before the crash.
     assert any(d == 1 for d in direction if d is not None)
+
+
+def test_bollinger_shorter_than_period_is_all_none():
+    upper, mid, lower = bollinger([1.0, 2.0, 3.0], 20)
+    assert upper == [None, None, None]
+    assert mid == [None, None, None]
+    assert lower == [None, None, None]
+
+
+def test_bollinger_constant_series_has_zero_width():
+    values = [50.0] * 30
+    upper, mid, lower = bollinger(values, 20)
+    assert upper[:19] == [None] * 19
+    for u, m, l in zip(upper[19:], mid[19:], lower[19:]):
+        assert abs(u - 50.0) < 1e-9
+        assert abs(m - 50.0) < 1e-9
+        assert abs(l - 50.0) < 1e-9
+
+
+def test_bollinger_uses_population_sigma():
+    """1..20 has population variance (n^2-1)/12 = 33.25, so sigma = 5.7663.
+
+    Sample sigma would widen the band by sqrt(20/19) — a material difference at
+    period 20, and MT4/TradingView (the charts BBMA is drawn on) use the
+    population form.
+    """
+    values = [float(i) for i in range(1, 21)]
+    upper, mid, lower = bollinger(values, 20, 2.0)
+    assert abs(mid[-1] - 10.5) < 1e-9
+    assert abs(upper[-1] - 22.0325626) < 1e-6
+    assert abs(lower[-1] - (-1.0325626)) < 1e-6
+
+
+def test_bollinger_series_are_aligned_to_input():
+    values = [float(i % 7) for i in range(40)]
+    upper, mid, lower = bollinger(values, 20)
+    assert len(upper) == len(mid) == len(lower) == 40
+
+
+def test_bollinger_rejects_non_positive_period():
+    with pytest.raises(ValueError):
+        bollinger([1.0, 2.0], 0)

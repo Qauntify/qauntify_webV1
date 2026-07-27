@@ -163,6 +163,33 @@ def lwma(values, period):
     return out
 
 
+def bollinger(values, period=20, num_std=2.0):
+    """Bollinger Bands: (upper, mid, lower), each aligned 1:1 with `values`.
+
+    Mid is the simple moving average. The band offset uses the POPULATION
+    standard deviation over the same window (divide by n), matching the
+    MT4/TradingView convention — sample sigma would widen the bands by
+    sqrt(n/(n-1)), which is not a rounding error at period 20.
+    """
+    if period <= 0:
+        raise ValueError("period must be positive")
+    n = len(values)
+    if n < period:
+        return [None] * n, [None] * n, [None] * n
+    upper = [None] * (period - 1)
+    mid = [None] * (period - 1)
+    lower = [None] * (period - 1)
+    for i in range(period - 1, n):
+        window = values[i - period + 1:i + 1]
+        mean = sum(window) / period
+        variance = sum((v - mean) ** 2 for v in window) / period
+        offset = num_std * variance ** 0.5
+        mid.append(mean)
+        upper.append(mean + offset)
+        lower.append(mean - offset)
+    return upper, mid, lower
+
+
 def chandelier_exit(highs, lows, closes, period=22, multiplier=4.5,
                     lookback=None):
     """Chandelier Exit trails + direction (TradingView-style).
