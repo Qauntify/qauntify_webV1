@@ -31,3 +31,6 @@ artifacts/thresholding/
 catboost_info/
 mlruns/
 optuna.db
+
+# Cached historical archives for backtesting (verified downloads).
+.cache/
