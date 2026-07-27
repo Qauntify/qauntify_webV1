@@ -32,6 +32,8 @@ STRATEGY_TIMEFRAMES = {
     "ema_cross": "1h",
     "ict_smc": "1h",
     "sr_zone": "1h",
+    "bbma_extreme": "1h",
+    "bbma_reentry": "1h",
 }
 DEFAULT_WARMUP = 60
 DEFAULT_SYMBOLS = ("BTCUSD", "ETHUSD", "XAUUSD", "GBPUSD")
@@ -44,6 +46,9 @@ CONFLUENCE_TIMEFRAMES = {
     "ema_cross": "4h",
     "ict_smc": "4h",
     "sr_zone": "4h",
+    # bbma_extreme is deliberately absent: it is counter-trend by construction,
+    # so an HTF trend gate would veto nearly every setup.
+    "bbma_reentry": "4h",
 }
 TF_MINUTES = {"5m": 5, "15m": 15, "1h": 60, "4h": 240}
 
