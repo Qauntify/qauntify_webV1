@@ -190,9 +190,12 @@ def list_open_signals(supabase_url: str, service_key: str, session=None):
         response = session.get(
             f"{supabase_url}/rest/v1/signals"
             "?status=in.(open,tp1_hit,tp2_hit)"
+            # `indicators` carries entry_style, which decides whether the
+            # outcome tracker counts the bar the order filled on.
             "&select=id,symbol,timeframe,direction,entry,stop_loss,"
             "take_profit,take_profit_1,take_profit_2,take_profit_3,"
-            "tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at,chart_data"
+            "tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at,chart_data,"
+            "indicators"
             "&order=created_at.asc",
             headers={
                 "apikey": service_key,

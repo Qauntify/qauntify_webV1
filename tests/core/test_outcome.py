@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -346,6 +347,118 @@ def test_track_prefetch_key_includes_timeframe(monkeypatch):
         prefetched={("BTCUSDT", "15m"): covering})
 
     assert fetches == []  # right-timeframe prefetch is used
+
+
+LIMIT_INDICATORS = {"strategy": "sr_limit", "entry_style": "limit"}
+
+
+def _hourly_row_and_candles(fill_low=94.0, fill_high=101.0, **overrides):
+    """A 1h signal written 7 minutes into the bar AFTER the one it was built
+    from — how the engine actually writes rows, since the ~10-minute cron lands
+    at an arbitrary point inside a bar.
+
+    Returns (row, candles) where candles[0] is the fill bar (closed before
+    created_at) and the rest are quiet bars running forward.
+    """
+    top_of_hour = datetime.now(timezone.utc).replace(
+        minute=0, second=0, microsecond=0) - timedelta(hours=6)
+    created = top_of_hour + timedelta(minutes=7)
+    row = {
+        "id": "sig-x", "symbol": "BTCUSDT", "direction": "long",
+        "entry": 100.0, "stop_loss": 95.0, "take_profit": 110.0,
+        "timeframe": "1h", "created_at": created.isoformat(),
+    }
+    row.update(overrides)
+
+    def bar(offset_hours, high, low):
+        return Candle(
+            open_time=int((top_of_hour + timedelta(hours=offset_hours))
+                          .timestamp() * 1000),
+            open=100.0, high=high, low=low, close=100.0, volume=1.0)
+
+    candles = [bar(-1, fill_high, fill_low)]  # the bar the setup was built on
+    candles += [bar(i, 105.0, 99.0) for i in range(0, 4)]  # quiet afterwards
+    return row, candles
+
+
+def test_limit_entry_counts_the_bar_it_filled_on(monkeypatch):
+    # sr_limit rests an order at the zone edge, so it fills INSIDE a bar. That
+    # same bar can trade on down through the stop just below the zone. The
+    # tracker used to start after created_at, so those losses were invisible —
+    # biasing the paper trial optimistically against the backtest it exists to
+    # check.
+    row, candles = _hourly_row_and_candles(
+        id="lim-1", indicators=LIMIT_INDICATORS)
+
+    _, _, closes, _ = _track(monkeypatch, [row], fetched_candles=candles)
+
+    assert closes == [("lim-1", "sl_hit")]
+
+
+def test_market_entry_still_ignores_the_signal_bar(monkeypatch):
+    # Every other detector enters at the CLOSE of its signal bar, so that bar
+    # is already over when the trade starts. It must stay excluded.
+    row, candles = _hourly_row_and_candles(id="mkt-1")
+
+    _, _, closes, _ = _track(monkeypatch, [row], fetched_candles=candles)
+
+    assert closes == []
+
+
+def test_limit_entry_fill_bar_still_lets_the_stop_win_ties(monkeypatch):
+    # A fill bar spanning both the stop and a target is scored as a stop —
+    # the same conservative intrabar convention used everywhere else.
+    row, candles = _hourly_row_and_candles(
+        fill_low=94.0, fill_high=111.0, id="lim-2",
+        indicators=LIMIT_INDICATORS)
+
+    _, _, closes, _ = _track(monkeypatch, [row], fetched_candles=candles)
+
+    assert closes == [("lim-2", "sl_hit")]
+
+
+def test_limit_entry_fill_bar_resolved_by_close_not_index(monkeypatch):
+    # The engine writes the row an arbitrary number of minutes into the bar
+    # after the one it scanned, so the bar immediately preceding created_at in
+    # the candle list is the CURRENT bar, not the fill bar. Stepping back one
+    # index would pick the wrong one; the fill bar is the newest one that had
+    # already closed.
+    from signals.outcome_tracker import _scan_start
+
+    hour = 3_600_000
+    candles = [SimpleNamespace(open_time=t) for t in
+               (0, hour, 2 * hour, 3 * hour)]
+    created_ms = 2 * hour + 7 * 60_000  # 7 minutes into the bar at 2h
+
+    # Fill bar is the one at 1h (closed at 2h), not the one at 2h.
+    assert _scan_start(candles, created_ms, True, hour) == 1
+    # Market entry: first bar opening at or after created_at.
+    assert _scan_start(candles, created_ms, False, hour) == 3
+
+
+def test_one_minute_signals_expire_on_their_own_session(monkeypatch):
+    # The 1m XAU scalper runs as its own workflow, so "1m" is absent from
+    # TRADING_SESSIONS. It must still be a REGISTERED session for expiry:
+    # falling through to the 1h swing default left a 1-minute scalp open for
+    # 14 days, and the unique open-per-(symbol,timeframe) index meant that one
+    # stale row blocked the scalper for a fortnight.
+    quiet = _candles_from(
+        datetime.now(timezone.utc) - timedelta(days=2), hours=48)
+
+    scalp = _live_row(days_old=1, timeframe="1m", id="xau-1m",
+                      symbol="XAUUSD")
+    _, _, closes, _ = _track(monkeypatch, [scalp], fetched_candles=quiet)
+    assert closes == [("xau-1m", "expired")]
+
+
+def test_one_minute_dedup_window_scales_to_its_own_bar(monkeypatch):
+    # _dedup_window fell back to the 1h value for any unknown timeframe, so a
+    # scalper firing every 60s could only emit one same-direction signal every
+    # 3 hours.
+    from signals.run import _dedup_window
+
+    assert _dedup_window("1m") == timedelta(minutes=3)
+    assert _dedup_window("5m") == timedelta(minutes=15)
 
 
 def test_track_scalp_signals_expire_faster_than_swing(monkeypatch):

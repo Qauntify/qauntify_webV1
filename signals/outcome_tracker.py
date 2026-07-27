@@ -9,13 +9,15 @@ from datetime import datetime, timedelta, timezone
 
 from signals.chart.outcome_pipeline import attach_outcome_chart
 from signals.market_client import fetch_candles
-from signals.models import OPEN_POLL_STATUSES, TRADING_SESSIONS
+from signals.models import ALL_SESSIONS, OPEN_POLL_STATUSES, TIMEFRAME_MINUTES
 from signals.storage import list_open_signals, update_signal_outcome, set_outcome_chart_url
 from signals.telegram_client import send_outcome_alert
 
-_SESSION_BY_TIMEFRAME = {s.timeframe: s for s in TRADING_SESSIONS}
-_DEFAULT_MAX_OPEN_DAYS = next(
-    s.max_open_days for s in TRADING_SESSIONS if s.timeframe == "1h")
+# Keyed off ALL_SESSIONS, not TRADING_SESSIONS: this tracker settles every open
+# row, including those written by workflows the main scan loop never runs.
+_SESSION_BY_TIMEFRAME = {s.timeframe: s for s in ALL_SESSIONS}
+_DEFAULT_MAX_OPEN = next(
+    s.max_open for s in ALL_SESSIONS if s.timeframe == "1h")
 HISTORY_LIMIT = 1000
 
 _TP_ORDER = ("tp1_hit", "tp2_hit", "tp3_hit")
@@ -68,13 +70,53 @@ def _already_hit(signal_row: dict) -> set[str]:
     return hit
 
 
-def check_outcome_events(signal_row: dict, candles: list) -> list[tuple[str, str]]:
+def fills_intrabar(signal_row: dict) -> bool:
+    """Whether this signal's entry was a resting order filled INSIDE a bar.
+
+    Market entries (every detector except sr_limit) are taken at the close of
+    their signal bar, so that bar is already history when the trade starts. A
+    limit entry fills partway through its bar, and the rest of that bar's range
+    — including a stop sitting just beyond the level — is part of the trade.
+    """
+    indicators = signal_row.get("indicators") or {}
+    return indicators.get("entry_style") == "limit"
+
+
+def _scan_start(candles: list, created_ms: float, include_entry_bar: bool,
+                bar_ms: int | None) -> int:
+    """Index of the first candle belonging to the trade's life.
+
+    For a limit fill this is the bar the order filled on: the newest bar that
+    had already CLOSED when the row was written, which is exactly the bar the
+    detector built the setup from. Identified by its own close time rather than
+    by stepping back one index from created_at — the engine writes the row an
+    arbitrary number of minutes into the following bar, so neither index
+    arithmetic nor subtracting one bar's duration lands reliably.
+    """
+    first = next((i for i, c in enumerate(candles)
+                  if c.open_time >= created_ms), len(candles))
+    if not include_entry_bar or bar_ms is None:
+        return first
+    entry_bar = max(
+        (i for i, c in enumerate(candles) if c.open_time + bar_ms <= created_ms),
+        default=None,
+    )
+    return first if entry_bar is None else entry_bar
+
+
+def check_outcome_events(signal_row: dict, candles: list, *,
+                         include_entry_bar: bool = False,
+                         bar_ms: int | None = None) -> list[tuple[str, str]]:
     """Ordered new events for this run: (status, closed_at_iso).
 
     Stop wins on a same-candle tie with any TP. A fast move can cross
-    multiple unhit TPs in one candle — all are returned in order.
+    multiple unhit TPs in one candle — all are returned in order. That tie rule
+    is what makes including the entry bar safe for limit fills: a bar that
+    spans both the fill and the stop scores as a stop.
     """
     created_ms = datetime.fromisoformat(signal_row["created_at"]).timestamp() * 1000
+    start = _scan_start(candles, created_ms, include_entry_bar, bar_ms)
+    candles = candles[start:]
     is_long = signal_row["direction"] == "long"
     stop = float(signal_row["stop_loss"])
     targets = _targets(signal_row)
@@ -89,8 +131,6 @@ def check_outcome_events(signal_row: dict, candles: list) -> list[tuple[str, str
         level_names = list(_TP_ORDER[:len(targets)])
 
     for candle in candles:
-        if candle.open_time < created_ms:
-            continue
         stamp = _candle_closed_at(candle)
         if is_long:
             if candle.low <= stop:
@@ -135,16 +175,16 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
     prefetched = prefetched or {}
     fetch_cache: dict = {}
 
-    def candles_covering(symbol, timeframe, created_ms):
+    def candles_covering(symbol, timeframe, from_ms):
         pre = prefetched.get((symbol, timeframe))
-        if pre and pre[0].open_time <= created_ms:
+        if pre and pre[0].open_time <= from_ms:
             return pre
-        key = (symbol, timeframe, created_ms)
+        key = (symbol, timeframe, from_ms)
         if key not in fetch_cache:
             try:
                 fetch_cache[key] = fetch_candles(
                     symbol, timeframe, HISTORY_LIMIT,
-                    start_time=int(created_ms), session=session,
+                    start_time=int(from_ms), session=session,
                 )[:-1]
             except Exception as exc:
                 print(f"[{symbol}] outcome check skipped, no market data: {exc}")
@@ -157,17 +197,25 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
         symbol = row["symbol"]
         timeframe = row.get("timeframe") or "1h"
         session_cfg = _SESSION_BY_TIMEFRAME.get(timeframe)
-        max_open_days = (session_cfg.max_open_days if session_cfg
-                         else _DEFAULT_MAX_OPEN_DAYS)
+        max_open = session_cfg.max_open if session_cfg else _DEFAULT_MAX_OPEN
         created = datetime.fromisoformat(row["created_at"])
         created_ms = created.timestamp() * 1000
-        expires_at = created + timedelta(days=max_open_days)
-        candles = candles_covering(symbol, timeframe, created_ms)
+        expires_at = created + max_open
+        # A limit fill needs its own entry bar in the window. Reach back two
+        # bars rather than one so the fetch lands before that bar's open
+        # whatever the delay between bar close and row write; _scan_start then
+        # trims to the exact bar by position.
+        include_entry_bar = fills_intrabar(row)
+        bar_ms = TIMEFRAME_MINUTES.get(timeframe, 60) * 60_000
+        from_ms = created_ms - 2 * bar_ms if include_entry_bar else created_ms
+        candles = candles_covering(symbol, timeframe, from_ms)
         if candles is None:
             continue
         expiry_ms = expires_at.timestamp() * 1000
         window = [c for c in candles if c.open_time < expiry_ms]
-        events = check_outcome_events(row, window)
+        events = check_outcome_events(row, window,
+                                      include_entry_bar=include_entry_bar,
+                                      bar_ms=bar_ms)
         if not events and now >= expires_at:
             events = [("expired", now.isoformat())]
         if not events:

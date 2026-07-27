@@ -1,7 +1,7 @@
 """Core data types for the signals engine."""
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 # Staged take-profit R-multiples off |entry - stop|.
@@ -104,7 +104,7 @@ class NoSignalReport:
 SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone")
 DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
-TIMEFRAME_MINUTES = {"5m": 5, "15m": 15, "1h": 60}
+TIMEFRAME_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "1h": 60}
 
 # Terminal win statuses (legacy tp_hit + multi-TP final).
 WIN_STATUSES = frozenset({"tp_hit", "tp3_hit"})
@@ -119,6 +119,9 @@ class TradingSession:
     name: str        # "scalp" | "swing"
     timeframe: str   # Binance kline interval
     max_open_days: int
+    # Overrides max_open_days when set. Days are too coarse below the 5m
+    # session — one day of 1m bars is 1440 of them, which is not a scalp.
+    max_open_hours: int | None = None
     # When set, a setup on this session's timeframe only fires if it agrees
     # with the EMA9/21 trend direction on this higher timeframe — a faster
     # session confirming against a slower one, to cut whipsaws that go
@@ -127,7 +130,15 @@ class TradingSession:
     # When set, this session always uses this strategy (ignores admin toggle).
     strategy: str | None = None
 
+    @property
+    def max_open(self) -> timedelta:
+        """How long a signal on this session stays live before expiring."""
+        if self.max_open_hours is not None:
+            return timedelta(hours=self.max_open_hours)
+        return timedelta(days=self.max_open_days)
 
+
+# Sessions the main engine scans, in order, every run.
 # Super scalp = 5m ICT+FVG (tight R); scalp = 15m S/R bounce (best backtested
 # frequency + TP-hit rate, no HTF gate); swing = admin strategy.
 TRADING_SESSIONS = (
@@ -144,6 +155,24 @@ TRADING_SESSIONS = (
         confluence_timeframe="4h",
     ),
 )
+
+# Sessions the main engine does NOT scan but whose signals it still settles.
+# The 1m XAU scalper runs as its own workflow (signals/xau_scan.py against a
+# single symbol), so putting it in TRADING_SESSIONS would make every run scan
+# 1m for every symbol. It still has to be declared somewhere: the outcome
+# tracker resolves every open row regardless of which process created it, and
+# an unregistered timeframe silently inherited the 1h swing's 14-day expiry.
+AUXILIARY_SESSIONS = (
+    TradingSession(
+        name="xau_scalp", timeframe="1m", max_open_days=1, max_open_hours=4,
+        strategy="ict_fvg",
+    ),
+)
+
+# Every declared session. Use this — not TRADING_SESSIONS — for any lookup
+# keyed on timeframe (expiry, bar length), so a stream that the engine does
+# not scan is never treated as an unknown timeframe.
+ALL_SESSIONS = TRADING_SESSIONS + AUXILIARY_SESSIONS
 
 
 @dataclass(frozen=True)
