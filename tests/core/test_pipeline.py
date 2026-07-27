@@ -992,3 +992,71 @@ def test_shadow_sampling_cannot_be_keyed_on_trade_attributes():
     import inspect
     import signals.run as run
     assert list(inspect.signature(run._shadow_sampled).parameters) == []
+
+
+# --- limit-entry S/R paper trial ---------------------------------------------
+
+def test_paper_sr_limit_is_off_by_default():
+    """A paper trial must not begin merely by deploying the code."""
+    import signals.run as run
+    assert run.PAPER_SR_LIMIT is False
+
+
+def test_paper_sr_limit_does_nothing_when_disabled(monkeypatch):
+    import signals.run as run
+    saved = []
+    monkeypatch.setattr(run, "PAPER_SR_LIMIT", False)
+    monkeypatch.setattr(run, "save_signal", lambda *a, **k: saved.append(a))
+    run._record_paper_sr_limit("BTCUSD", object(), object(),
+                               timeframe="1h", session=None)
+    assert saved == []
+
+
+def test_paper_sr_limit_only_runs_on_its_own_timeframe(monkeypatch):
+    """Only 1h measured net positive; 15m limit entry still loses."""
+    import signals.run as run
+    saved = []
+    monkeypatch.setattr(run, "PAPER_SR_LIMIT", True)
+    monkeypatch.setattr(run, "save_signal", lambda *a, **k: saved.append(a))
+    run._record_paper_sr_limit("BTCUSD", object(), object(),
+                               timeframe="15m", session=None)
+    assert saved == []
+
+
+def test_paper_sr_limit_records_shadow_tagged_with_its_experiment(monkeypatch):
+    import signals.run as run
+    from signals.models import CandidateSetup
+
+    captured = {}
+
+    def _fake_save(sig, url, key, session=None, shadow=False, experiment=None):
+        captured.update(shadow=shadow, experiment=experiment)
+
+    monkeypatch.setattr(run, "PAPER_SR_LIMIT", True)
+    monkeypatch.setattr(run, "save_signal", _fake_save)
+    monkeypatch.setattr(
+        "signals.strategies.sr_limit.detect_setup",
+        lambda *a, **k: CandidateSetup("BTCUSD", "long", 100.0, 99.0, 102.0,
+                                       {"strategy": "sr_limit"}),
+    )
+    market = type("M", (), {"candles": [], "atr14": [1.0], "adx14": None,
+                            "htf_trend": None})()
+    cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
+    run._record_paper_sr_limit("BTCUSD", market, cfg,
+                               timeframe="1h", session=None)
+    assert captured == {"shadow": True, "experiment": "sr_limit"}
+
+
+def test_paper_failure_never_breaks_the_scan(monkeypatch):
+    import signals.run as run
+
+    def _boom(*a, **k):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(run, "PAPER_SR_LIMIT", True)
+    monkeypatch.setattr("signals.strategies.sr_limit.detect_setup", _boom)
+    market = type("M", (), {"candles": [], "atr14": [1.0], "adx14": None,
+                            "htf_trend": None})()
+    cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
+    run._record_paper_sr_limit("BTCUSD", market, cfg,
+                               timeframe="1h", session=None)  # must not raise

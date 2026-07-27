@@ -11,12 +11,14 @@ from signals.market_client import canonical_symbol
 
 
 def save_signal(signal: Signal, supabase_url: str, service_key: str,
-                session=None, *, shadow: bool = False) -> None:
+                session=None, *, shadow: bool = False,
+                experiment: str | None = None) -> None:
     """Insert one signal row; raises on any failure so the caller can retry.
 
-    `shadow=True` marks a setup the LLM gate REJECTED, stored so the gate's
-    accuracy can be measured. Shadow rows are outcome-tracked but filtered out
-    of every user-facing read path — they are not recommendations.
+    `shadow=True` means "record but never deliver" — it is the containment
+    flag every user-facing read path filters on. `experiment` names WHICH study
+    the row belongs to ("gate_ab", "sr_limit"), so unrelated trials are never
+    pooled together in analysis. Ordinary delivered signals leave both unset.
     """
     session = session or requests.Session()
     payload = asdict(signal)
@@ -24,6 +26,7 @@ def save_signal(signal: Signal, supabase_url: str, service_key: str,
     # legacy `take_profit` populated for older readers.
     payload["take_profit_1"] = signal.take_profit
     payload["shadow"] = shadow
+    payload["experiment"] = experiment
     response = session.post(
         f"{supabase_url}/rest/v1/signals",
         headers={
@@ -414,7 +417,8 @@ def list_closed_signals(supabase_url: str, service_key: str, session=None,
         f"{shadow_filter}"
         "&select=symbol,timeframe,direction,entry,stop_loss,take_profit,"
         "take_profit_1,take_profit_2,take_profit_3,confidence,indicators,"
-        "status,created_at,closed_at,shadow,tp1_hit_at,tp2_hit_at,tp3_hit_at"
+        "status,created_at,closed_at,shadow,experiment,"
+        "tp1_hit_at,tp2_hit_at,tp3_hit_at"
         "&order=created_at.asc",
         headers={
             "apikey": service_key,

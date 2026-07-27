@@ -89,7 +89,11 @@ def main():
 
     rows = list_closed_signals(url, key, include_shadow=True)
     delivered = [r for r in rows if not r.get("shadow")]
-    shadow = [r for r in rows if r.get("shadow")]
+    # Only this experiment's shadows. Other trials (e.g. the sr_limit paper
+    # run) are also stored as shadows; pooling them would compare the gate
+    # against an unrelated strategy rather than against its own rejects.
+    shadow = [r for r in rows
+              if r.get("shadow") and r.get("experiment") == "gate_ab"]
     a = [x for x in (realised_r(r) for r in delivered) if x is not None]
     b = [x for x in (realised_r(r) for r in shadow) if x is not None]
 

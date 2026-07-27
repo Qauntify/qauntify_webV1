@@ -25,6 +25,7 @@ from signals.models import (
     TIMEFRAME_MINUTES,
     TRADING_SESSIONS,
     CandidateSetup,
+    Confirmation,
     NoSignalReport,
     ScanResult,
     make_signal,
@@ -320,9 +321,46 @@ def _save_shadow(setup, confirmation, cfg, *, timeframe, session):
     try:
         shadow = make_signal(setup, confirmation, [], timeframe=timeframe)
         save_signal(shadow, cfg.supabase_url, cfg.supabase_service_key,
-                    session=session, shadow=True)
+                    session=session, shadow=True, experiment="gate_ab")
     except Exception as exc:
         print(f"shadow save failed ({type(exc).__name__}) — continuing")
+
+
+# Paper trial: limit-entry S/R at 1h, the only configuration that measured net
+# positive once each entry style was paired with the fee tier it can actually
+# achieve (+0.065R at maker rates; market entry is always taker). Recorded, not
+# delivered — it exists to check the backtest result on forward data before any
+# signal-lifecycle work. OFF by default.
+PAPER_SR_LIMIT = os.environ.get("PAPER_SR_LIMIT", "").lower() in ("1", "true")
+PAPER_SR_LIMIT_TIMEFRAME = "1h"
+
+
+def _record_paper_sr_limit(symbol, market, cfg, *, timeframe, session):
+    """Record a limit-entry S/R setup as an undelivered paper signal.
+
+    Deliberately skips the LLM, Telegram and chart rendering: this measures the
+    rules, and adding the gate would confound it with the other live
+    experiment. Failures are swallowed — a paper trial must never break a scan.
+    """
+    if not PAPER_SR_LIMIT or timeframe != PAPER_SR_LIMIT_TIMEFRAME:
+        return
+    try:
+        from signals.strategies.sr_limit import detect_setup as detect_limit
+
+        setup = detect_limit(
+            symbol, market.candles, market.atr14,
+            adx14=market.adx14, htf_trend=market.htf_trend,
+        )
+        if setup is None:
+            return
+        paper = make_signal(
+            setup, Confirmation("confirm", 0, "paper trial — not delivered"),
+            [], timeframe=timeframe,
+        )
+        save_signal(paper, cfg.supabase_url, cfg.supabase_service_key,
+                    session=session, shadow=True, experiment="sr_limit")
+    except Exception as exc:
+        print(f"paper sr_limit save failed ({type(exc).__name__}) — continuing")
 
 
 def _no_setup_indicators(strategy, atr14, adx14, htf_trend,
@@ -448,6 +486,11 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     rsi14, macd_hist = market.rsi14, market.macd_hist
     atr14, adx14 = market.atr14, market.adx14
     htf_trend, h1_candles = market.htf_trend, market.h1_candles
+
+    # Paper trial runs off the same market data, before and independently of
+    # the live strategy — it must not influence what gets delivered.
+    _record_paper_sr_limit(symbol, market, cfg,
+                           timeframe=timeframe, session=session)
 
     setup = detect_setup(
         strategy, symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
