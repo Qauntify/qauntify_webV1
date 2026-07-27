@@ -43,7 +43,15 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           # LLM confirmation-gate A/B: fraction of REJECTED setups recorded as
           # shadow signals. Shadows are outcome-tracked but never delivered —
-          # RLS containment was verified before this was switched on. Set to
-          # "0.0" to stop collecting; nothing else needs to change.
+          # RLS containment was verified against the live database (06d090e)
+          # before this was ever switched on. Set to "0.0" to stop collecting;
+          # nothing else needs to change.
+          #
+          # Held at 0.0 through the staged rollout (f9b1d0d) so the shadow/
+          # experiment columns could deploy without writing a row. That cycle
+          # ran clean, so this is the planned flip to 0.25. The gate rejects
+          # ~87% of setups and nothing has ever measured whether the discarded
+          # ones were worse; at 250 per arm this is months of wall clock, so
+          # every run it stays off is a run that answer is deferred.
           # See docs/superpowers/specs/2026-07-26-ai-gate-ab-design.md
-          SHADOW_SAMPLE_RATE: "0.0"
+          SHADOW_SAMPLE_RATE: "0.25"
