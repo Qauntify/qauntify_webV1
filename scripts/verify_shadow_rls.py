@@ -41,7 +41,7 @@ def load_env(path=".env"):
 
 
 def _probe_row(probe_id, shadow):
-    return {
+    row = {
         "id": probe_id,
         "symbol": PROBE_SYMBOL,
         "timeframe": "15m",
@@ -58,6 +58,13 @@ def _probe_row(probe_id, shadow):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "shadow": shadow,
     }
+    if shadow:
+        # Exercise the experiment column too. If it is missing, the insert
+        # fails loudly here — which matters, because in the engine the shadow
+        # write is wrapped in try/except, so a missing column would silently
+        # record nothing while both experiments looked like they were running.
+        row["experiment"] = "probe"
+    return row
 
 
 def _visible_to_anon(url, anon, probe_id):
@@ -87,13 +94,26 @@ def _run_probe(url, svc, anon, shadow):
                          json=_probe_row(probe_id, shadow),
                          headers=headers, timeout=30)
     if resp.status_code >= 400:
-        if "shadow" in resp.text:
-            sys.exit("FAIL: the `shadow` column does not exist — apply the "
-                     "migration in supabase/schema.sql first.\n"
-                     f"  server said: {resp.text[:200]}")
+        for column in ("shadow", "experiment"):
+            if column in resp.text:
+                sys.exit(f"FAIL: the `{column}` column does not exist — apply "
+                         "the migration in supabase/schema.sql first.\n"
+                         f"  server said: {resp.text[:200]}")
         sys.exit(f"FAIL: could not insert probe: {resp.status_code} "
                  f"{resp.text[:200]}")
     try:
+        if shadow:
+            back = requests.get(
+                f"{url}/rest/v1/signals?id=eq.{probe_id}"
+                "&select=shadow,experiment",
+                headers={"apikey": svc, "Authorization": f"Bearer {svc}"},
+                timeout=30,
+            ).json()
+            stored = back[0] if back else {}
+            if stored.get("experiment") != "probe":
+                sys.exit("FAIL: the `experiment` column did not round-trip "
+                         f"(read back {stored!r}). Both experiments would "
+                         "silently record nothing.")
         return _visible_to_anon(url, anon, probe_id)
     finally:
         requests.delete(
@@ -112,8 +132,10 @@ def main():
     if not url or not svc or not anon:
         sys.exit("need SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and an anon key")
 
-    print("Probe 1: shadow row MUST be invisible to anon")
+    print("Probe 1: shadow row MUST be invisible to anon "
+          "(and carry an `experiment` tag)")
     s_direct, s_listing = _run_probe(url, svc, anon, shadow=True)
+    print(f"  experiment round-trip: OK")
     print(f"  direct fetch visible : {s_direct}")
     print(f"  appears in listing   : {s_listing}")
 
