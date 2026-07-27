@@ -1,123 +1,197 @@
 # BBMA backtest results
 
-Run 2026-07-27 (UTC) with:
+Design: `docs/superpowers/specs/2026-07-27-bbma-strategy-design.md`
+
+**Headline: the two patterns finished in opposite places, and the long test
+reversed the short one.**
+
+- `bbma_reentry` — **+0.120R net per trade over 905 trades and 8.87 years**,
+  profitable in 7 of 10 calendar years. A genuine candidate.
+- `bbma_extreme` — **−0.019R net over 6,136 trades**, profitable in 3 of 10
+  years, **−117.8R total**. Rejected.
+
+The first sweep (four months, below) pointed the other way on both. That is
+what a four-month sample is worth.
+
+---
+
+## 1. Long-history test — the decisive one
+
+```bash
+.venv/bin/python -m scripts.history_provenance   # prove the data first
+.venv/bin/python -m scripts.bbma_history_report
+```
+
+Data: Binance monthly archives, **2017-08-17 → 2026-06-30, 8.87 years**,
+BTCUSDT and ETHUSDT, 1h and 4h. Replayed on a 200-bar rolling window, matching
+the `ScanConfig.candle_limit` the live scan actually sees.
+
+### Why this data is trusted
+
+Provenance is established two independent ways, because "I downloaded a file"
+is not evidence (`scripts/history_provenance.py`):
+
+1. **Cryptographic** — all 107 monthly archives verified against Binance's
+   published SHA256 before parsing. Fail-closed on mismatch.
+2. **Historical** — checksums prove a file is unmodified, not that its contents
+   are real prices. So known market events were located in the data:
+
+| Landmark | Found | Expected |
+|---|---|---|
+| 2017 blow-off top | $19,799 on 2017-12-17 12:00 | Dec 2017, $17–21k |
+| 2018 bear low | $3,156 on 2018-12-15 15:00 | Dec 2018, $3.0–3.6k |
+| COVID crash low | $3,782 on 2020-03-13 02:00 | 11–14 Mar 2020, $3.5–4.5k |
+| 2021 all-time high | $69,000 on 2021-11-10 14:00 | Nov 2021, $66–71k |
+| FTX collapse low | $15,476 on 2022-11-21 21:00 | Nov 2022, $15–16.5k |
+
+Worst single hour in 8.87 years: **−18.2% on 2020-03-12 10:00 UTC** — Black
+Thursday, to the hour. Plus 126 missing hours across 29 discontinuities, which
+are real exchange outages; a simulated series has none.
+
+### Results
+
+| Strategy | Symbol | tf | Trades | TP1% | TP3% | Gross | Net | Total |
+|---|---|---|---|---|---|---|---|---|
+| `bbma_extreme` | BTCUSD | 1h | 2505 | 65.5% | 38.9% | +0.120R | **−0.054R** | −134.8R |
+| `bbma_extreme` | ETHUSD | 1h | 2433 | 65.0% | 38.2% | +0.112R | **−0.017R** | −42.5R |
+| `bbma_extreme` | BTCUSD | 4h | 598 | 64.5% | 40.0% | +0.120R | +0.035R | +20.9R |
+| `bbma_extreme` | ETHUSD | 4h | 600 | 64.3% | 41.7% | +0.126R | +0.064R | +38.6R |
+| `bbma_reentry` | BTCUSD | 1h | 336 | 52.4% | 29.5% | +0.238R | **+0.089R** | +29.8R |
+| `bbma_reentry` | ETHUSD | 1h | 367 | 51.2% | 27.8% | +0.196R | **+0.089R** | +32.8R |
+| `bbma_reentry` | BTCUSD | 4h | 106 | 52.8% | 33.0% | +0.321R | **+0.250R** | +26.5R |
+| `bbma_reentry` | ETHUSD | 4h | 96 | 49.0% | 34.4% | +0.253R | **+0.200R** | +19.2R |
+
+Pooled:
+
+| Strategy | n | Gross | Net | t | 95% CI | Total |
+|---|---|---|---|---|---|---|
+| `bbma_extreme` | 6136 | +0.117R | −0.019R | −1.72 | [−0.041, +0.003] | −117.8R |
+| `bbma_reentry` | 905 | +0.232R | **+0.120R** | **+2.77** | **[+0.035, +0.204]** | +108.3R |
+
+### Per-year breakdown — the robustness test
+
+`bbma_reentry`:
+
+| Year | Trades | Net/trade | Total |
+|---|---|---|---|
+| 2017 | 48 | +0.210R | +10.1R |
+| 2018 | 88 | +0.395R | +34.7R |
+| 2019 | 97 | +0.161R | +15.6R |
+| 2020 | 96 | +0.441R | +42.3R |
+| 2021 | 117 | −0.060R | −7.0R |
+| 2022 | 96 | +0.089R | +8.6R |
+| 2023 | 92 | −0.011R | −1.0R |
+| 2024 | 98 | +0.090R | +8.8R |
+| 2025 | 113 | +0.016R | +1.8R |
+| 2026 | 60 | −0.093R | −5.6R |
+
+**7 of 10 years positive. Median trade +0.157R** (above the mean, so not
+outlier-driven). The **top 10 trades contribute only +19.7R of the +108.3R
+total — 18%**, so the result is broad-based rather than a few lucky wins.
+
+Its two best years were **2018 (+34.7R, the bear market)** and **2020 (+42.3R,
+the COVID crash)** — the stress regimes. Its one meaningful losing year was
+**2021, the parabolic bull**, which is coherent: a pullback-continuation setup
+with an HTF gate gets little to work with in a melt-up that never pulls back.
+Losing years are small (−7.0R, −1.0R, −5.6R); winning years are large.
+
+`bbma_extreme`, by contrast: **3 of 10 years positive**, and the shape of the
+failure is instructive. Median trade **+0.119R** against a mean of **−0.019R**
+— it wins 65% of the time with a positive median and still loses money, because
+the losers are far bigger than the winners. That is the textbook mean-reversion
+payoff: picking up pennies in front of a steamroller. No parameter change fixes
+a payoff shape.
+
+### This was out-of-sample
+
+Not one parameter was touched between the four-month sweep and the nine-year
+run — `git diff` over `signals/strategies/bbma/` across those commits is empty.
+The lookbacks (6, 10), the 0.5 ATR stop buffer and the 2.5 ATR cap all came
+from BBMA doctrine and this repo's existing `sr_zone` conventions, fixed before
+any long-history data was seen. **No optimisation was performed at any point.**
+That matters more than the t-statistic: the usual reason a backtest fails
+forward is that its parameters were fitted to the test set, and here there was
+no fitting to do.
+
+---
+
+## 2. Short sweep — superseded, kept as a cautionary record
 
 ```bash
 .venv/bin/python -m scripts.bbma_report
 ```
 
-Design: `docs/superpowers/specs/2026-07-27-bbma-strategy-design.md`
+Run 2026-07-27 over Kraken/Yahoo live data — 30 days at 1h and 120 days at 4h
+per symbol, because Kraken caps OHLC at 721 bars.
 
-## Raw sweep
+| Strategy | n | Gross | Net | 95% CI |
+|---|---|---|---|---|
+| `bbma_extreme` | 188 | +0.183R | +0.076R | [−0.046, +0.199] |
+| `bbma_reentry` | 29 | +0.057R | −0.016R | [−0.437, +0.405] |
 
-```
-Scale-out model: 1/3 booked at each of TP1/TP2/TP3, stop to breakeven after TP1. Net subtracts r_model round-trip costs.
-bbma_extreme ladder is 0.5/1/1.5R; bbma_reentry is 1/2/3R.
-strategy      symbol  tf   bars trades   tp1%   tp3%   gross     net     totR
-------------------------------------------------------------------------------
-bbma_extreme  BTCUSD  1h    720     19  73.7%  57.9%  +0.34R  -0.00R    +6.5R
-bbma_extreme  ETHUSD  1h    720     22  72.7%  36.4%  +0.17R  -0.06R    +3.7R
-bbma_extreme  XAUUSD  1h   1432     42  69.0%  35.7%  +0.18R  +0.15R    +7.7R
-bbma_extreme  GBPUSD  1h    720     17  76.5%  29.4%  +0.20R  +0.09R    +3.3R
-bbma_extreme  BTCUSD  4h    720     19  63.2%  42.1%  +0.12R  +0.00R    +2.3R
-bbma_extreme  ETHUSD  4h    720     20  70.0%  40.0%  +0.20R  +0.11R    +4.0R
-bbma_extreme  XAUUSD  4h    762     28  50.0%  39.3%  -0.09R  -0.10R    -2.5R
-bbma_extreme  GBPUSD  4h    720     21  81.0%  52.4%  +0.44R  +0.39R    +9.3R
-bbma_reentry  BTCUSD  1h    720      3  33.3%   0.0%  -0.33R  -0.52R    -1.0R
-bbma_reentry  ETHUSD  1h    720      4  50.0%   0.0%  -0.17R  -0.30R    -0.7R
-bbma_reentry  XAUUSD  1h   1432      6  83.3%  16.7%  +0.61R  +0.58R    +3.7R
-bbma_reentry  GBPUSD  1h    720      3  33.3%  33.3%  +0.00R  -0.08R    +0.0R
-bbma_reentry  BTCUSD  4h    720      2  50.0%   0.0%  -0.33R  -0.42R    -0.7R
-bbma_reentry  ETHUSD  4h    720      3  66.7%  33.3%  +0.44R  +0.37R    +1.3R
-bbma_reentry  XAUUSD  4h    762      4  75.0%  25.0%  +0.75R  +0.74R    +3.0R
-bbma_reentry  GBPUSD  4h    720      4   0.0%   0.0%  -1.00R  -1.04R    -4.0R
-```
+Both readings were wrong in direction. Extreme looked like the promising half
+and is the loser; Re-entry looked unmeasurable — which was the correct call at
+29 trades — and is the winner. The four-month window (2026-03 to 2026-07) was a
+single regime that happened to suit a mean-reversion setup.
 
-## Pooled per-trade statistics
+**The lesson is the sample, not the strategies.** Any conclusion drawn from
+four months of one regime is a coin flip wearing a decimal point.
 
-Row-level averages over 2–20 trades are not readable on their own, so the same
-trades were pooled across every symbol and timeframe:
-
-| Strategy | n | Gross | Cost drag | Net | 95% CI on net | t |
-|---|---|---|---|---|---|---|
-| `bbma_extreme` | 188 | +0.183R | −0.106R | **+0.076R** | [−0.046, +0.199] | 1.22 |
-| `bbma_reentry` | 29 | +0.057R | −0.074R | **−0.016R** | [−0.437, +0.405] | −0.08 |
-
-## How to read this
-
-**The samples are small, and the reason is structural.** Kraken caps its OHLC
-endpoint at 721 bars regardless of the requested limit and serves no deeper
-history, so a 1h row spans ~30 days and a 4h row ~120 days per symbol. XAUUSD
-is the one exception (Yahoo, 1432 bars at 1h). Pagination cannot extend the
-Kraken series — the data simply is not offered.
-
-Any single row here is noise. A row with 2–6 trades carries no information at
-all, whichever direction it points. The pooled figures are the only numbers in
-this document worth weighing, and even those are thin.
-
-**Costs are not a footnote for these strategies.** `bbma_extreme` books its
-first third at 0.5R of a deliberately tight stop, and cost expressed in R
-scales inversely with stop distance. Round-trip costs consumed **58% of its
-gross edge** (+0.183R → +0.076R). Quoting the gross number alone would have
-made this look roughly twice as good as it is.
+---
 
 ## Verdict
 
-The bar set in the design was *positive net expectancy on more than one symbol
-with a non-trivial trade count*.
+### `bbma_reentry` — promote to a paper trial
 
-### `bbma_extreme` — does not clear the bar. Not promoted.
+It clears the bar set in the design and then some: positive net expectancy on
+every symbol and timeframe tested, 7 of 10 years positive, a positive median,
+not outlier-driven, statistically significant (t = +2.77, CI excludes zero),
+and profitable through both a bear market and a liquidity crash — on unfitted
+parameters.
 
-The encouraging part is real: gross expectancy is positive on 7 of 8 rows, the
-TP1 hit rate is consistently 63–81%, and the pooled net is positive.
+Caveats that keep this a paper trial rather than a live promotion:
 
-It still fails, for two reasons.
+- **The CI is optimistic.** BTC and ETH are highly correlated and the 1h/4h
+  rows cover the same underlying market, so 905 trades are not 905 independent
+  observations. The true interval is wider than [+0.035, +0.204].
+- **Crypto only.** Binance lists no gold or GBP, so `XAUUSD` and `GBPUSD` are
+  still on four months of data.
+- **Costs take 48%** of the gross edge (+0.232R → +0.120R). At a worse fee tier
+  than the 20bps in `r_model.COST_BPS`, the edge shrinks toward zero. Confirm
+  the tier before sizing anything.
+- **4h is the stronger timeframe** (+0.250R / +0.200R vs +0.089R at 1h), for
+  the same reason Extreme fails at 1h: wider stops mean cost is a smaller
+  fraction of R.
 
-1. **The edge is smaller than its own sampling error.** +0.076R over 188 trades
-   carries a 95% confidence interval of [−0.046, +0.199], which straddles zero
-   (t = 1.22). This data cannot distinguish the strategy from a coin flip.
-2. **The sign is unstable across timeframes on the same instrument.** XAUUSD
-   pays +0.15R at 1h and −0.10R at 4h; BTCUSD is −0.00R at 1h and +0.00R at 4h.
-   A real effect should not reverse when the bar length changes while the rules
-   stay identical.
+### `bbma_extreme` — reject
 
-### `bbma_reentry` — cannot be evaluated. Not promoted.
+−117.8R over 6,136 trades and nine years, positive in 3 of 10. The 4h rows are
+mildly positive, but that is two rows out of four in a strategy whose pooled
+result is negative and whose payoff shape is structurally adverse.
 
-29 trades across eight rows, 2–6 per row. The 95% CI of [−0.437, +0.405] spans
-almost a full R in each direction. This is not a negative result; it is the
-absence of a result. Nothing about the setup's quality can be inferred, in
-either direction, from this data.
+The limit-entry idea floated after the short sweep should **not** be pursued on
+the strength of that sweep — it was built on a false positive. If it is ever
+revisited, the argument has to be made against these nine-year numbers.
 
-The notable fact is the *frequency* gap: Re-entry fired 29 times where Extreme
-fired 188, on identical candles. Six conditions have to align simultaneously
-(momentum leg, rising Mid BB, EMA50 side, MA5 pullback, MA10 hold, Mid BB
-hold), and at least one is evidently near-binding. That is a fact about the
-implementation's restrictiveness, not yet about the setup's edge.
+## Follow-ups
 
-## Follow-ups worth doing
+1. **Paper-trial `bbma_reentry` at 4h**, where the cost drag is smallest. This
+   needs a session slot decision, an admin-selectable entry with its migration,
+   and a chart-plan builder — none of which this work did.
+2. **Extend gold and FX history.** The HuggingFace XAUUSD set in `ml/data/`
+   covers 2004–2025 and would test Re-entry on a genuinely different asset
+   class; it needs `requirements-ml-data.txt` installed. FX would need a source
+   such as HistData.
+3. **Re-run the other strategies over this history.** `sr_zone`, `sr_limit` and
+   `orb_rvol` are all sitting on the same thin evidence the short BBMA sweep
+   was. `signals/history.py` is strategy-agnostic and the sweep pattern is now
+   established.
 
-1. **Find which Re-entry rule is binding.** Instrument the detector to count
-   how many bars pass each of the six conditions, then relax only the one that
-   is throttling the rest. Until the trade count reaches the low hundreds, no
-   verdict on Re-entry means anything. This is the highest-value next step —
-   the current answer is "unknown", not "bad".
-2. **Test the ADX veto on Extreme.** `adx14` is already recorded into every
-   emitted setup's `indicators` precisely so this can be answered from stored
-   data rather than by re-running with a guessed threshold. `sr_zone` vetoes
-   mean-reversion above ADX 35 for the same reason; if Extreme's losers cluster
-   in strong trends, that veto is free.
-3. **Get deeper history before re-deciding.** The binding constraint on this
-   whole exercise is 721 bars. The `ml/data/` pipeline points at a HuggingFace
-   XAUUSD set covering 2004–2025 at every timeframe, which would give one
-   instrument a genuinely long test — though it is gold-only and lives in the
-   ML tree, which is not wired into the live engine.
+## Incidental fix
 
-## What shipped regardless
-
-The sweep also surfaced and fixed a pre-existing data bug: `YAHOO_INTERVAL`
-mapped a 4h gold request to Yahoo's hourly series, so `fetch_candles("XAUUSD",
-"4h")` returned 60-minute bars (measured: 2,829 bars at a 60.0m median gap).
-Because `backtest.py` uses 4h for HTF confluence on every strategy, XAUUSD's
-higher-timeframe trend was being computed from 1h data while labelled 4h — for
-`ema_cross`, `ict_smc` and `sr_zone` too, not only BBMA. Gold's 4h series is
-now folded into true 4h buckets (763 bars, 240.0m median gap).
+`YAHOO_INTERVAL` mapped a 4h gold request to Yahoo's hourly series, so
+`fetch_candles("XAUUSD", "4h")` returned 60-minute bars (2,829 bars at a 60.0m
+median gap). Because `backtest.py` uses 4h for HTF confluence on every strategy,
+XAUUSD's higher-timeframe trend was computed from 1h data while labelled 4h —
+for `ema_cross`, `ict_smc` and `sr_zone` too. Now folded into true 4h buckets
+(763 bars, 240.0m median gap).
