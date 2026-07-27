@@ -1,9 +1,26 @@
 """Fetches OHLCV candles (no API key required).
 
 Crypto + FX (BTCUSD, ETHUSD, GBPUSD) come from Kraken public OHLC.
-Spot-style gold (XAUUSD) comes from Yahoo Finance COMEX gold futures
-(GC=F) — Kraken has no XAUUSD pair. Legacy PAXG* symbols canonicalize to
-XAUUSD so older rows still settle.
+Legacy PAXG* symbols canonicalize to XAUUSD so older rows still settle.
+
+GOLD IS FUTURES, NOT SPOT. The symbol is labelled XAUUSD, but the prices come
+from Yahoo Finance's front-month COMEX gold future (GC=F) because Kraken has no
+XAUUSD pair. The future trades at a basis to spot — typically a few dollars,
+driven by carry — and that basis steps discontinuously at contract roll, when
+the front month changes underneath the same ticker.
+
+What that means in practice:
+  * Levels published for "XAUUSD" are futures levels. Someone executing them on
+    a spot gold CFD will not see the same prices.
+  * On the 1h swing session the basis is small against the stop distance and is
+    mostly noise. On the 1m scalper, whose targets are 0.5R of a very tight
+    stop, it is not.
+  * A roll can shift the series by more than a scalp's entire risk. Nothing
+    here detects or adjusts for a roll.
+
+Fixing this properly means either sourcing genuine spot XAU or renaming the
+symbol; both are larger changes than a data-source swap, since `symbol` is a
+stored key on every signal row.
 """
 from __future__ import annotations
 
