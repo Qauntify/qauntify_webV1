@@ -102,7 +102,8 @@ class NoSignalReport:
 
 
 # Every strategy the router can dispatch to.
-SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone")
+SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone",
+                     "bbma_extreme", "bbma_reentry")
 
 # The subset the admin page may store in bot_settings.signal_strategy, which
 # only controls the SWING session — the scalp sessions pin their own strategy
