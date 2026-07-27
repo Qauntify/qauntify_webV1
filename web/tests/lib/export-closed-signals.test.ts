@@ -1,3 +1,4 @@
+import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 
 import type { Signal } from "@/lib/signals";
@@ -41,9 +42,24 @@ describe("export-closed-signals helpers", () => {
     expect(parseExportTab("nope")).toBe("all");
   });
 
-  it("builds a non-empty xlsx buffer", () => {
-    const buf = buildClosedSignalsXlsx([CLOSED]);
+  it("builds a real xlsx buffer", async () => {
+    const buf = await buildClosedSignalsXlsx([CLOSED]);
     expect(buf.byteLength).toBeGreaterThan(100);
+    // .xlsx is a zip; check the local file header so a truncated or
+    // wrong-format buffer cannot pass on size alone.
+    expect(Array.from(new Uint8Array(buf).slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04]);
+  });
+
+  it("round-trips the exported rows", async () => {
+    const buf = await buildClosedSignalsXlsx([CLOSED]);
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(buf);
+    const sheet = book.getWorksheet("Closed signals");
+    expect(sheet).toBeDefined();
+    const header = sheet!.getRow(1).values as unknown[];
+    expect(header).toContain("Symbol");
+    expect(header).toContain("Rationale");
+    expect(sheet!.getRow(2).getCell(1).value).toBe(CLOSED.symbol);
   });
 
   it("builds a non-empty pdf buffer", () => {

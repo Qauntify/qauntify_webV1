@@ -1,6 +1,6 @@
+import ExcelJS from "exceljs";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 
 import type { Signal } from "@/lib/signals";
 
@@ -45,11 +45,25 @@ function rowsForExport(signals: Signal[]): Record<string, string | number>[] {
   }));
 }
 
-export function buildClosedSignalsXlsx(signals: Signal[]): ArrayBuffer {
-  const sheet = XLSX.utils.json_to_sheet(rowsForExport(signals));
-  const book = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(book, sheet, "Closed signals");
-  return XLSX.write(book, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+/**
+ * Async because ExcelJS streams the workbook out. It replaced the `xlsx`
+ * package, which has unpatched prototype-pollution and ReDoS advisories with
+ * "no fix available" — npm's published build is unmaintained.
+ */
+export async function buildClosedSignalsXlsx(signals: Signal[]): Promise<ArrayBuffer> {
+  const rows = rowsForExport(signals);
+  const book = new ExcelJS.Workbook();
+  const sheet = book.addWorksheet("Closed signals");
+  const headers = Object.keys(rows[0] ?? {});
+  sheet.columns = headers.map((header) => ({
+    header,
+    key: header,
+    // Rationale is a paragraph; everything else is short.
+    width: header === "Rationale" ? 80 : Math.max(12, header.length + 2),
+  }));
+  sheet.getRow(1).font = { bold: true };
+  for (const row of rows) sheet.addRow(row);
+  return book.xlsx.writeBuffer() as Promise<ArrayBuffer>;
 }
 
 export function buildClosedSignalsPdf(
