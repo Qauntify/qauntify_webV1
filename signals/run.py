@@ -363,6 +363,55 @@ def _record_paper_sr_limit(symbol, market, cfg, *, timeframe, session):
         print(f"paper sr_limit save failed ({type(exc).__name__}) — continuing")
 
 
+# Paper trial: BBMA Re-entry, the one pattern that survived a nine-year test
+# (docs/bbma-backtest-results.md). Over 2017-08 to 2026-06 on BTC and ETH it
+# returned +0.120R net across 905 trades, profitable in 7 of 10 calendar years
+# with a positive median and only 18% of its total from its top ten trades. Its
+# best years were the 2018 bear and the 2020 crash. Nothing was tuned: the
+# parameters were fixed before the long history was ever loaded.
+#
+# WHY 1h AND NOT 4h. 4h measured stronger (+0.250R vs +0.089R) because a wider
+# stop makes cost a smaller fraction of R. But 4h fires ~12 times per symbol
+# per year, so a readable forward sample would take upwards of two years. 1h
+# fires ~38, and the swing session already scans 1h against a 4h confluence
+# trend — which is exactly the configuration the backtest measured, at no extra
+# fetch. The weaker-but-readable arm is the one worth running forward.
+#
+# Recorded, never delivered. OFF by default.
+PAPER_BBMA_REENTRY = os.environ.get(
+    "PAPER_BBMA_REENTRY", "").lower() in ("1", "true")
+PAPER_BBMA_REENTRY_TIMEFRAME = "1h"
+
+
+def _record_paper_bbma_reentry(symbol, market, cfg, *, timeframe, session):
+    """Record a BBMA Re-entry setup as an undelivered paper signal.
+
+    Skips the LLM, Telegram and chart rendering for the same reason
+    `_record_paper_sr_limit` does: this measures the rules on forward data, and
+    running the confirmation gate over it would confound this trial with the
+    gate A/B. Failures are swallowed — a paper trial must never break a scan.
+    """
+    if not PAPER_BBMA_REENTRY or timeframe != PAPER_BBMA_REENTRY_TIMEFRAME:
+        return
+    try:
+        from signals.strategies.bbma import detect_reentry
+
+        setup = detect_reentry(
+            symbol, market.candles, market.atr14,
+            adx14=market.adx14, htf_trend=market.htf_trend,
+        )
+        if setup is None:
+            return
+        paper = make_signal(
+            setup, Confirmation("confirm", 0, "paper trial — not delivered"),
+            [], timeframe=timeframe,
+        )
+        save_signal(paper, cfg.supabase_url, cfg.supabase_service_key,
+                    session=session, shadow=True, experiment="bbma_reentry")
+    except Exception as exc:
+        print(f"paper bbma_reentry save failed ({type(exc).__name__}) — continuing")
+
+
 def _no_setup_indicators(strategy, atr14, adx14, htf_trend,
                          ema9, ema21, rsi14, macd_hist):
     """Indicators to attach to a no-setup ai_event, or None while a required
@@ -491,6 +540,8 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     # the live strategy — it must not influence what gets delivered.
     _record_paper_sr_limit(symbol, market, cfg,
                            timeframe=timeframe, session=session)
+    _record_paper_bbma_reentry(symbol, market, cfg,
+                               timeframe=timeframe, session=session)
 
     setup = detect_setup(
         strategy, symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
