@@ -34,3 +34,6 @@ optuna.db
 
 # Cached historical archives for backtesting (verified downloads).
 .cache/
+
+# Generated review images (regenerate with scripts/bbma_trade_shots.py).
+artifacts/bbma-trades/
