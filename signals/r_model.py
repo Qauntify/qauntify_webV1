@@ -110,24 +110,38 @@ COST_BPS = {
 # Unknown symbols take the most expensive assumption rather than a free ride.
 DEFAULT_COST_BPS = 20.0
 
+# Round-trip cost for a strategy that is filled as MAKER — a resting limit that
+# adds liquidity rather than crossing the spread. Roughly 0.04% on crypto
+# against the 0.20% taker figure above. This is not a discount to hand out
+# freely: it applies only to a detector that genuinely rests an order (see
+# signals/strategies/sr_limit), and it still assumes the order was filled,
+# which candles cannot verify.
+MAKER_BPS = 4.0
+
 
 def cost_bps(symbol: str) -> float:
     return COST_BPS.get(canonical_symbol(symbol), DEFAULT_COST_BPS)
 
 
-def cost_r(symbol: str, entry: float, stop: float) -> float:
+def cost_r(symbol: str, entry: float, stop: float, *, bps: float | None = None) -> float:
     """Round-trip cost expressed in R for one trade.
 
     Cost is a fraction of PRICE while R is a fraction of the stop distance, so
     the same venue is far more expensive on a tight stop than a wide one. That
     ratio is exactly why the 15m and 1h S/R variants measured so differently.
+
+    `bps` overrides the symbol's default tier. COST_BPS assumes a TAKER fill,
+    because every market-entry detector in this engine enters at a bar close. A
+    resting-limit strategy earns the maker tier instead, and charging it taker
+    fees would measure a strategy nobody would run — see MAKER_BPS.
     """
     if entry is None or stop is None:
         return 0.0
     risk = abs(entry - stop)
     if risk <= 0:
         return 0.0
-    return (cost_bps(symbol) / 10_000.0) * abs(entry) / risk
+    rate = cost_bps(symbol) if bps is None else bps
+    return (rate / 10_000.0) * abs(entry) / risk
 
 
 def net_r(row: dict) -> float | None:

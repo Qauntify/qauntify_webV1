@@ -31,10 +31,9 @@ import statistics
 
 import requests
 
-from signals.backtest import htf_trend_series, net_r_multiples, simulate_scaled
+from signals.backtest import backtest_windowed, htf_trend_series
 from signals.history import load_history
 from signals.indicators import atr
-from signals.r_model import scaled_r
 from signals.strategies.bbma import detect_extreme, detect_reentry
 
 # Binance lists no gold or GBP, so those two symbols cannot be extended past
@@ -51,40 +50,6 @@ GATED = frozenset({"bbma_reentry"})
 WINDOW = 200
 # Longest a trade is carried before being treated as expired.
 MAX_HOLD = 2000
-
-
-def backtest_windowed(detector, symbol, candles, atr14, trends):
-    """Replay `detector` bar by bar over a rolling WINDOW, non-overlapping."""
-    n = len(candles)
-    rs, entries, stops = [], [], []
-    tp1_hits = tp3_hits = 0
-    i = WINDOW
-    while i < n - 1:
-        lo = i - WINDOW + 1
-        setup = detector(
-            symbol, candles[lo:i + 1], atr14[lo:i + 1], htf_trend=trends[i],
-        )
-        if setup is None:
-            i += 1
-            continue
-        tps = list(setup.resolved_take_profits())
-        reached, stopped, bars = simulate_scaled(
-            setup.direction, setup.entry, setup.stop_loss, tps,
-            candles[i + 1:i + 1 + MAX_HOLD],
-        )
-        rs.append(scaled_r(setup.direction, setup.entry, setup.stop_loss,
-                           tps, reached, stopped))
-        entries.append(setup.entry)
-        stops.append(setup.stop_loss)
-        tp1_hits += 1 if reached >= 1 else 0
-        tp3_hits += 1 if reached >= len(tps) else 0
-        i = i + 1 + max(bars, 1)
-    return {
-        "gross": rs,
-        "net": net_r_multiples(symbol, rs, entries, stops),
-        "tp1_hits": tp1_hits,
-        "tp3_hits": tp3_hits,
-    }
 
 
 def _series(symbol, timeframe, session, cache):
@@ -124,7 +89,9 @@ def main():
                     trends = htf_trend_series(
                         candles, htf_candles, TF_MINUTES[htf])
 
-                out = backtest_windowed(detector, symbol, candles, atr14, trends)
+                out = backtest_windowed(detector, symbol, candles, atr14,
+                                        trends, window=WINDOW,
+                                        max_hold=MAX_HOLD)
                 gross, net = out["gross"], out["net"]
                 trades = len(gross)
                 pooled[name]["gross"] += gross

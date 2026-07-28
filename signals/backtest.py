@@ -152,7 +152,7 @@ def summarize(r_multiples):
     }
 
 
-def net_r_multiples(symbol, r_multiples, entries, stops):
+def net_r_multiples(symbol, r_multiples, entries, stops, *, bps=None):
     """Per-trade R after the round-trip cost for that trade's stop distance.
 
     Cost is a fraction of PRICE while R is a fraction of the stop distance, so
@@ -161,9 +161,62 @@ def net_r_multiples(symbol, r_multiples, entries, stops):
     in R. `r_model` stays the single definition of what a trade cost.
     """
     return [
-        r - cost_r(symbol, entry, stop)
+        r - cost_r(symbol, entry, stop, bps=bps)
         for r, entry, stop in zip(r_multiples, entries, stops)
     ]
+
+
+def backtest_windowed(detector, symbol, candles, atr14, trends, *,
+                      window=200, max_hold=2000, bps=None):
+    """Replay `detector` bar by bar over a ROLLING window, non-overlapping.
+
+    Differs from `backtest_strategy` in two ways, both of which make it more
+    faithful to production rather than less:
+
+      * The live engine fetches `ScanConfig.candle_limit` bars and computes
+        indicators on the closed ones, so a detector never sees more than that.
+        Replaying with the same window means a setup fires here only if it
+        would have fired live. Passing the whole prefix, as `backtest_strategy`
+        does, is also quadratic — unusable across years of bars.
+      * A trade is abandoned after `max_hold` bars instead of being walked to
+        the end of history, mirroring the way live signals expire (see
+        `TradingSession.max_open`) and keeping the forward slice bounded.
+
+    `detector` is any `(symbol, candles, atr14, htf_trend=...) -> CandidateSetup
+    | None`. `trends` is aligned to `candles`; pass `[None] * len(candles)` for
+    an ungated strategy. Returns per-trade gross and net R plus target counts.
+    """
+    n = len(candles)
+    r_multiples, entries, stops = [], [], []
+    tp1_hits = tp3_hits = 0
+    i = window
+    while i < n - 1:
+        lo = i - window + 1
+        setup = detector(
+            symbol, candles[lo:i + 1], atr14[lo:i + 1], htf_trend=trends[i],
+        )
+        if setup is None:
+            i += 1
+            continue
+        tps = list(setup.resolved_take_profits())
+        reached, stopped, bars = simulate_scaled(
+            setup.direction, setup.entry, setup.stop_loss, tps,
+            candles[i + 1:i + 1 + max_hold],
+        )
+        r_multiples.append(scaled_r(setup.direction, setup.entry,
+                                    setup.stop_loss, tps, reached, stopped))
+        entries.append(setup.entry)
+        stops.append(setup.stop_loss)
+        tp1_hits += 1 if reached >= 1 else 0
+        tp3_hits += 1 if reached >= len(tps) else 0
+        # Always advance at least one bar, so a same-bar resolution cannot loop.
+        i = i + 1 + max(bars, 1)
+    return {
+        "gross": r_multiples,
+        "net": net_r_multiples(symbol, r_multiples, entries, stops, bps=bps),
+        "tp1_hits": tp1_hits,
+        "tp3_hits": tp3_hits,
+    }
 
 
 def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,

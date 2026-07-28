@@ -148,6 +148,31 @@ def load_month(path: Path) -> list[Candle]:
         return parse_klines(archive.read(name))
 
 
+def _get_with_retry(session, url, timeout, attempts=4):
+    """GET with linear backoff. A 404 is returned immediately — it is a real
+    answer (the month predates the listing, or has not been published yet),
+    not a transient failure worth retrying.
+    """
+    import time
+
+    last = None
+    for attempt in range(attempts):
+        try:
+            response = session.get(url, timeout=timeout)
+            if response.status_code == 404:
+                response.raise_for_status()
+            response.raise_for_status()
+            return response
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status == 404:
+                raise
+            last = exc
+            if attempt < attempts - 1:
+                time.sleep(2 * (attempt + 1))
+    raise last
+
+
 def download_month(symbol, interval, month, session, cache_dir=DEFAULT_CACHE):
     """Fetch one verified monthly archive, caching it on disk.
 
@@ -163,10 +188,12 @@ def download_month(symbol, interval, month, session, cache_dir=DEFAULT_CACHE):
     if path.exists():
         return path
 
-    response = session.get(archive_url(symbol, interval, month), timeout=60)
-    response.raise_for_status()
-    published = session.get(checksum_url(symbol, interval, month), timeout=30)
-    published.raise_for_status()
+    # A nine-year sweep at 15m pulls ~100 multi-megabyte archives; a single
+    # transient read timeout should not abandon the whole run. Retries are
+    # local rather than reusing run.with_retry, so this backtest-only module
+    # keeps no dependency on the live engine.
+    response = _get_with_retry(session, archive_url(symbol, interval, month), 60)
+    published = _get_with_retry(session, checksum_url(symbol, interval, month), 30)
 
     tmp = path.with_suffix(".zip.part")
     tmp.write_bytes(response.content)
