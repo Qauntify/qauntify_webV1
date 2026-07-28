@@ -73,7 +73,7 @@ def main():
 
     print("All rules strategies over the full verified Binance history "
           "(BTC/ETH only — Binance lists no gold or FX).")
-    print("Scale-out: 1/3 at each of TP1/TP2/TP3, stop to breakeven after TP1. "
+    print("Scale-out: 1/3 at each of TP1/TP2/TP3, under the FIXED stop the signal publishes. "
           "Net subtracts r_model round-trip costs.\n")
     print(f"{'strategy':10} {'symbol':7} {'tf':4} {'years':>6} {'bars':>7} "
           f"{'trades':>7} {'tp1%':>6} {'tp3%':>6} {'gross':>7} {'net':>7} "

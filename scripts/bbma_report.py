@@ -56,8 +56,8 @@ def _row(strategy, symbol, timeframe, session):
 
 def main():
     session = requests.Session()
-    print("Scale-out model: 1/3 booked at each of TP1/TP2/TP3, stop to "
-          "breakeven after TP1. Net subtracts r_model round-trip costs.")
+    print("Scale-out model: 1/3 booked at each of TP1/TP2/TP3, under the "
+          "FIXED stop the signal publishes. Net subtracts r_model round-trip costs.")
     print("bbma_extreme ladder is 0.5/1/1.5R; bbma_reentry is 1/2/3R.")
     print(f"{'strategy':13} {'symbol':7} {'tf':3} {'bars':>5} {'trades':>6} "
           f"{'tp1%':>6} {'tp3%':>6} {'gross':>7} {'net':>7} {'totR':>8}")

@@ -300,7 +300,7 @@ def main():
 
     session = requests.Session()
     print("Scale-out model: 1/3 booked at each of TP1/TP2/TP3, stop trails to "
-          "breakeven after TP1. HTF confluence applied (as live).")
+          "fixed stop (as published). HTF confluence applied (as live).")
     print(f"{'strategy':10} {'symbol':7} {'tf':3} {'trades':>6} "
           f"{'tp1%':>6} {'tp3%':>6} {'exp/R':>7} {'total/R':>8}")
     print("-" * 64)

@@ -65,7 +65,7 @@ def main():
     pooled = {name: {"gross": [], "net": []} for name in DETECTORS}
 
     print("BBMA over the full verified Binance history. Scale-out model: 1/3 "
-          "at each of TP1/TP2/TP3, stop to breakeven after TP1.")
+          "at each of TP1/TP2/TP3, under the FIXED stop the signal publishes.")
     print(f"{WINDOW}-bar rolling window (matches the live scan). Net subtracts "
           "r_model round-trip costs.\n")
     print(f"{'strategy':13} {'symbol':7} {'tf':3} {'years':>6} {'bars':>7} "
