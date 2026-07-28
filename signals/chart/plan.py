@@ -75,12 +75,49 @@ def _ce_lwma(candles, signal):
     return out
 
 
+def _bbma(candles, signal):
+    """The full BBMA stack: Bollinger envelope, the MA5/MA10 High-Low pairs and
+    EMA50 — the five lines every BBMA setup is read against.
+
+    All eight series are drawn because the setup is defined by their geometry:
+    an Extreme is MA5 escaping the band, a Re-entry is price dipping into the
+    MA5/MA10 zone and closing back above it. Showing only price would hide the
+    reason the setup fired.
+    """
+    from signals.strategies.bbma.stack import bbma_stack
+
+    stack = bbma_stack(candles)
+
+    def _pts(key):
+        return [{"time": c.open_time, "value": v}
+                for c, v in zip(candles, stack[key])]
+
+    out = [
+        series(_pts("upper"), "BB upper", "bb-band"),
+        series(_pts("lower"), "BB lower", "bb-band"),
+        series(_pts("mid"), "BB mid", "bb-mid"),
+        series(_pts("ma5h"), "MA5 High", "ma5"),
+        series(_pts("ma5l"), "MA5 Low", "ma5"),
+        series(_pts("ma10h"), "MA10 High", "ma10"),
+        series(_pts("ma10l"), "MA10 Low", "ma10"),
+        series(_pts("ema50"), "EMA50", "ema50"),
+    ]
+    if candles:
+        label = ("Re-entry → entry"
+                 if signal.indicators.get("strategy") == "bbma_reentry"
+                 else "Extreme rejection → entry")
+        out.append(marker(candles[-1].open_time, signal.entry, label, "entry", 1))
+    return out
+
+
 _BUILDERS = {
     "ict_fvg": _ict_fvg,
     "ict_smc": _ict_smc,
     "sr_zone": _sr_zone,
     "ema_cross": _ema_cross,
     "ce_lwma": _ce_lwma,
+    "bbma_extreme": _bbma,
+    "bbma_reentry": _bbma,
 }
 
 

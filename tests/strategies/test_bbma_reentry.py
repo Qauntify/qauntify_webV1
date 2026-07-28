@@ -1,21 +1,24 @@
 """Rule tests for the BBMA Re-entry detector.
 
-As with the Extreme tests, the stack is monkeypatched so these exercise the
-RULES rather than Bollinger arithmetic already covered elsewhere.
+Rules come from docs/strategy_doc; page numbers below refer to the 79-page
+manual. The stack is monkeypatched so these exercise the RULES rather than
+Bollinger arithmetic already covered by tests/core/test_indicators.py.
 """
 import random
 
 from signals.indicators import atr
 from signals.models import Candle
 from signals.strategies.bbma import reentry
-from signals.strategies.bbma.reentry import MOMENTUM_LOOKBACK, detect_setup
+from signals.strategies.bbma.reentry import SIGNAL_LOOKBACK, detect_setup
 from signals.strategies.bbma.stack import MIN_CANDLES
 
-N = 60
+N = 61          # MIN_CANDLES + 1: the setup spans a pullback and a confirm bar
 ATR = 5.0
+ARM = 55        # an index inside the arming window
 
+# Band kept wide so the structural target clears MIN_STRUCTURAL_R.
 BASE = {
-    "upper": 110.0, "mid": 100.0, "lower": 90.0,
+    "upper": 120.0, "mid": 100.0, "lower": 80.0,
     "ma5h": 104.0, "ma5l": 96.0,
     "ma10h": 103.0, "ma10l": 97.0,
     "ema50": 99.0,
@@ -39,143 +42,208 @@ def _patch(monkeypatch, stack):
     monkeypatch.setattr(reentry, "bbma_stack", lambda _candles: stack)
 
 
-# --- long -------------------------------------------------------------------
+# --- long: the CSM branch ---------------------------------------------------
 
-def _long_stack():
+def _csm_long_stack():
     stack = _flat_stack()
-    # Momentum leg: bar N-5's close (100.0) sits above a lowered upper band.
-    stack["upper"][N - 5] = 99.0
-    # Mid BB rising across the lookback — the "vertical band" test.
-    stack["mid"][N - MOMENTUM_LOOKBACK] = 98.0
+    stack["upper"][ARM] = 99.0        # bar ARM closes 100 > 99 -> CSM
     return stack
 
 
 def _long_candles():
     candles = _flat_candles()
-    # Pullback bar: dips into MA5-Low (96) but closes above MA10-High (103).
-    candles[-1] = _c(100.0, 104.0, 95.0, 103.5, N - 1)
+    # Pullback: dips to MA5-Low (96), closes back above MA10-Low and Mid BB.
+    candles[-2] = _c(100.0, 101.0, 95.0, 101.0, N - 2)
+    # Confirming second candle closes higher still (p33/p36).
+    candles[-1] = _c(101.0, 103.5, 102.0, 103.0, N - 1)
     return candles
 
 
-def test_long_fires_on_a_pullback_that_holds_the_ma_zone(monkeypatch):
-    _patch(monkeypatch, _long_stack())
+def test_long_fires_after_a_momentum_candle(monkeypatch):
+    _patch(monkeypatch, _csm_long_stack())
     setup = detect_setup("BTCUSD", _long_candles(), [ATR] * N)
     assert setup is not None
     assert setup.direction == "long"
-    assert setup.entry == 103.5
+    assert setup.indicators["trigger"] == "csm"
 
 
-def test_long_stop_sits_below_the_pullback_low(monkeypatch):
-    _patch(monkeypatch, _long_stack())
+def test_entry_is_the_second_candle_not_the_pullback(monkeypatch):
+    """p33: 'wait a second candle … entry in the second candle'. Entering at
+    the pullback's close would front-run the confirmation the manual requires.
+    """
+    _patch(monkeypatch, _csm_long_stack())
+    candles = _long_candles()
+    setup = detect_setup("BTCUSD", candles, [ATR] * N)
+    assert setup.entry == candles[-1].close == 103.0
+    assert setup.entry != candles[-2].close
+
+
+def test_no_setup_when_the_second_candle_does_not_confirm(monkeypatch):
+    _patch(monkeypatch, _csm_long_stack())
+    candles = _long_candles()
+    candles[-1] = _c(101.0, 103.5, 100.5, 100.8, N - 1)   # closes below pullback
+    assert detect_setup("BTCUSD", candles, [ATR] * N) is None
+
+
+# --- long: the CSAK branch (the fix) ----------------------------------------
+
+def _csak_long_stack():
+    """A strong direction candle: close through MA5/MA10 and Mid BB (p31)."""
+    stack = _flat_stack()
+    stack["ma5h"][ARM] = 98.0
+    stack["ma10h"][ARM] = 97.5
+    stack["mid"][ARM] = 99.0
+    return stack
+
+
+def test_long_fires_after_a_direction_candle(monkeypatch):
+    """p35: re-entry applies after cs direction AND momentum. Arming on CSM
+    alone silently discarded this entire branch."""
+    _patch(monkeypatch, _csak_long_stack())
     setup = detect_setup("BTCUSD", _long_candles(), [ATR] * N)
-    # min(bar low 95.0, ma10l 97.0) - STOP_ATR_BUFFER (0.5) * ATR (5.0)
-    assert setup.stop_loss == 92.5
+    assert setup is not None
+    assert setup.direction == "long"
+    assert setup.indicators["trigger"] == "csak"
 
 
-def test_long_uses_the_standard_ladder(monkeypatch):
-    """Re-entry is a continuation trade, so it gets the engine's 1/2/3R —
-    unlike Extreme's scalp ladder."""
-    _patch(monkeypatch, _long_stack())
+def test_no_setup_without_any_arming_signal(monkeypatch):
+    _patch(monkeypatch, _flat_stack())      # neither CSM nor CSAK anywhere
+    assert detect_setup("BTCUSD", _long_candles(), [ATR] * N) is None
+
+
+def test_arming_signal_must_precede_the_pullback(monkeypatch):
+    """The window ends before the pullback bar: a signal ON the pullback is the
+    move itself, not a prior direction to re-enter."""
+    stack = _flat_stack()
+    stack["upper"][N - 2] = 99.0            # on the pullback bar, not before
+    _patch(monkeypatch, stack)
+    assert detect_setup("BTCUSD", _long_candles(), [ATR] * N) is None
+
+
+def test_arming_signal_older_than_the_lookback_is_ignored(monkeypatch):
+    stack = _flat_stack()
+    stack["upper"][N - 3 - SIGNAL_LOOKBACK] = 99.0     # one bar too old
+    _patch(monkeypatch, stack)
+    assert detect_setup("BTCUSD", _long_candles(), [ATR] * N) is None
+
+
+# --- the zone floor ---------------------------------------------------------
+
+def test_pullback_must_reach_the_ma5_zone(monkeypatch):
+    _patch(monkeypatch, _csm_long_stack())
+    candles = _long_candles()
+    candles[-2] = _c(100.0, 101.0, 98.0, 101.0, N - 2)   # low 98 > ma5l 96
+    assert detect_setup("BTCUSD", candles, [ATR] * N) is None
+
+
+def test_pullback_closing_through_the_zone_floor_is_rejected(monkeypatch):
+    """p33: 'candle close can not get past a 5-/A10'. The floor for a buy is
+    MA10-Low (97) — an earlier version tested MA10-HIGH and so rejected valid
+    re-entries that merely closed below the zone's ceiling."""
+    _patch(monkeypatch, _csm_long_stack())
+    candles = _long_candles()
+    candles[-2] = _c(100.0, 101.0, 95.0, 96.5, N - 2)    # close 96.5 < ma10l 97
+    assert detect_setup("BTCUSD", candles, [ATR] * N) is None
+
+
+def test_close_between_ma10_low_and_ma10_high_still_qualifies(monkeypatch):
+    """101 sits above MA10-Low (97) and below MA10-High (103). The documented
+    rule accepts it; the previous MA10-High test did not."""
+    _patch(monkeypatch, _csm_long_stack())
+    candles = _long_candles()
+    assert 97.0 < candles[-2].close < 103.0
+    assert detect_setup("BTCUSD", candles, [ATR] * N) is not None
+
+
+def test_pullback_closing_below_mid_bb_is_rejected(monkeypatch):
+    _patch(monkeypatch, _csm_long_stack())
+    candles = _long_candles()
+    candles[-2] = _c(100.0, 101.0, 95.0, 99.0, N - 2)    # 99 < mid 100
+    assert detect_setup("BTCUSD", candles, [ATR] * N) is None
+
+
+# --- targets ----------------------------------------------------------------
+
+def test_first_target_is_the_documented_ma_pair(monkeypatch):
+    """Brocamkh p4: "buy TP at Ma5/10 High". Targeting the band instead — an
+    earlier interpretation — dropped the TP1 hit rate from ~75% to ~43% and
+    turned +531R into -53R over 8.87 years."""
+    _patch(monkeypatch, _csm_long_stack())
     setup = detect_setup("BTCUSD", _long_candles(), [ATR] * N)
-    risk = setup.entry - setup.stop_loss          # 11.0
+    assert setup.take_profit == max(BASE["ma5h"], BASE["ma10h"])
+
+
+def test_later_targets_extend_one_and_two_r_beyond_the_first(monkeypatch):
+    _patch(monkeypatch, _csm_long_stack())
+    setup = detect_setup("BTCUSD", _long_candles(), [ATR] * N)
+    risk = setup.entry - setup.stop_loss
     tp1, tp2, tp3 = setup.resolved_take_profits()
-    assert abs(tp1 - (103.5 + 1.0 * risk)) < 1e-9
-    assert abs(tp2 - (103.5 + 2.0 * risk)) < 1e-9
-    assert abs(tp3 - (103.5 + 3.0 * risk)) < 1e-9
+    assert abs(tp2 - (tp1 + risk)) < 1e-9
+    assert abs(tp3 - (tp1 + 2 * risk)) < 1e-9
 
 
-def test_no_setup_without_a_prior_close_outside_the_band(monkeypatch):
-    stack = _long_stack()
-    stack["upper"][N - 5] = 110.0                 # remove the momentum leg
+def test_mandatory_target_may_sit_inside_one_r(monkeypatch):
+    """Like Extreme, the MA target sits close to price. Requiring 1R here
+    discards exactly the setups that pay."""
+    _patch(monkeypatch, _csm_long_stack())
+    setup = detect_setup("BTCUSD", _long_candles(), [ATR] * N)
+    assert setup is not None
+    risk = setup.entry - setup.stop_loss
+    assert 0 < (setup.take_profit - setup.entry) < risk
+
+
+def test_target_on_the_wrong_side_of_entry_is_rejected(monkeypatch):
+    stack = _csm_long_stack()
+    stack["ma5h"][-1] = 102.0
+    stack["ma10h"][-1] = 101.0          # both below the 103 entry
     _patch(monkeypatch, stack)
     assert detect_setup("BTCUSD", _long_candles(), [ATR] * N) is None
 
 
-def test_no_setup_when_the_band_is_flat(monkeypatch):
-    stack = _long_stack()
-    stack["mid"][N - MOMENTUM_LOOKBACK] = 100.0   # mid no longer rising
-    _patch(monkeypatch, stack)
-    assert detect_setup("BTCUSD", _long_candles(), [ATR] * N) is None
+def test_stop_sits_below_the_pullback_low(monkeypatch):
+    _patch(monkeypatch, _csm_long_stack())
+    setup = detect_setup("BTCUSD", _long_candles(), [ATR] * N)
+    # min(pullback low 95, confirm low 102, ma10l 97) - 0.5 * ATR
+    assert setup.stop_loss == 95.0 - 0.5 * ATR
 
 
-def test_no_setup_when_the_close_breaks_the_mid_band(monkeypatch):
-    stack = _long_stack()
-    stack["ma10h"][-1] = 99.0                     # isolate the Mid BB rule
-    _patch(monkeypatch, stack)
-    candles = _flat_candles()
-    candles[-1] = _c(100.0, 104.0, 95.0, 99.5, N - 1)   # 99.5 < mid 100.0
-    assert detect_setup("BTCUSD", candles, [ATR] * N) is None
-
-
-def test_no_setup_when_the_close_is_below_ma10_high(monkeypatch):
-    _patch(monkeypatch, _long_stack())
-    candles = _flat_candles()
-    candles[-1] = _c(100.0, 104.0, 95.0, 101.0, N - 1)  # 101.0 < ma10h 103.0
-    assert detect_setup("BTCUSD", candles, [ATR] * N) is None
-
-
-def test_no_setup_when_price_never_pulled_back_into_ma5(monkeypatch):
-    _patch(monkeypatch, _long_stack())
-    candles = _flat_candles()
-    candles[-1] = _c(100.0, 104.0, 98.0, 103.5, N - 1)  # low 98.0 > ma5l 96.0
-    assert detect_setup("BTCUSD", candles, [ATR] * N) is None
-
-
-def test_no_setup_when_price_is_below_the_ema50(monkeypatch):
-    stack = _long_stack()
-    stack["ema50"][-1] = 105.0                    # close 103.5 now below it
-    _patch(monkeypatch, stack)
-    assert detect_setup("BTCUSD", _long_candles(), [ATR] * N) is None
-
+# --- gates ------------------------------------------------------------------
 
 def test_opposing_htf_trend_vetoes_a_long(monkeypatch):
-    """Unlike Extreme, Re-entry trades WITH the trend, so the HTF gate applies."""
-    _patch(monkeypatch, _long_stack())
-    setup = detect_setup("BTCUSD", _long_candles(), [ATR] * N, htf_trend="down")
-    assert setup is None
+    _patch(monkeypatch, _csm_long_stack())
+    assert detect_setup("BTCUSD", _long_candles(), [ATR] * N,
+                        htf_trend="down") is None
 
 
 def test_aligned_htf_trend_allows_a_long(monkeypatch):
-    _patch(monkeypatch, _long_stack())
-    setup = detect_setup("BTCUSD", _long_candles(), [ATR] * N, htf_trend="up")
-    assert setup is not None
-
-
-def test_momentum_leg_excludes_the_current_bar(monkeypatch):
-    """The current bar is the pullback. A bar closing outside the band IS the
-    momentum candle, not a re-entry into one."""
-    stack = _long_stack()
-    stack["upper"][N - 5] = 110.0        # no leg among the earlier bars
-    stack["upper"][-1] = 99.0            # only the current bar closes outside
-    _patch(monkeypatch, stack)
-    assert detect_setup("BTCUSD", _long_candles(), [ATR] * N) is None
+    _patch(monkeypatch, _csm_long_stack())
+    assert detect_setup("BTCUSD", _long_candles(), [ATR] * N,
+                        htf_trend="up") is not None
 
 
 def test_no_setup_when_the_stop_exceeds_the_atr_cap(monkeypatch):
-    _patch(monkeypatch, _long_stack())
-    # Risk is 11.0 plus buffer; at ATR 1.0 that is far beyond MAX_STOP_ATR.
+    _patch(monkeypatch, _csm_long_stack())
     assert detect_setup("BTCUSD", _long_candles(), [1.0] * N) is None
 
 
 def test_indicators_tag_the_strategy(monkeypatch):
-    _patch(monkeypatch, _long_stack())
+    _patch(monkeypatch, _csm_long_stack())
     setup = detect_setup("BTCUSD", _long_candles(), [ATR] * N)
     assert setup.indicators["strategy"] == "bbma_reentry"
 
 
-# --- short ------------------------------------------------------------------
+# --- short mirror -----------------------------------------------------------
 
 def _short_stack():
     stack = _flat_stack()
-    stack["lower"][N - 5] = 101.0                 # bar N-5 closed below it
-    stack["mid"][N - MOMENTUM_LOOKBACK] = 102.0   # mid falling
+    stack["lower"][ARM] = 101.0             # bar ARM closes 100 < 101 -> CSM
     return stack
 
 
 def _short_candles():
     candles = _flat_candles()
-    # Pullback up into MA5-High (104), closing back below MA10-Low (97).
-    candles[-1] = _c(100.0, 105.0, 96.0, 96.5, N - 1)
+    candles[-2] = _c(100.0, 105.0, 99.0, 99.0, N - 2)
+    candles[-1] = _c(99.0, 99.5, 96.5, 97.0, N - 1)
     return candles
 
 
@@ -184,9 +252,9 @@ def test_short_fires_on_the_mirror_setup(monkeypatch):
     setup = detect_setup("BTCUSD", _short_candles(), [ATR] * N)
     assert setup is not None
     assert setup.direction == "short"
-    assert setup.entry == 96.5
-    # max(bar high 105.0, ma10h 103.0) + 0.5 * 5.0
-    assert setup.stop_loss == 107.5
+    assert setup.entry == 97.0
+    assert setup.stop_loss == 105.0 + 0.5 * ATR
+    assert setup.take_profit == min(BASE["ma5l"], BASE["ma10l"])
 
 
 def test_opposing_htf_trend_vetoes_a_short(monkeypatch):
@@ -198,13 +266,13 @@ def test_opposing_htf_trend_vetoes_a_short(monkeypatch):
 # --- guards -----------------------------------------------------------------
 
 def test_no_setup_below_the_minimum_candle_count(monkeypatch):
-    n = MIN_CANDLES - 1
+    n = MIN_CANDLES
     _patch(monkeypatch, _flat_stack(n))
     assert detect_setup("BTCUSD", _flat_candles(n), [ATR] * n) is None
 
 
 def test_no_setup_without_an_atr(monkeypatch):
-    _patch(monkeypatch, _long_stack())
+    _patch(monkeypatch, _csm_long_stack())
     assert detect_setup("BTCUSD", _long_candles(), [None] * N) is None
 
 
@@ -231,18 +299,22 @@ def test_rules_are_satisfiable_against_the_real_stack():
     atr14 = atr(highs, lows, closes, 14)
 
     setups = []
-    for end in range(MIN_CANDLES, len(candles) + 1):
+    for end in range(MIN_CANDLES + 1, len(candles) + 1):
         setup = detect_setup("BTCUSD", candles[:end], atr14[:end])
         if setup is not None:
             setups.append(setup)
 
     assert setups, "no Re-entry fired across 900 bars — the rules never combine"
     for setup in setups:
+        risk = abs(setup.entry - setup.stop_loss)
+        tp1, tp2, tp3 = setup.resolved_take_profits()
         if setup.direction == "long":
             assert setup.stop_loss < setup.entry
+            assert tp1 > setup.entry
         else:
             assert setup.stop_loss > setup.entry
-        tp1, _, tp3 = setup.resolved_take_profits()
-        risk = abs(setup.entry - setup.stop_loss)
-        assert abs(abs(tp1 - setup.entry) - 1.0 * risk) < 1e-6
-        assert abs(abs(tp3 - setup.entry) - 3.0 * risk) < 1e-6
+            assert tp1 < setup.entry
+        # Structural first target, then +1R and +2R beyond it.
+        assert abs(tp1 - setup.entry) > 0
+        assert abs(abs(tp2 - tp1) - risk) < 1e-6
+        assert abs(abs(tp3 - tp1) - 2 * risk) < 1e-6

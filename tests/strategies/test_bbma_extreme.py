@@ -73,16 +73,42 @@ def test_short_stop_sits_beyond_the_escape_window_high(monkeypatch):
     assert setup.stop_loss == 106.5
 
 
-def test_short_uses_the_scalp_ladder(monkeypatch):
-    """BBMA calls Extreme an unconfirmed reversal and takes profit early —
-    0.5/1/1.5R, not the engine's usual 1/2/3R."""
+def test_short_target_is_the_opposite_ma_pair(monkeypatch):
+    """Manual p24 'TP MANDATORY': a sell takes profit on the opposite (Low)
+    MA5/MA10 — the nearer of the two is the first level reached going down."""
     candles = _short_case(monkeypatch)
     setup = detect_setup("BTCUSD", candles, [ATR] * N)
-    risk = setup.stop_loss - setup.entry          # 4.5
+    assert setup.take_profit == max(BASE["ma5l"], BASE["ma10l"])
+
+
+def test_short_later_targets_extend_one_and_two_r_beyond_the_first(monkeypatch):
+    candles = _short_case(monkeypatch)
+    setup = detect_setup("BTCUSD", candles, [ATR] * N)
+    risk = setup.stop_loss - setup.entry
     tp1, tp2, tp3 = setup.resolved_take_profits()
-    assert abs(tp1 - (102.0 - 0.5 * risk)) < 1e-9
-    assert abs(tp2 - (102.0 - 1.0 * risk)) < 1e-9
-    assert abs(tp3 - (102.0 - 1.5 * risk)) < 1e-9
+    assert abs(tp2 - (tp1 - risk)) < 1e-9
+    assert abs(tp3 - (tp1 - 2 * risk)) < 1e-9
+
+
+def test_mandatory_target_may_sit_inside_one_r(monkeypatch):
+    """Extreme stops beyond the whole spike but targets a nearby MA, so its
+    first target is often sub-1R. Applying Re-entry's 1R floor here removed
+    EVERY Extreme setup — the manual calls for taking profit early, not for 1R.
+
+    MA10-Low is lifted to 100 so the target sits 2.0 below the 102 entry
+    against a 4.5 risk: 0.44R, well inside the stop.
+    """
+    candles = _short_case(monkeypatch, ma10l=(-1, 100.0))
+    setup = detect_setup("BTCUSD", candles, [ATR] * N)
+    assert setup is not None
+    risk = setup.stop_loss - setup.entry
+    assert 0 < (setup.entry - setup.take_profit) < risk
+
+
+def test_target_on_the_wrong_side_of_entry_is_rejected(monkeypatch):
+    """A "target" above a short's entry is not a target."""
+    candles = _short_case(monkeypatch, ma10l=(-1, 103.0))
+    assert detect_setup("BTCUSD", candles, [ATR] * N) is None
 
 
 def test_no_setup_when_the_ma_never_escaped_the_band(monkeypatch):
@@ -238,5 +264,7 @@ def test_rules_are_satisfiable_against_the_real_stack():
             assert setup.stop_loss > setup.entry
         tp1, tp2, tp3 = setup.resolved_take_profits()
         risk = abs(setup.entry - setup.stop_loss)
-        assert abs(abs(tp1 - setup.entry) - 0.5 * risk) < 1e-6
-        assert abs(abs(tp3 - setup.entry) - 1.5 * risk) < 1e-6
+        # TP1 is a structural level beyond entry; TP2/TP3 sit +1R and +2R past it.
+        assert abs(tp1 - setup.entry) > 0
+        assert abs(abs(tp2 - tp1) - risk) < 1e-6
+        assert abs(abs(tp3 - tp1) - 2 * risk) < 1e-6

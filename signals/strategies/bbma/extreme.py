@@ -1,10 +1,19 @@
 """BBMA Extreme — mean reversion off a Bollinger Band escape.
 
+Rules follow docs/strategy_doc. Manual p23, "Features Extrem": MA5 outside the
+band, a reverse candle, then a retest candle which is the entry.
+
 The setup: MA5 (linear weighted, on highs for a sell / lows for a buy) escapes
 outside the band, then price rejects back inside. BBMA treats this as an early
-reversal signal and explicitly as a scalp — the doctrine is to take profit
-quickly because direction is not yet confirmed, which is why the ladder here is
-0.5/1/1.5R rather than the engine's usual 1/2/3R.
+reversal signal and explicitly as a scalp.
+
+The first target is structural and mandatory (manual p24, "TP MANDATORY"): a
+sell takes profit on the opposite — Low-applied — MA5/MA10, a buy on the
+High-applied pair. Because that level sits close to price while the stop sits
+beyond the whole spike, Extreme's first target is normally inside 1R. That is
+the manual's intent, not a defect: profit is taken early precisely because
+direction is not yet confirmed. TP2/TP3 extend one and two R past it so the
+engine still has its three-level ladder.
 
 There is deliberately NO band-expansion test. BBMA invalidates an Extreme when
 the candle closes OUTSIDE an expanding band (that is momentum, not exhaustion)
@@ -12,21 +21,24 @@ and validates it when the candle closes back inside. Requiring the close back
 inside therefore excludes the momentum case by construction — no invented
 bandwidth threshold, and nothing to overfit.
 """
-from signals.models import CandidateSetup, take_profits_from_risk
+from signals.models import CandidateSetup
 from signals.strategies.bbma.stack import (
     MIN_CANDLES,
     STOP_ATR_BUFFER,
     bbma_stack,
     risk_ok,
     stack_ready,
+    structural_targets,
 )
 
 # How far back the MA may have escaped the band and still count.
 EXTREME_LOOKBACK = 6
-# Scalp ladder — an unconfirmed reversal is banked early.
-EXTREME_TP1_R = 0.5
-EXTREME_TP2_R = 1.0
-EXTREME_TP3_R = 1.5
+# Extreme's mandatory target (the opposite MA5/10) sits close to price while
+# its stop sits beyond the whole spike, so the first target is normally inside
+# 1R. That is the manual's intent — "take profit early, direction is not yet
+# confirmed" — so the only requirement here is that the target be beyond entry.
+# A 1R floor, as used for Re-entry, removes every Extreme setup.
+EXTREME_MIN_R = 0.0
 
 
 def _indicators(side, stack, atr_value, adx14, htf_trend):
@@ -92,16 +104,19 @@ def detect_setup(symbol, candles, atr14, adx14=None, htf_trend=None):
             and bar.high >= ma5h
             and bar.close < ma5h):
         stop = max(c.high for c in recent) + STOP_ATR_BUFFER * atr_value
+        # Manual p24, "TP MANDATORY": a sell entry takes profit on the MA5/MA10
+        # of the opposite (buy) side — the Low-applied pair. The nearer of the
+        # two is the first level price reaches on the way down.
+        target = max(stack["ma5l"][-1], stack["ma10l"][-1])
         if stop > bar.close and risk_ok(bar.close, stop, atr_value):
-            tp1, tp2, tp3 = take_profits_from_risk(
-                bar.close, stop, "short",
-                r1=EXTREME_TP1_R, r2=EXTREME_TP2_R, r3=EXTREME_TP3_R,
-            )
-            return CandidateSetup(
-                symbol, "short", bar.close, stop, tp1,
-                _indicators("upper", stack, atr_value, adx14, htf_trend),
-                take_profit_2=tp2, take_profit_3=tp3,
-            )
+            tps = structural_targets(bar.close, stop, "short", target,
+                                     min_r=EXTREME_MIN_R)
+            if tps:
+                return CandidateSetup(
+                    symbol, "short", bar.close, stop, tps[0],
+                    _indicators("upper", stack, atr_value, adx14, htf_trend),
+                    take_profit_2=tps[1], take_profit_3=tps[2],
+                )
 
     if (_escaped(stack["ma5l"], stack["lower"], window, above=False)
             and bar.close > stack["lower"][-1]
@@ -109,15 +124,17 @@ def detect_setup(symbol, candles, atr14, adx14=None, htf_trend=None):
             and bar.low <= ma5l
             and bar.close > ma5l):
         stop = min(c.low for c in recent) - STOP_ATR_BUFFER * atr_value
+        # Mirror of the short: a buy entry takes profit on the High-applied
+        # MA5/MA10 pair, nearer level first.
+        target = min(stack["ma5h"][-1], stack["ma10h"][-1])
         if stop < bar.close and risk_ok(bar.close, stop, atr_value):
-            tp1, tp2, tp3 = take_profits_from_risk(
-                bar.close, stop, "long",
-                r1=EXTREME_TP1_R, r2=EXTREME_TP2_R, r3=EXTREME_TP3_R,
-            )
-            return CandidateSetup(
-                symbol, "long", bar.close, stop, tp1,
-                _indicators("lower", stack, atr_value, adx14, htf_trend),
-                take_profit_2=tp2, take_profit_3=tp3,
-            )
+            tps = structural_targets(bar.close, stop, "long", target,
+                                     min_r=EXTREME_MIN_R)
+            if tps:
+                return CandidateSetup(
+                    symbol, "long", bar.close, stop, tps[0],
+                    _indicators("lower", stack, atr_value, adx14, htf_trend),
+                    take_profit_2=tps[1], take_profit_3=tps[2],
+                )
 
     return None

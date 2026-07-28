@@ -10,6 +10,7 @@ substituting `ema` or a simple average would move every level the rules test
 against.
 """
 from signals.indicators import bollinger, ema, lwma
+from signals.models import take_profits_from_risk
 
 BB_PERIOD = 20
 BB_DEV = 2.0
@@ -51,6 +52,38 @@ def bbma_stack(candles):
 def stack_ready(stack):
     """True when every series carries a value on the latest bar."""
     return all(series[-1] is not None for series in stack.values())
+
+
+# BBMA marks the first target "mandatory" (manual p24). A mandatory target
+# sitting nearer than the stop is a sub-1R trade, so the setup is skipped
+# rather than taken at negative expectancy by construction.
+MIN_STRUCTURAL_R = 1.0
+
+
+def structural_targets(entry, stop, direction, target, min_r=MIN_STRUCTURAL_R):
+    """TP1 at a structural BBMA level, TP2/TP3 one and two R beyond it.
+
+    Returns None when `target` is nearer than `min_r`, or on the wrong side of
+    entry. Keeping TP2/TP3 in R preserves the three-level ladder the outcome
+    tracker, r_model and the track-record page all assume, while the level the
+    manual actually names drives the first exit.
+
+    `min_r` is per-setup because the manual's two setups have different shapes.
+    Re-entry targets the band, comfortably beyond 1R. Extreme targets the
+    opposite MA5/10 while stopping beyond the whole spike, so its mandatory
+    target is nearly always INSIDE 1R — the manual says as much, calling for
+    profit to be taken early because direction is not yet confirmed. Applying a
+    1R floor there does not filter Extreme, it deletes it.
+    """
+    risk = abs(entry - stop)
+    if risk <= 0:
+        return None
+    reach = (target - entry) if direction == "long" else (entry - target)
+    r1 = reach / risk
+    if r1 <= 0 or r1 < min_r:
+        return None
+    return take_profits_from_risk(entry, stop, direction,
+                                  r1=r1, r2=r1 + 1.0, r3=r1 + 2.0)
 
 
 def risk_ok(entry, stop, atr_value):
