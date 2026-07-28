@@ -53,16 +53,18 @@ def test_r_multiple_sl_before_any_target_is_minus_one():
     assert _r_multiple(_free_row(status="sl_hit")) == pytest.approx(-1.0)
 
 
-def test_r_multiple_sl_after_tp1_books_the_first_third():
-    # TP1 banked, stop moved to breakeven, remainder exits flat.
+def test_r_multiple_sl_after_tp1_is_a_net_loss():
+    """The published stop never moves, so the unbooked two thirds lose their
+    full risk: 1/3 - 2/3 = -0.333R. Banking TP1 does not make a trade safe."""
     assert _r_multiple(_free_row(status="sl_hit", tp1_hit_at=TP1_AT)) \
-        == pytest.approx(1 / 3)
+        == pytest.approx(-1 / 3)
 
 
-def test_r_multiple_sl_after_tp2_books_the_first_two_thirds():
+def test_r_multiple_sl_after_tp2_keeps_two_thirds_and_loses_the_last():
+    # 1/3*1R + 1/3*2R - 1/3*1R = +0.667R
     assert _r_multiple(_free_row(
         status="sl_hit", tp1_hit_at=TP1_AT, tp2_hit_at=TP2_AT,
-    )) == pytest.approx(1.0)
+    )) == pytest.approx(2 / 3)
 
 
 def test_r_multiple_expired_after_tp1_keeps_what_it_banked():
@@ -116,27 +118,35 @@ def test_bucket_stats_counts_wins_by_result_not_status():
     assert stats["win_rate"] == 2 / 3
 
 
-def test_bucket_stats_counts_partial_sl_as_win():
+def test_bucket_stats_counts_a_stop_after_tp1_as_a_loss():
+    """Under a fixed stop, TP1-then-reverse is -0.333R, so both of these are
+    losses. It counted as a win while the model assumed a breakeven trail."""
     rows = [
         _free_row(status="sl_hit", tp1_hit_at=TP1_AT),
         _free_row(status="sl_hit"),
     ]
     stats = _bucket_stats(rows)
+    assert stats["wins"] == 0
+    assert stats["losses"] == 2
+    assert stats["win_rate"] == 0.0
+
+
+def test_bucket_stats_counts_a_stop_after_tp2_as_a_win():
+    rows = [_free_row(status="sl_hit", tp1_hit_at=TP1_AT, tp2_hit_at=TP2_AT)]
+    stats = _bucket_stats(rows)
     assert stats["wins"] == 1
-    assert stats["losses"] == 1
-    assert stats["win_rate"] == 0.5
+    assert stats["losses"] == 0
 
 
-def test_bucket_stats_costs_can_turn_a_banked_tp1_into_a_loss():
-    # TP1-then-reverse books +0.333R gross. On a symbol whose round-trip cost
-    # exceeds that, the trade is a loser — and must be counted as one.
-    # 0.5-point stop → 20 bps of a 100 price costs 0.4R.
+def test_bucket_stats_costs_deepen_a_losing_trade():
+    # TP1-then-reverse is -0.333R gross under a fixed stop. A 0.5-point stop on
+    # a 100 price costs 0.4R at 20 bps, so net lands near -0.733R.
     row = _row(symbol="BTCUSD", status="sl_hit", tp1_hit_at=TP1_AT,
                entry=100.0, stop_loss=99.5,
                take_profit=100.5, take_profit_2=101.0, take_profit_3=101.5)
     stats = _bucket_stats([row])
-    assert stats["avg_gross_r"] == pytest.approx(1 / 3)
-    assert stats["avg_r"] < 0
+    assert stats["avg_gross_r"] == pytest.approx(-1 / 3)
+    assert stats["avg_r"] == pytest.approx(-1 / 3 - 0.4)
     assert stats["losses"] == 1
 
 

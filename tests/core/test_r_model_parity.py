@@ -44,9 +44,9 @@ def test_default_cost_matches_the_typescript_port():
 
 @pytest.mark.parametrize("reached,stopped,expected", [
     (3, False, 2.0),        # full run to the last target
-    (2, True, 1.0),         # TP2 then reversed
-    (1, True, 1 / 3),       # TP1 then reversed
-    (0, True, -1.0),        # the only full loss
+    (2, True, 2 / 3),       # TP2 banked, last third stopped at full risk
+    (1, True, -1 / 3),      # TP1 banked and still a net loss
+    (0, True, -1.0),        # stopped before any target
     (0, False, 0.0),        # untouched expiry
 ])
 def test_scale_out_reference_values(reached, stopped, expected):

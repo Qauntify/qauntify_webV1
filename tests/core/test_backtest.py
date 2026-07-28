@@ -1,4 +1,6 @@
 """Unit tests for the rules-only backtester's fill simulation + stats."""
+import pytest
+
 from signals.backtest import (
     backtest_windowed,
     htf_trend_series,
@@ -86,7 +88,7 @@ def test_summarize_empty_is_safe():
     assert stats["expectancy_r"] == 0.0
 
 
-# --- scale-out (multi-TP + breakeven) model -------------------------------
+# --- scale-out (multi-TP, fixed stop) model -------------------------------
 # entry 100, stop 98 (risk 2), tps at 1R/2R/3R = 102/104/106.
 TPS = [102.0, 104.0, 106.0]
 
@@ -127,13 +129,21 @@ def test_scaled_r_full_tp3_is_two_r():
     assert scaled_r("long", 100, 98, TPS, reached=3, stopped=False) == 2.0
 
 
-def test_scaled_r_tp2_then_breakeven_stop():
-    # 1/3*1R + 1/3*2R + 1/3 at breakeven(0) = 1.0R
-    assert scaled_r("long", 100, 98, TPS, reached=2, stopped=True) == 1.0
+def test_scaled_r_tp2_then_stopped_loses_the_last_third():
+    """The stop never moves, so the unbooked third loses its full risk:
+    1/3*1R + 1/3*2R - 1/3*1R = +0.667R."""
+    assert scaled_r("long", 100, 98, TPS, reached=2, stopped=True) \
+        == pytest.approx(2.0 / 3.0)
 
 
 def test_scaled_r_full_loss_when_nothing_reached():
     assert scaled_r("long", 100, 98, TPS, reached=0, stopped=True) == -1.0
+
+
+def test_scaled_r_tp1_then_stopped_is_a_net_loss():
+    """Banking TP1 does not make a trade safe: 1/3*1R - 2/3*1R = -0.333R."""
+    assert scaled_r("long", 100, 98, TPS, reached=1, stopped=True) \
+        == pytest.approx(-1.0 / 3.0)
 
 
 def test_scaled_r_tp1_then_expire_books_first_third():

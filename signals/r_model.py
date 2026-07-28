@@ -6,15 +6,29 @@ three separate answers to "what is a full winner worth?" (+3R, +3R and +2R,
 depending on which file you read), and the most optimistic of them was the one
 on the public page.
 
-There is exactly one model, and it is the one a follower can actually execute:
+There is exactly one model, and it is the trade this engine actually publishes:
 
   * Position enters in full, then books an equal third at each of TP1/TP2/TP3.
-  * Once TP1 is banked the stop moves to breakeven, so the remainder exits at
-    0R rather than -1R if price reverses.
-  * Stopped out before TP1 is the only full -1R loss.
+  * The stop does NOT move. The Telegram message carries one SL and never asks
+    the follower to trail it, and `outcome_tracker` settles every trade against
+    that same `stop_loss` for its whole life.
+  * So an unbooked remainder still standing when the stop is hit loses 1R of
+    its share.
 
 Under it a trade that runs all the way to TP3 returns (1 + 2 + 3) / 3 = +2R,
-not +3R, and a trade that tags TP1 then reverses returns +0.33R, not -1R.
+not +3R; a trade that banks TP1 and then reverses into the stop returns
+0.33 - 0.67 = -0.33R; and a stop before any target is a full -1R.
+
+HISTORY, because this was wrong and the error was expensive. This module used
+to score the remainder at breakeven (0R) once TP1 was banked, while
+`backtest.simulate_scaled` and the live tracker both walked a FIXED stop. That
+pairing is not any real trade: it credited the trade for surviving a pullback
+to entry (fixed stop) AND for losing nothing when the stop finally hit
+(breakeven). Measured over 8.87 years of verified history, the gap between the
+hybrid and an honest fixed stop was roughly 0.24R PER TRADE — enough to turn
+several losing strategies into apparent winners. If the engine ever does start
+telling followers to trail to breakeven, change `outcome_tracker` first and
+this second; never only this.
 
 Costs are subtracted separately (see `cost_r`) so a gross and a net number can
 both be quoted, and so the pre-registered gate A/B can stay on the gross
@@ -28,12 +42,15 @@ from signals.market_client import canonical_symbol
 
 
 def scaled_r(direction, entry, stop, tps, reached, stopped):
-    """Realized R for a 1/len-at-each-target scale-out with the stop trailed to
-    breakeven once the first target is booked.
+    """Realized R for a 1/len-at-each-target scale-out under a FIXED stop.
 
-    - Nothing reached + stopped → full -1R.
     - Each reached target books its slice at that target's R.
-    - The unbooked remainder exits at breakeven (0R) on a later stop or expiry.
+    - If the stop is then hit, the UNBOOKED remainder loses 1R of its share —
+      the published stop never moves, so there is nothing to protect it.
+    - Nothing reached + stopped → full -1R (the same case, with no slices
+      booked).
+    - Expiry with the stop untouched leaves the remainder at 0R: the trade was
+      closed out flat, not stopped.
     """
     risk = abs(entry - stop)
     if risk == 0 or not tps:
@@ -46,9 +63,9 @@ def scaled_r(direction, entry, stop, tps, reached, stopped):
     booked = sum(portion * r_of(tps[k]) for k in range(reached))
     if reached >= len(tps):
         return booked
-    if reached == 0 and stopped:
-        return -1.0
-    return booked  # remainder trails out at breakeven → contributes 0R
+    if stopped:
+        return booked - (1.0 - reached * portion)
+    return booked
 
 
 def targets_of(row: dict) -> list:

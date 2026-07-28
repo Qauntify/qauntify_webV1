@@ -53,11 +53,14 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // The R model. Port of signals/r_model.py — keep the two in step.
 //
 // One third of the position is booked at each of TP1/TP2/TP3, and the stop
-// moves to breakeven once TP1 is banked. So a trade that runs all the way to
-// the last target returns (1 + 2 + 3) / 3 = +2R, not +3R, and a trade that
-// tags TP1 then reverses returns +0.33R, not −1R. This page used to credit the
-// full +3R for a winner and a full −1R for any stop, which flattered the
-// headline number against the model the engine actually publishes.
+// does NOT move — the signal carries one SL and the outcome tracker settles
+// against it for the whole life of the trade. So a trade that runs all the way
+// to the last target returns (1 + 2 + 3) / 3 = +2R, not +3R, and a trade that
+// banks TP1 and then reverses into the stop returns 0.33 − 0.67 = −0.33R.
+//
+// This scored the remainder at breakeven until 2026-07-28, which credited a
+// stop-out with losing nothing on the unbooked two thirds. Nobody was ever
+// told to trail the stop, so that was not a trade any follower made.
 // ---------------------------------------------------------------------------
 
 export function scaledR(
@@ -76,8 +79,9 @@ export function scaledR(
   let booked = 0;
   for (let k = 0; k < reached; k += 1) booked += portion * rOf(targets[k]);
   if (reached >= targets.length) return booked;
-  if (reached === 0 && stopped) return -1;
-  return booked; // remainder trails out at breakeven → contributes 0R
+  // Fixed stop: the unbooked remainder loses 1R of its share.
+  if (stopped) return booked - (1 - reached * portion);
+  return booked; // expired flat, remainder scores 0
 }
 
 // Round-trip cost (spread + commission) in basis points of notional.
