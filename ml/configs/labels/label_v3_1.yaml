@@ -1,0 +1,21 @@
+version: label_v3_1
+inherits_economic_policy: ml/configs/labels/label_v3.yaml
+change_type: timestamp_metadata_correction
+
+source_timestamp:
+  meaning: candle_open_time
+  preserve_as: source_bar_open_timestamp
+
+decision_timestamp:
+  formula: source_bar_open_timestamp_plus_5_minutes
+  meaning: completed_m5_candle_close_time
+
+entry_timestamp:
+  formula: next_m5_source_bar_open_timestamp
+
+candidate_id:
+  timestamp_field: decision_timestamp
+
+economic_outcomes_changed: false
+downstream_label_version: label_v3_1
+

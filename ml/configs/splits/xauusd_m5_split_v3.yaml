@@ -1,0 +1,74 @@
+version: xauusd_m5_split_v3
+approval_status: approved
+interval_semantics: half_open
+timezone_status: source_not_declared
+
+eligible_interval:
+  start_inclusive: "2016-01-01T00:00:00"
+  end_exclusive: "2026-01-31T00:00:00"
+
+chronological_split:
+  train:
+    start_inclusive: "2016-01-01T00:00:00"
+    end_exclusive: "2024-01-01T00:00:00"
+  validation:
+    start_inclusive: "2024-01-01T00:00:00"
+    end_exclusive: "2025-01-01T00:00:00"
+  untouched_test:
+    start_inclusive: "2025-01-01T00:00:00"
+    end_exclusive: "2026-01-31T00:00:00"
+    locked: true
+
+protection:
+  outcome_horizon_bars: 48
+  bar_minutes: 5
+  purge_minutes: 240
+  embargo_minutes: 240
+  purge_by_outcome_exit_timestamp: true
+  account_for_next_bar_entry_offset: true
+
+walk_forward:
+  folds: 5
+  expanding_window: true
+  definitions:
+    - fold: 1
+      train_start_inclusive: "2016-01-01T00:00:00"
+      train_end_exclusive: "2022-07-01T00:00:00"
+      validation_start_inclusive: "2022-07-01T00:00:00"
+      validation_end_exclusive: "2023-01-01T00:00:00"
+    - fold: 2
+      train_start_inclusive: "2016-01-01T00:00:00"
+      train_end_exclusive: "2023-01-01T00:00:00"
+      validation_start_inclusive: "2023-01-01T00:00:00"
+      validation_end_exclusive: "2023-07-01T00:00:00"
+    - fold: 3
+      train_start_inclusive: "2016-01-01T00:00:00"
+      train_end_exclusive: "2023-07-01T00:00:00"
+      validation_start_inclusive: "2023-07-01T00:00:00"
+      validation_end_exclusive: "2024-01-01T00:00:00"
+    - fold: 4
+      train_start_inclusive: "2016-01-01T00:00:00"
+      train_end_exclusive: "2024-01-01T00:00:00"
+      validation_start_inclusive: "2024-01-01T00:00:00"
+      validation_end_exclusive: "2024-07-01T00:00:00"
+    - fold: 5
+      train_start_inclusive: "2016-01-01T00:00:00"
+      train_end_exclusive: "2024-07-01T00:00:00"
+      validation_start_inclusive: "2024-07-01T00:00:00"
+      validation_end_exclusive: "2025-01-01T00:00:00"
+
+known_source_gaps:
+  - start_exclusive: "2025-09-12T23:45:00"
+    end_inclusive: "2025-10-15T07:55:00"
+    affected_outcome_windows: invalid
+  - start_exclusive: "2026-01-13T14:15:00"
+    end_inclusive: "2026-01-22T18:50:00"
+    affected_outcome_windows: invalid
+
+test_access:
+  cli_locked_by_default: true
+  approval_artifact_required: true
+  frozen_policy_manifest_required: true
+  matching_checksums_required: true
+  access_log_required: true
+  maximum_policy_evaluations: 1

@@ -1,0 +1,35 @@
+version: policy_safeguards_v3
+approval_status: approved
+
+folds:
+  total: 5
+  minimum_positive: 4
+  reject_zero_trade_folds: true
+
+coverage:
+  minimum: 0.05
+  minimum_accepted_candidates_per_fold: 100
+  minimum_total_accepted_candidates: 500
+
+economics:
+  require_positive_mean_net_r_base_cost: true
+  require_positive_total_net_r_base_cost: true
+  require_positive_total_net_r_higher_cost: true
+  maximum_execution_constrained_drawdown_r: 25.0
+
+concentration:
+  maximum_single_fold_positive_profit_share: 0.40
+  maximum_single_year_positive_profit_share: 0.50
+  share_denominator: sum_of_positive_segment_net_r
+
+execution:
+  maximum_open_positions: 1
+  signals_while_position_open: ignore
+  opposing_positions_allowed: false
+  same_timestamp_long_short_conflict: NO_TRADE
+  position_size_risk_units: 1.0
+
+selection:
+  reject_if_any_hard_safeguard_fails: true
+  maximum_locked_policies: 1
+  untouched_test_used_for_selection: false

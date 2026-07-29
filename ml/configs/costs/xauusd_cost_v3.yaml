@@ -1,0 +1,21 @@
+version: xauusd_cost_v3
+instrument: XAUUSD
+unit: R
+price_convention: source_not_declared
+model: all_in_round_trip_proxy
+
+scenarios:
+  base:
+    total_round_trip_cost_r: 0.02
+    hard_pass_required: true
+  higher:
+    total_round_trip_cost_r: 0.03
+    hard_pass_required: true
+  stress:
+    total_round_trip_cost_r: 0.05
+    hard_pass_required: false
+
+primary_scenario: base
+subtract_component_costs_in_addition_to_proxy: false
+broker_specific_replacement_requires_new_version: true
+

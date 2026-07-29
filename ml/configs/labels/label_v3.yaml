@@ -1,0 +1,58 @@
+version: label_v3
+instrument: XAUUSD
+decision_timeframe: M5
+context_timeframes: [M15]
+
+entry:
+  policy: next_bar_open
+  price_field: open
+  require_executable_bar: true
+
+atr:
+  period: 14
+  timeframe: M5
+  source_bar: decision_bar
+  freeze_after_entry: true
+
+barriers:
+  target_atr: 1.5
+  stop_atr: 1.0
+  horizon_bars: 48
+  scan_first_bar: entry_bar
+  scan_last_bar_offset: 48
+
+expiry:
+  price_field: close
+  bar_offset: 48
+
+ambiguity:
+  use_lower_timeframe: false
+  same_m5_candle_policy: stop_first_conservative
+  state: AMBIGUOUS_CONSERVATIVE_SL
+  preserve_metadata: true
+
+targets:
+  long_binary:
+    name: long_net_profitable
+    rule: long_net_realised_r_strictly_greater_than_zero
+  short_binary:
+    name: short_net_profitable
+    rule: short_net_realised_r_strictly_greater_than_zero
+  optional_regression:
+    long: long_net_realised_r
+    short: short_net_realised_r
+
+right_censoring:
+  retain_in_outcome_dataset: true
+  supervised_eligible: false
+
+unexpected_internal_gap:
+  outcome_state: INVALID
+  supervised_eligible: false
+
+overlap:
+  allow_overlapping_candidates: true
+  candidate_frequency_bars: 1
+
+candidate_records_mutable: false
+

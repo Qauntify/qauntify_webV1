@@ -1,0 +1,33 @@
+{
+  "manifest_version": "data_v3_manifest",
+  "dataset_id": "xauusd_m5_m15_2016_2026_v1",
+  "status": "frozen_for_label_v3",
+  "instrument": "XAUUSD",
+  "decision_timeframe": "M5",
+  "context_timeframes": ["M15"],
+  "eligible_interval": {
+    "start_inclusive": "2016-01-01T00:00:00",
+    "end_exclusive": "2026-01-31T00:00:00",
+    "timezone": "unknown"
+  },
+  "files": {
+    "M5": {
+      "path": "ml/data/raw/xauusd_m5_2016_2026.csv",
+      "rows": 701154,
+      "sha256": "5432E9D54B77D4B7B5201482B7403A0663208BA9B66BEE22F52689A2ABC6D1E0"
+    },
+    "M15": {
+      "path": "ml/data/raw/xauusd_m15_2016_2026.csv",
+      "rows": 234859,
+      "sha256": "02330690AA21D31035BDD684D03327E8BFC30C68F36DAB4B135EF3E3A543EBAC"
+    }
+  },
+  "audit_report": "ml/data/reports/data_audit_v3.json",
+  "outcome_gap_policy": "INVALID",
+  "material_gap_count": 2,
+  "mutable": false,
+  "permitted_next_stage": "label_v3_implementation",
+  "features_authorized": false,
+  "models_authorized": false,
+  "live_integration_authorized": false
+}
