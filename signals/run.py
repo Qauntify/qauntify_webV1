@@ -29,6 +29,7 @@ from signals.models import (
     NoSignalReport,
     ScanResult,
     make_signal,
+    session_scans,
 )
 from signals.outcome_tracker import track_open_signals
 from signals.session_clock import describe_market_session
@@ -804,25 +805,35 @@ def main():
         # Each session (scalp, swing) scans all symbols in parallel, one session
         # at a time — so a run's outcomes group by session for a clear summary.
         for trading_session in TRADING_SESSIONS:
+            # Not every symbol belongs on every session — see SESSION_SYMBOLS.
+            # Filtered once here so the prefetches, the scan tasks and the
+            # result pairing below all agree on the same list; querying for a
+            # symbol this session will not scan would also waste a round trip.
+            session_symbols = [
+                symbol for symbol in settings.symbols
+                if session_scans(trading_session.name, symbol)
+            ]
+            if not session_symbols:
+                continue
             # One query each for the whole session's symbol list, instead of
             # every symbol hitting Supabase individually before its scan even
             # starts — collapses up to 3*len(symbols) round trips into 3.
             recent_events = _prefetch_recent_events(
-                settings.symbols, trading_session.timeframe, cfg, session=db_session)
+                session_symbols, trading_session.timeframe, cfg, session=db_session)
             recent_signals = _prefetch_recent_signals(
-                settings.symbols, trading_session.timeframe, cfg, session=db_session)
+                session_symbols, trading_session.timeframe, cfg, session=db_session)
             open_symbols = _prefetch_open_symbols(
-                settings.symbols, trading_session.timeframe, cfg, session=db_session)
+                session_symbols, trading_session.timeframe, cfg, session=db_session)
             tasks = [
                 (i, symbol, trading_session, recent_events, recent_signals, open_symbols)
-                for i, symbol in enumerate(settings.symbols)
+                for i, symbol in enumerate(session_symbols)
             ]
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 results = list(pool.map(scan_one, tasks))
 
             # Alerts go out from the main thread, in symbol order, after the
             # session's scans finish.
-            for symbol, (result, error) in zip(settings.symbols, results):
+            for symbol, (result, error) in zip(session_symbols, results):
                 if error is not None:
                     print(f"[{symbol}] unexpected error, skipping: "
                           f"{type(error).__name__}: {error}")

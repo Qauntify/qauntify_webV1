@@ -782,6 +782,51 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
     ]
 
 
+def test_main_scans_gbpusd_on_the_swing_session_only(monkeypatch):
+    """GBPUSD is restricted to swing (SESSION_SYMBOLS). The fast sessions must
+    skip it entirely — not scan and discard, which would still burn the fetch
+    and the Supabase round trips."""
+    _patch_engine_lock(monkeypatch)
+    settings = BotSettings(symbols=("BTCUSDT", "GBPUSD"))
+    monkeypatch.setattr(run_module, "load_config", _config)
+    monkeypatch.setattr(run_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
+    monkeypatch.setattr(run_module, "track_open_signals",
+                        lambda cfg, prefetched=None, session=None: [])
+
+    scanned = []
+    prefetched = []
+
+    def fake_scan(symbol, cfg, llm, *, strategy, timeframe,
+                  feed_titles=None, calendar_events=None, session=None,
+                  recent_events=None, recent_signals=None, open_symbols=None,
+                  confluence_timeframe=None, min_store_confidence=0):
+        scanned.append((symbol, timeframe))
+        return run_module.ScanResult()
+
+    monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
+    monkeypatch.setattr(
+        run_module, "_prefetch_recent_events",
+        lambda symbols, tf, cfg, session=None: prefetched.append((tuple(symbols), tf)) or {})
+    monkeypatch.setattr(run_module, "save_engine_run",
+                        lambda run, url, key, session=None: None)
+
+    run_module.main()
+
+    assert sorted(scanned) == [
+        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
+        ("GBPUSD", "1h"),
+    ]
+    # The fast sessions must not even query for it.
+    assert prefetched == [
+        (("BTCUSDT",), "5m"),
+        (("BTCUSDT",), "15m"),
+        (("BTCUSDT", "GBPUSD"), "1h"),
+    ]
+
+
 def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypatch):
     _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))

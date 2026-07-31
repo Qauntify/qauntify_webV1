@@ -208,6 +208,30 @@ AUXILIARY_SESSIONS = (
 ALL_SESSIONS = TRADING_SESSIONS + AUXILIARY_SESSIONS
 
 
+# Symbols that only some sessions may scan. A symbol absent from this map is
+# scanned by every session, which is the default for crypto.
+#
+# GBPUSD is restricted to the swing session. Retail FX carries roughly a pip of
+# spread, and cost expressed in R scales inversely with the stop distance — so
+# the same spread that is a rounding error against a 1h stop is a large
+# fraction of a 5m or 15m one. The fast sessions cannot pay for themselves on
+# it. Same instrument and same rules; only the timeframe makes it viable.
+SESSION_SYMBOLS = {
+    "GBPUSD": ("swing",),
+}
+
+
+def session_scans(session_name: str, symbol: str) -> bool:
+    """Whether the named session should scan `symbol`."""
+    # Imported inside the function on purpose: market_client imports Candle
+    # from this module, so a top-level import here would be circular. Reusing
+    # canonical_symbol keeps one definition of how BTCUSDT maps to BTCUSD.
+    from signals.market_client import canonical_symbol
+
+    allowed = SESSION_SYMBOLS.get(canonical_symbol(symbol))
+    return allowed is None or session_name in allowed
+
+
 @dataclass(frozen=True)
 class BotSettings:
     """Engine behavior controlled from the /admin page (bot_settings table)."""
