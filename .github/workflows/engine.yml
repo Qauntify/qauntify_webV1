@@ -55,3 +55,19 @@ jobs:
           # every run it stays off is a run that answer is deferred.
           # See docs/superpowers/specs/2026-07-26-ai-gate-ab-design.md
           SHADOW_SAMPLE_RATE: "0.25"
+          # BBMA Re-entry paper trial: detects on the 1h swing scan and records
+          # a shadow row tagged experiment="bbma_reentry". Never delivered, and
+          # never LLM-gated, so it cannot confound the gate A/B above.
+          #
+          # The backtest says this LOSES: -0.137R per trade over 8.87 years of
+          # verified history (docs/r-model-correction.md). It runs anyway
+          # because a forward result is the only way to confirm or refute that,
+          # and it costs nothing but rows. 1h rather than the milder 4h because
+          # 4h is not a scanned session and 1h yields ~4x the samples, so the
+          # question resolves in months instead of years.
+          #
+          # REQUIRES migration 20260728000000_shadow_rows_bypass_live_uniqueness
+          # to be applied first. Without it every paper row collides with an
+          # open live signal on the same symbol+timeframe and is silently
+          # dropped — biased, not random. Set to "false" to stop collecting.
+          PAPER_BBMA_REENTRY: "true"
