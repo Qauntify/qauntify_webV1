@@ -1,0 +1,445 @@
+//@version=6
+indicator("Trend Following Claud", "Trend Following Claud", overlay = true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500, max_bars_back = 500)
+
+// Chandelier Exit 1
+groupCE1 = "Chandelier Exit 1"
+showCE1 = input.bool(true, "Show CE1", group = groupCE1)
+timeframeCE1 = input.timeframe("60", "Timeframe", group = groupCE1)
+atrPeriodCE1 = input.int(22, "ATR Period", minval = 1, group = groupCE1)
+atrMultiplierCE1Band1 = input.float(4.5, "ATR Multiplier Band 1", minval = 0.0, step = 0.1, group = groupCE1)
+atrMultiplierCE1Band2 = input.float(4.5, "ATR Multiplier Band 2", minval = 0.0, step = 0.1, group = groupCE1)
+lookbackCE1 = input.int(22, "Lookback Period", minval = 1, group = groupCE1)
+
+// Chandelier Exit 2
+groupCE2 = "Chandelier Exit 2"
+showCE2 = input.bool(false, "Show CE2", group = groupCE2)
+timeframeCE2 = input.timeframe("60", "Timeframe", group = groupCE2)
+atrPeriodCE2 = input.int(22, "ATR Period", minval = 1, group = groupCE2)
+atrMultiplierCE2Band1 = input.float(4.5, "ATR Multiplier Band 1", minval = 0.0, step = 0.1, group = groupCE2)
+atrMultiplierCE2Band2 = input.float(4.5, "ATR Multiplier Band 2", minval = 0.0, step = 0.1, group = groupCE2)
+lookbackCE2 = input.int(22, "Lookback Period", minval = 1, group = groupCE2)
+
+// Moving average
+groupMA = "Moving Average"
+showMA = input.bool(true, "Show MA", group = groupMA)
+timeframeMA = input.timeframe("15", "Timeframe", group = groupMA)
+maPeriod = input.int(200, "Period", minval = 1, group = groupMA)
+maMethod = input.string("LWMA", "Method", options = ["SMA", "EMA", "SMMA (RMA)", "LWMA"], group = groupMA)
+maSource = input.source(close, "Source", group = groupMA)
+
+// Bollinger Bands
+groupBB = "Bollinger Bands"
+showBB = input.bool(true, "Show Bollinger Bands", group = groupBB)
+bbSource = input.source(close, "Source", group = groupBB)
+bbLength = input.int(20, "Length", minval = 1, group = groupBB)
+bbMult = input.float(2.0, "StdDev", minval = 0.1, step = 0.1, group = groupBB)
+bbUpperColor = input.color(#F23645, "Upper", inline = "bbColors", group = groupBB)
+bbBasisColor = input.color(#2962FF, "Basis", inline = "bbColors", group = groupBB)
+bbLowerColor = input.color(#089981, "Lower", inline = "bbColors", group = groupBB)
+bbFillColor = input.color(color.new(#2962FF, 92), "Fill", group = groupBB)
+bbLineWidth = input.int(1, "Line Width", minval = 1, maxval = 5, group = groupBB)
+
+// Watermark
+groupWatermark = "Watermark"
+showWatermark = input.bool(true, "Show Watermark", group = groupWatermark)
+watermarkText = input.string("Super Cloud Turtle", "Text", group = groupWatermark)
+watermarkColor = input.color(color.new(#787B86, 82), "Color", group = groupWatermark)
+watermarkSize = input.string(size.huge, "Size", options = [size.normal, size.large, size.huge], group = groupWatermark)
+
+// Volatility dashboard
+groupDashboard = "ATR Dashboard"
+showDashboard = input.bool(true, "Show ATR Dashboard", group = groupDashboard)
+dashboardPosition = input.string("Top Right", "Position", options = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"], group = groupDashboard)
+dashboardAtrLength = input.int(14, "ATR Length", minval = 1, group = groupDashboard)
+dashboardTextSize = input.string(size.small, "Text Size", options = [size.tiny, size.small, size.normal], group = groupDashboard)
+dashboardUpColor = input.color(#089981, "Up", inline = "dashColors", group = groupDashboard)
+dashboardDownColor = input.color(#F23645, "Down", inline = "dashColors", group = groupDashboard)
+
+// Appearance
+groupStyle = "Appearance"
+ce1BullColor = input.color(#00BFFF, "CE1 Bullish", inline = "ce1", group = groupStyle)
+ce1BearColor = input.color(#DB7093, "CE1 Bearish", inline = "ce1", group = groupStyle)
+ce2BullColor = input.color(#FFD700, "CE2 Bullish", inline = "ce2", group = groupStyle)
+ce2BearColor = input.color(#FF4500, "CE2 Bearish", inline = "ce2", group = groupStyle)
+maColor = input.color(color.white, "MA Color", group = groupStyle)
+lineWidth = input.int(2, "Line Width", minval = 1, maxval = 5, group = groupStyle)
+showFlipMarkers = input.bool(true, "Show Flip Markers", group = groupStyle)
+showFill = input.bool(true, "Show CE1 to MA Cloud", group = groupStyle)
+cloudBullColor = input.color(color.new(#ADD8E6, 20), "Cloud Bullish", inline = "cloud", group = groupStyle)
+cloudBearColor = input.color(color.new(#FFB6C1, 20), "Cloud Bearish", inline = "cloud", group = groupStyle)
+
+// Market structure
+MS_ALL = "All"
+MS_BOS = "BOS"
+MS_CHOCH = "CHoCH"
+MS_HISTORICAL = "Historical"
+MS_PRESENT = "Present"
+MS_BULLISH_LEG = 1
+MS_BEARISH_LEG = 0
+MS_BULLISH = 1
+MS_BEARISH = -1
+
+groupStructure = "Market Structure"
+structureMode = input.string(MS_HISTORICAL, "Mode", options = [MS_HISTORICAL, MS_PRESENT], group = groupStructure)
+
+groupInternal = "Internal Market Structure"
+showInternalStructure = input.bool(true, "Show Internal Structure", group = groupInternal)
+internalDuplicateDistance = input.float(0.10, "Internal Duplicate Distance (ATR)", minval = 0.0, step = 0.05, group = groupInternal, tooltip = "Hide internal structure whose level is within this many ATR of the matching swing level")
+showInternalBull = input.string(MS_ALL, "Bullish Structure", options = [MS_ALL, MS_BOS, MS_CHOCH], inline = "internalBull", group = groupInternal)
+internalBullColor = input.color(#089981, "", inline = "internalBull", group = groupInternal)
+showInternalBear = input.string(MS_ALL, "Bearish Structure", options = [MS_ALL, MS_BOS, MS_CHOCH], inline = "internalBear", group = groupInternal)
+internalBearColor = input.color(#F23645, "", inline = "internalBear", group = groupInternal)
+internalConfluenceFilter = input.bool(false, "Confluence Filter", group = groupInternal)
+internalLabelSize = input.string(size.tiny, "Label Size", options = [size.tiny, size.small, size.normal], group = groupInternal)
+
+groupSwing = "Swing Market Structure"
+showSwingStructure = input.bool(true, "Show Swing Structure", group = groupSwing)
+swingLength = input.int(50, "Swing Length", minval = 10, group = groupSwing)
+showSwingBull = input.string(MS_ALL, "Bullish Structure", options = [MS_ALL, MS_BOS, MS_CHOCH], inline = "swingBull", group = groupSwing)
+swingBullColor = input.color(#089981, "", inline = "swingBull", group = groupSwing)
+showSwingBear = input.string(MS_ALL, "Bearish Structure", options = [MS_ALL, MS_BOS, MS_CHOCH], inline = "swingBear", group = groupSwing)
+swingBearColor = input.color(#F23645, "", inline = "swingBear", group = groupSwing)
+swingLabelSize = input.string(size.small, "Label Size", options = [size.tiny, size.small, size.normal], group = groupSwing)
+
+// Session zones
+SESSION1_NAME = "Sydney"
+SESSION2_NAME = "Asia"
+SESSION3_NAME = "Asia + London"
+SESSION4_NAME = "London"
+SESSION5_NAME = "London + New York"
+SESSION6_NAME = "New York"
+
+groupSession = "Session Zones"
+showSessionBoxes = input.bool(true, "Show Session Boxes", group = groupSession)
+sessionTimezone = input.string("Etc/UTC", "Timezone", group = groupSession, tooltip = "IANA timezone applied to every session time, for example Etc/UTC, America/New_York or Asia/Bangkok")
+showSessionLiquidity = input.bool(true, "Show Session Liquidity Rays", group = groupSession, tooltip = "Draws a ray at the high and the low of each finished session, labelled as buy or sell liquidity")
+liquidityLabelSize = input.string(size.small, "Liquidity Label Size", options = [size.tiny, size.small, size.normal, size.large], group = groupSession)
+showSessionLegend = input.bool(true, "Show Session Legend", group = groupSession)
+sessionLegendPosition = input.string("Bottom Left", "Legend Position", options = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"], group = groupSession)
+session1Enabled = input.bool(true, SESSION1_NAME, inline = "session1", group = groupSession)
+session1Spec = input.session("2200-0000", "", inline = "session1", group = groupSession)
+session1Color = input.color(color.new(#9C27B0, 88), "", inline = "session1", group = groupSession)
+session2Enabled = input.bool(true, SESSION2_NAME, inline = "session2", group = groupSession)
+session2Spec = input.session("0000-0700", "", inline = "session2", group = groupSession)
+session2Color = input.color(color.new(#2962FF, 88), "", inline = "session2", group = groupSession)
+session3Enabled = input.bool(true, SESSION3_NAME, inline = "session3", group = groupSession)
+session3Spec = input.session("0700-0800", "", inline = "session3", group = groupSession)
+session3Color = input.color(color.new(#089981, 88), "", inline = "session3", group = groupSession)
+session4Enabled = input.bool(true, SESSION4_NAME, inline = "session4", group = groupSession)
+session4Spec = input.session("0800-1200", "", inline = "session4", group = groupSession)
+session4Color = input.color(color.new(#FF9800, 88), "", inline = "session4", group = groupSession)
+session5Enabled = input.bool(true, SESSION5_NAME, inline = "session5", group = groupSession)
+session5Spec = input.session("1200-1600", "", inline = "session5", group = groupSession)
+session5Color = input.color(color.new(#F23645, 88), "", inline = "session5", group = groupSession)
+session6Enabled = input.bool(true, SESSION6_NAME, inline = "session6", group = groupSession)
+session6Spec = input.session("1600-2100", "", inline = "session6", group = groupSession)
+session6Color = input.color(color.new(#00BCD4, 88), "", inline = "session6", group = groupSession)
+
+type StructurePivot
+    float currentLevel
+    bool crossed
+    int barTime = time
+    int barIndex = bar_index
+
+type StructureTrend
+    int bias
+
+var StructurePivot swingHigh = StructurePivot.new(na, false)
+var StructurePivot swingLow = StructurePivot.new(na, false)
+var StructurePivot internalHigh = StructurePivot.new(na, false)
+var StructurePivot internalLow = StructurePivot.new(na, false)
+var StructureTrend swingTrend = StructureTrend.new(0)
+var StructureTrend internalTrend = StructureTrend.new(0)
+
+// MT5 iATR is a simple average of True Range, not Wilder smoothing
+mt5Atr(int length) => ta.sma(ta.tr(true), length)
+
+maCalculate(string method, int length, float source) =>
+    switch method
+        "SMA" => ta.sma(source, length)
+        "EMA" => ta.ema(source, length)
+        "SMMA (RMA)" => ta.rma(source, length)
+        => ta.wma(source, length)
+
+// Returns the values of the last closed bar so higher timeframe results never repaint
+confirmedMa(string method, int length, float source) =>
+    value = maCalculate(method, length, source)
+    value[1]
+
+// Chandelier Exit with two ATR bands, mirroring the buffer logic of the MQ5 indicator
+confirmedChandelierExit(int atrLength, int lookback, float multiplier1, float multiplier2) =>
+    atr = mt5Atr(atrLength)
+    highestPrevious = ta.highest(high[1], lookback)
+    lowestPrevious = ta.lowest(low[1], lookback)
+
+    longRaw1 = highestPrevious - multiplier1 * atr
+    shortRaw1 = lowestPrevious + multiplier1 * atr
+    var int trend1 = 0
+    var float longStop1 = na
+    var float shortStop1 = na
+    trend1 := close < nz(longStop1[1], longRaw1) ? -1 : close > nz(shortStop1[1], shortRaw1) ? 1 : nz(trend1[1], 0)
+    longStop1 := trend1 == 1 ? math.max(longRaw1, nz(longStop1[1], longRaw1)) : longRaw1
+    shortStop1 := trend1 == -1 ? math.min(shortRaw1, nz(shortStop1[1], shortRaw1)) : shortRaw1
+
+    longRaw2 = highestPrevious - multiplier2 * atr
+    shortRaw2 = lowestPrevious + multiplier2 * atr
+    var int trend2 = 0
+    var float longStop2 = na
+    var float shortStop2 = na
+    trend2 := close < nz(longStop2[1], longRaw2) ? -1 : close > nz(shortStop2[1], shortRaw2) ? 1 : nz(trend2[1], 0)
+    longStop2 := trend2 == 1 ? math.max(longRaw2, nz(longStop2[1], longRaw2)) : longRaw2
+    shortStop2 := trend2 == -1 ? math.min(shortRaw2, nz(shortStop2[1], shortRaw2)) : shortRaw2
+
+    [trend1[1], longStop1[1], shortStop1[1], trend2[1], longStop2[1], shortStop2[1]]
+
+[ce1TrendBand1, ce1LongBand1, ce1ShortBand1, ce1TrendBand2, ce1LongBand2, ce1ShortBand2] = request.security(syminfo.tickerid, timeframeCE1, confirmedChandelierExit(atrPeriodCE1, lookbackCE1, atrMultiplierCE1Band1, atrMultiplierCE1Band2), lookahead = barmerge.lookahead_on)
+
+[ce2TrendBand1, ce2LongBand1, ce2ShortBand1, ce2TrendBand2, ce2LongBand2, ce2ShortBand2] = request.security(syminfo.tickerid, timeframeCE2, confirmedChandelierExit(atrPeriodCE2, lookbackCE2, atrMultiplierCE2Band1, atrMultiplierCE2Band2), lookahead = barmerge.lookahead_on)
+
+maValue = request.security(syminfo.tickerid, timeframeMA, confirmedMa(maMethod, maPeriod, maSource), lookahead = barmerge.lookahead_on)
+
+ce1ActiveBand1 = ce1TrendBand1 == 1 ? ce1LongBand1 : ce1TrendBand1 == -1 ? ce1ShortBand1 : na
+ce1ActiveBand2 = ce1TrendBand2 == 1 ? ce1LongBand2 : ce1TrendBand2 == -1 ? ce1ShortBand2 : na
+ce2ActiveBand1 = ce2TrendBand1 == 1 ? ce2LongBand1 : ce2TrendBand1 == -1 ? ce2ShortBand1 : na
+ce2ActiveBand2 = ce2TrendBand2 == 1 ? ce2LongBand2 : ce2TrendBand2 == -1 ? ce2ShortBand2 : na
+
+plot(showCE1 and ce1TrendBand1 == 1 ? ce1ActiveBand1 : na, "CE1 Band 1 Bullish", ce1BullColor, lineWidth, plot.style_linebr)
+plot(showCE1 and ce1TrendBand1 == -1 ? ce1ActiveBand1 : na, "CE1 Band 1 Bearish", ce1BearColor, lineWidth, plot.style_linebr)
+plot(showCE1 and ce1TrendBand2 == 1 ? ce1ActiveBand2 : na, "CE1 Band 2 Bullish", ce1BullColor, lineWidth, plot.style_linebr)
+plot(showCE1 and ce1TrendBand2 == -1 ? ce1ActiveBand2 : na, "CE1 Band 2 Bearish", ce1BearColor, lineWidth, plot.style_linebr)
+
+plot(showCE2 and ce2TrendBand1 == 1 ? ce2ActiveBand1 : na, "CE2 Band 1 Bullish", ce2BullColor, lineWidth, plot.style_linebr)
+plot(showCE2 and ce2TrendBand1 == -1 ? ce2ActiveBand1 : na, "CE2 Band 1 Bearish", ce2BearColor, lineWidth, plot.style_linebr)
+plot(showCE2 and ce2TrendBand2 == 1 ? ce2ActiveBand2 : na, "CE2 Band 2 Bullish", ce2BullColor, lineWidth, plot.style_linebr)
+plot(showCE2 and ce2TrendBand2 == -1 ? ce2ActiveBand2 : na, "CE2 Band 2 Bearish", ce2BearColor, lineWidth, plot.style_linebr)
+
+ce1Flipped = not na(ce1TrendBand1[1]) and ce1TrendBand1 != ce1TrendBand1[1]
+ce2Flipped = not na(ce2TrendBand1[1]) and ce2TrendBand1 != ce2TrendBand1[1]
+
+plotshape(showCE1 and showFlipMarkers and ce1Flipped ? ce1ActiveBand1 : na, "CE1 Flip", shape.circle, location.absolute, ce1TrendBand1 == 1 ? ce1BullColor : ce1BearColor, size = size.tiny)
+plotshape(showCE2 and showFlipMarkers and ce2Flipped ? ce2ActiveBand1 : na, "CE2 Flip", shape.circle, location.absolute, ce2TrendBand1 == 1 ? ce2BullColor : ce2BearColor, size = size.tiny)
+
+// Invisible anchor so the cloud still fills when the CE1 lines are hidden
+ce1FillAnchor = plot(ce1ActiveBand1, "CE1 Cloud Anchor", color = na)
+maPlot = plot(maValue, "HTF MA", color = showMA ? maColor : na, linewidth = 2)
+cloudColor = ce1Flipped ? na : ce1TrendBand1 == 1 ? cloudBullColor : ce1TrendBand1 == -1 ? cloudBearColor : na
+fill(ce1FillAnchor, maPlot, showFill ? cloudColor : na, title = "CE1 to MA Cloud")
+
+[bbBasis, bbUpper, bbLower] = ta.bb(bbSource, bbLength, bbMult)
+bbUpperPlot = plot(showBB ? bbUpper : na, "BB Upper", bbUpperColor, bbLineWidth)
+bbBasisPlot = plot(showBB ? bbBasis : na, "BB Basis", bbBasisColor, bbLineWidth)
+bbLowerPlot = plot(showBB ? bbLower : na, "BB Lower", bbLowerColor, bbLineWidth)
+fill(bbUpperPlot, bbLowerPlot, showBB ? bbFillColor : na, title = "BB Fill")
+
+structureLeg(int length) =>
+    var int currentLeg = 0
+    newLegHigh = high[length] > ta.highest(length)
+    newLegLow = low[length] < ta.lowest(length)
+    if newLegHigh
+        currentLeg := MS_BEARISH_LEG
+    else if newLegLow
+        currentLeg := MS_BULLISH_LEG
+    currentLeg
+
+updateStructurePivots(int length, bool internal) =>
+    currentLeg = structureLeg(length)
+    newPivot = ta.change(currentLeg) != 0
+    pivotLow = ta.change(currentLeg) == 1
+    if newPivot
+        StructurePivot pivot = pivotLow ? (internal ? internalLow : swingLow) : (internal ? internalHigh : swingHigh)
+        pivot.currentLevel := pivotLow ? low[length] : high[length]
+        pivot.crossed := false
+        pivot.barTime := time[length]
+        pivot.barIndex := bar_index[length]
+
+drawMarketStructure(StructurePivot pivot, string tag, color structureColor, string lineStyle, string labelStyle, string labelSize) =>
+    var line structureLine = na
+    var label structureLabel = na
+    if structureMode == MS_PRESENT
+        line.delete(structureLine)
+        label.delete(structureLabel)
+    structureLine := line.new(chart.point.new(pivot.barTime, na, pivot.currentLevel), chart.point.new(time, na, pivot.currentLevel), xloc.bar_time, color = structureColor, style = lineStyle)
+    labelIndex = math.round(0.5 * (pivot.barIndex + bar_index))
+    structureLabel := label.new(chart.point.new(na, labelIndex, pivot.currentLevel), tag, xloc.bar_index, color = color.new(color.black, 100), textcolor = structureColor, style = labelStyle, size = labelSize)
+
+displayMarketStructure(bool internal) =>
+    bullishBar = true
+    bearishBar = true
+    if internalConfluenceFilter
+        bullishBar := high - math.max(close, open) > math.min(close, open - low)
+        bearishBar := high - math.max(close, open) < math.min(close, open - low)
+
+    StructurePivot highPivot = internal ? internalHigh : swingHigh
+    StructurePivot lowPivot = internal ? internalLow : swingLow
+    StructureTrend trend = internal ? internalTrend : swingTrend
+    structureLineStyle = internal ? line.style_dashed : line.style_solid
+    structureLabelSize = internal ? internalLabelSize : swingLabelSize
+    bullishColor = internal ? internalBullColor : swingBullColor
+    bearishColor = internal ? internalBearColor : swingBearColor
+
+    duplicateThreshold = internalDuplicateDistance * ta.atr(200)
+    bullishExtraCondition = internal ? math.abs(internalHigh.currentLevel - swingHigh.currentLevel) > duplicateThreshold and bullishBar : true
+    if ta.crossover(close, highPivot.currentLevel) and not highPivot.crossed and bullishExtraCondition
+        tag = trend.bias == MS_BEARISH ? MS_CHOCH : MS_BOS
+        highPivot.crossed := true
+        trend.bias := MS_BULLISH
+        showBullish = internal ? showInternalStructure and (showInternalBull == MS_ALL or showInternalBull == tag) : showSwingStructure and (showSwingBull == MS_ALL or showSwingBull == tag)
+        if showBullish
+            drawMarketStructure(highPivot, tag, bullishColor, structureLineStyle, label.style_label_down, structureLabelSize)
+
+    bearishExtraCondition = internal ? math.abs(internalLow.currentLevel - swingLow.currentLevel) > duplicateThreshold and bearishBar : true
+    if ta.crossunder(close, lowPivot.currentLevel) and not lowPivot.crossed and bearishExtraCondition
+        tag = trend.bias == MS_BULLISH ? MS_CHOCH : MS_BOS
+        lowPivot.crossed := true
+        trend.bias := MS_BEARISH
+        showBearish = internal ? showInternalStructure and (showInternalBear == MS_ALL or showInternalBear == tag) : showSwingStructure and (showSwingBear == MS_ALL or showSwingBear == tag)
+        if showBearish
+            drawMarketStructure(lowPivot, tag, bearishColor, structureLineStyle, label.style_label_up, structureLabelSize)
+
+updateStructurePivots(swingLength, false)
+updateStructurePivots(5, true)
+
+if showInternalStructure
+    displayMarketStructure(true)
+if showSwingStructure
+    displayMarketStructure(false)
+
+// Draws one session as a box spanning its own high and low, plus liquidity rays once the session closes.
+// Only the latest finished session of each type keeps its rays, which stops the chart filling up with old levels.
+sessionZone(simple bool enabled, simple string sessionSpec, simple string sessionName, simple color sessionColor) =>
+    inSession = enabled and timeframe.isintraday and not na(time(timeframe.period, sessionSpec, sessionTimezone))
+
+    var box zoneBox = na
+    var float zoneHigh = na
+    var float zoneLow = na
+    var int zoneStart = na
+    var line buyRay = na
+    var line sellRay = na
+    var label buyLabel = na
+    var label sellLabel = na
+    var float buyLevel = na
+    var float sellLevel = na
+
+    if inSession
+        if not inSession[1]
+            zoneHigh := high
+            zoneLow := low
+            zoneStart := time
+            if showSessionBoxes
+                zoneBox := box.new(chart.point.new(time, na, high), chart.point.new(time, na, low), xloc = xloc.bar_time, bgcolor = sessionColor, border_color = color(na))
+        else
+            zoneHigh := math.max(zoneHigh, high)
+            zoneLow := math.min(zoneLow, low)
+        if showSessionBoxes and not na(zoneBox)
+            box.set_top_left_point(zoneBox, chart.point.new(zoneStart, na, zoneHigh))
+            box.set_bottom_right_point(zoneBox, chart.point.new(time, na, zoneLow))
+
+    if showSessionLiquidity and not inSession and inSession[1] and not na(zoneHigh)
+        line.delete(buyRay)
+        line.delete(sellRay)
+        label.delete(buyLabel)
+        label.delete(sellLabel)
+        buyLevel := zoneHigh
+        sellLevel := zoneLow
+        rayColor = color.new(sessionColor, 0)
+        sessionDate = str.format_time(zoneStart, "yyyy-MM-dd", sessionTimezone)
+        buyRay := line.new(chart.point.new(zoneStart, na, buyLevel), chart.point.new(time, na, buyLevel), xloc = xloc.bar_time, color = rayColor, style = line.style_dashed, extend = extend.right)
+        sellRay := line.new(chart.point.new(zoneStart, na, sellLevel), chart.point.new(time, na, sellLevel), xloc = xloc.bar_time, color = rayColor, style = line.style_dashed, extend = extend.right)
+        buyLabel := label.new(chart.point.new(time, na, buyLevel), sessionName + " " + sessionDate + " Buy Liquidity", xloc = xloc.bar_time, style = label.style_label_left, color = color(na), textcolor = rayColor, size = liquidityLabelSize)
+        sellLabel := label.new(chart.point.new(time, na, sellLevel), sessionName + " " + sessionDate + " Sell Liquidity", xloc = xloc.bar_time, style = label.style_label_left, color = color(na), textcolor = rayColor, size = liquidityLabelSize)
+
+    // Remove each liquidity level independently as soon as a later wick sweeps it
+    if not inSession and not na(buyRay) and high >= buyLevel
+        line.delete(buyRay)
+        label.delete(buyLabel)
+        buyRay := na
+        buyLabel := na
+        buyLevel := na
+
+    if not inSession and not na(sellRay) and low <= sellLevel
+        line.delete(sellRay)
+        label.delete(sellLabel)
+        sellRay := na
+        sellLabel := na
+        sellLevel := na
+
+    // Keep the liquidity labels sitting at the right edge so they stay readable as the chart moves on
+    if barstate.islast and not na(buyLabel)
+        label.set_point(buyLabel, chart.point.new(time, na, buyLevel))
+    if barstate.islast and not na(sellLabel)
+        label.set_point(sellLabel, chart.point.new(time, na, sellLevel))
+
+legendPosition(simple string choice) =>
+    switch choice
+        "Top Left" => position.top_left
+        "Top Right" => position.top_right
+        "Bottom Right" => position.bottom_right
+        => position.bottom_left
+
+legendRow(table legend, int row, bool enabled, string sessionName, string sessionSpec, color sessionColor) =>
+    if enabled
+        table.cell(legend, 0, row, sessionName, text_color = chart.fg_color, text_size = size.tiny, text_halign = text.align_left, bgcolor = sessionColor)
+        table.cell(legend, 1, row, sessionSpec, text_color = chart.fg_color, text_size = size.tiny, text_halign = text.align_right, bgcolor = sessionColor)
+
+sessionZone(session1Enabled, session1Spec, SESSION1_NAME, session1Color)
+sessionZone(session2Enabled, session2Spec, SESSION2_NAME, session2Color)
+sessionZone(session3Enabled, session3Spec, SESSION3_NAME, session3Color)
+sessionZone(session4Enabled, session4Spec, SESSION4_NAME, session4Color)
+sessionZone(session5Enabled, session5Spec, SESSION5_NAME, session5Color)
+sessionZone(session6Enabled, session6Spec, SESSION6_NAME, session6Color)
+
+var table sessionLegend = table.new(legendPosition(sessionLegendPosition), 2, 7)
+if showSessionLegend and timeframe.isintraday and barstate.islast
+    table.cell(sessionLegend, 0, 0, "Sessions", text_color = chart.fg_color, text_size = size.tiny, text_halign = text.align_left)
+    table.cell(sessionLegend, 1, 0, "(" + sessionTimezone + ")", text_color = chart.fg_color, text_size = size.tiny, text_halign = text.align_right)
+    legendRow(sessionLegend, 1, session1Enabled, SESSION1_NAME, session1Spec, session1Color)
+    legendRow(sessionLegend, 2, session2Enabled, SESSION2_NAME, session2Spec, session2Color)
+    legendRow(sessionLegend, 3, session3Enabled, SESSION3_NAME, session3Spec, session3Color)
+    legendRow(sessionLegend, 4, session4Enabled, SESSION4_NAME, session4Spec, session4Color)
+    legendRow(sessionLegend, 5, session5Enabled, SESSION5_NAME, session5Spec, session5Color)
+    legendRow(sessionLegend, 6, session6Enabled, SESSION6_NAME, session6Spec, session6Color)
+
+// ATR comes from the last closed higher timeframe candle so the figure does not drift during the day.
+// The period open is requested without lookahead, so the move percentage stays honest on history.
+dashboardStats(simple string higherTimeframe) =>
+    atrValue = request.security(syminfo.tickerid, higherTimeframe, ta.atr(dashboardAtrLength)[1], lookahead = barmerge.lookahead_on)
+    [periodHigh, periodLow, periodOpen, periodClose] = request.security(syminfo.tickerid, higherTimeframe, [high, low, open, close], lookahead = barmerge.lookahead_off)
+    [atrValue, periodHigh, periodLow, periodOpen, periodClose]
+
+formatAtr(float value) => na(value) ? "n/a" : str.tostring(value, format.mintick)
+
+formatPercent(float value) => na(value) ? "n/a" : str.tostring(value, "#.##") + "%"
+
+// Range percentage is the full high to low travel of the current candle on that timeframe,
+// coloured by whether the candle itself is up or down
+dashboardRow(table board, int row, string periodName, float atrValue, float periodHigh, float periodLow, float periodOpen, float periodClose, string typicalMove, string highVolatility) =>
+    rangePercent = periodLow > 0 and not na(periodHigh) ? (periodHigh - periodLow) / periodLow * 100 : na
+    rangeColor = na(periodClose) or na(periodOpen) ? chart.fg_color : periodClose >= periodOpen ? dashboardUpColor : dashboardDownColor
+    table.cell(board, 0, row, periodName, text_color = chart.fg_color, text_size = dashboardTextSize, text_halign = text.align_left)
+    table.cell(board, 1, row, formatAtr(atrValue), text_color = chart.fg_color, text_size = dashboardTextSize, text_halign = text.align_right)
+    table.cell(board, 2, row, formatPercent(rangePercent), text_color = rangeColor, text_size = dashboardTextSize, text_halign = text.align_right)
+    table.cell(board, 3, row, typicalMove, text_color = chart.fg_color, text_size = dashboardTextSize, text_halign = text.align_right)
+    table.cell(board, 4, row, highVolatility, text_color = chart.fg_color, text_size = dashboardTextSize, text_halign = text.align_right)
+
+[dailyAtr, dailyHigh, dailyLow, dailyOpen, dailyClose] = dashboardStats("D")
+[weeklyAtr, weeklyHigh, weeklyLow, weeklyOpen, weeklyClose] = dashboardStats("W")
+[monthlyAtr, monthlyHigh, monthlyLow, monthlyOpen, monthlyClose] = dashboardStats("M")
+
+var table dashboard = table.new(legendPosition(dashboardPosition), 5, 4, border_width = 1)
+if showDashboard and barstate.islast
+    headerColor = color.new(chart.fg_color, 90)
+    table.cell(dashboard, 0, 0, "Period", text_color = chart.fg_color, text_size = dashboardTextSize, text_halign = text.align_left, bgcolor = headerColor)
+    table.cell(dashboard, 1, 0, "ATR(" + str.tostring(dashboardAtrLength) + ")", text_color = chart.fg_color, text_size = dashboardTextSize, text_halign = text.align_right, bgcolor = headerColor)
+    table.cell(dashboard, 2, 0, "Range %", text_color = chart.fg_color, text_size = dashboardTextSize, text_halign = text.align_right, bgcolor = headerColor)
+    table.cell(dashboard, 3, 0, "Typical Move", text_color = chart.fg_color, text_size = dashboardTextSize, text_halign = text.align_right, bgcolor = headerColor)
+    table.cell(dashboard, 4, 0, "High Volatility", text_color = chart.fg_color, text_size = dashboardTextSize, text_halign = text.align_right, bgcolor = headerColor)
+    dashboardRow(dashboard, 1, "Daily", dailyAtr, dailyHigh, dailyLow, dailyOpen, dailyClose, "1-2%", "3-5%+")
+    dashboardRow(dashboard, 2, "Weekly", weeklyAtr, weeklyHigh, weeklyLow, weeklyOpen, weeklyClose, "2-5%", "6-10%+")
+    dashboardRow(dashboard, 3, "Monthly", monthlyAtr, monthlyHigh, monthlyLow, monthlyOpen, monthlyClose, "4-10%", "10-20%+")
+
+var table watermarkTable = table.new(position.middle_center, 1, 1)
+if barstate.islast
+    if showWatermark
+        table.cell(watermarkTable, 0, 0, watermarkText, text_color = watermarkColor, text_size = watermarkSize, text_halign = text.align_center, bgcolor = color(na))
+    else
+        table.clear(watermarkTable, 0, 0, 0, 0)

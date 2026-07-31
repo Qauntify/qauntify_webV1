@@ -37,3 +37,6 @@ optuna.db
 
 # Generated review images (regenerate with scripts/bbma_trade_shots.py).
 artifacts/bbma-trades/
+
+# Root-level npm install (web/ has its own ignore for web/node_modules).
+/node_modules/
