@@ -769,8 +769,7 @@ def main():
               f"{len(settings.symbols)} symbol(s) in {len(TRADING_SESSIONS)} "
               f"session(s) ({session_label}), "
               f"swing_strategy={settings.signal_strategy}, "
-              f"super_scalp=ict_fvg. (15m scalp retired — see "
-              f"docs/strategy-history-sweep.md)")
+              f"scalp=cloud_mss, super_scalp=ict_fvg.")
 
         def scan_one(item):
             """(index, symbol, TradingSession, recent_events, recent_signals, open_symbols)
