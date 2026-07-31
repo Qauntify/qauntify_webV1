@@ -69,5 +69,12 @@ jobs:
           # REQUIRES migration 20260728000000_shadow_rows_bypass_live_uniqueness
           # to be applied first. Without it every paper row collides with an
           # open live signal on the same symbol+timeframe and is silently
-          # dropped — biased, not random. Set to "false" to stop collecting.
-          PAPER_BBMA_REENTRY: "true"
+          # dropped — biased, not random.
+          #
+          # OFF because BBMA is now admin-selectable for the swing session
+          # (migration 20260728000100). If the swing strategy is set to
+          # bbma_reentry, this would shadow-record the very setup being
+          # delivered — two rows per signal and a doubled outcome-tracker load
+          # for no extra information. Turn it back on only if the swing session
+          # is running something else and you still want the forward sample.
+          PAPER_BBMA_REENTRY: "false"

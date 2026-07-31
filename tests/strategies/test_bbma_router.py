@@ -40,11 +40,17 @@ def test_both_keys_are_registered():
     assert "bbma_reentry" in SIGNAL_STRATEGIES
 
 
-def test_neither_key_is_admin_selectable():
-    """Adding one would need the bot_settings CHECK constraint migration and
-    the web dropdown to change with it — out of scope until one is promoted."""
-    assert "bbma_extreme" not in ADMIN_SELECTABLE_STRATEGIES
-    assert "bbma_reentry" not in ADMIN_SELECTABLE_STRATEGIES
+def test_both_keys_are_admin_selectable():
+    """Promoted 2026-07-28 at the operator's direction. Selecting either sets
+    the SWING session's strategy, so these deliver to Telegram.
+
+    tests/core/test_strategy_choices.py is what guarantees the three sources
+    agree — Python, the bot_settings CHECK constraint and the admin dropdown.
+    A key present here but missing from the constraint would be accepted by
+    Python and rejected by the database on write.
+    """
+    assert "bbma_extreme" in ADMIN_SELECTABLE_STRATEGIES
+    assert "bbma_reentry" in ADMIN_SELECTABLE_STRATEGIES
 
 
 def test_neither_key_is_pinned_to_a_live_session():

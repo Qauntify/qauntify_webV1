@@ -116,7 +116,8 @@ SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone",
 #   - fetch_bot_settings below
 # tests/core/test_strategy_choices.py pins them together. Validating against
 # the full list instead let Python accept a value the database would reject.
-ADMIN_SELECTABLE_STRATEGIES = ("ema_cross", "ict_smc", "sr_zone")
+ADMIN_SELECTABLE_STRATEGIES = ("ema_cross", "ict_smc", "sr_zone",
+                               "bbma_reentry", "bbma_extreme")
 
 DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
