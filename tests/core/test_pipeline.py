@@ -1126,3 +1126,49 @@ def test_fifteen_minute_session_runs_cloud_mss():
     # off ALL_SESSIONS by timeframe, so a duplicate would win at random.
     timeframes = [s.timeframe for s in ALL_SESSIONS]
     assert len(timeframes) == len(set(timeframes))
+
+
+def test_load_market_data_fetches_h1_for_cloud_mss(monkeypatch):
+    """cloud_mss builds its cloud from 1h candles. Without them the detector
+    returns None on every bar and the session silently produces nothing."""
+    from signals.models import Candle
+
+    fetched = []
+
+    def fake_fetch(symbol, interval, limit, session=None):
+        fetched.append((interval, limit))
+        return [Candle(i * 900_000, 100.0, 100.5, 99.5, 100.0, 1.0)
+                for i in range(limit)]
+
+    monkeypatch.setattr(run_module, "fetch_candles", fake_fetch)
+    market, _ = run_module._load_market_data(
+        "BTCUSDT", "15m", "cloud_mss", _config(), session=None)
+
+    assert market is not None
+    assert market.h1_candles, "1h candles were not loaded"
+    assert "1h" in [i for i, _ in fetched]
+
+
+def test_cloud_mss_candle_limit_clears_its_own_minimum():
+    """A fetch yielding fewer closed bars than MIN_CANDLES would leave a
+    detector that can never fire — silently, with no error anywhere."""
+    from signals.strategies.cloud_mss.detector import MIN_CANDLES
+
+    limit = run_module._candle_limit_for("cloud_mss", _config())
+    # _load_market_data drops the still-forming bar.
+    assert limit - 1 > MIN_CANDLES
+
+
+def test_no_setup_indicators_for_cloud_mss_are_relevant():
+    """A no-setup ai_event must log what the strategy actually reads. Falling
+    through to the ema_cross default would record EMA/RSI/MACD for a strategy
+    that uses none of them — misleading rows in ai_events."""
+    n = 30
+    indicators = run_module._no_setup_indicators(
+        "cloud_mss", [2.0] * n, [25.0] * n, "up",
+        [1.0] * n, [1.0] * n, [50.0] * n, [0.0] * n,
+    )
+    assert indicators["strategy"] == "cloud_mss"
+    assert indicators["atr"] == 2.0
+    assert "ema9" not in indicators
+    assert "rsi" not in indicators
