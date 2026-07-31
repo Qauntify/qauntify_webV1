@@ -36,7 +36,19 @@ STRUCTURE_WINDOW = 60
 STOP_ATR_BUFFER = 0.5
 # Reject setups whose stop is farther than this many ATRs from entry — same
 # threshold as sr_zone and the BBMA detectors.
-MAX_STOP_ATR = 2.5
+# 6.0, not the 2.5 that sr_zone and the BBMA detectors use. That is not a
+# loosened guard, it is the only value consistent with where this strategy
+# puts its stop. The cloud's far edge is a 1h Chandelier band sitting 4.5x the
+# ONE-HOUR ATR from its extreme; expressed in the 15m ATR this divides by,
+# that is 6-9 ATR before the pullback distance is added. Measured over 310,462
+# real 15m bars the median setup needs 6.6 ATR, and a 2.5 cap rejected 99.4%
+# of them - 35 setups in 8.87 years, which is silence, not selectivity.
+#
+# 6.0 was chosen from a measured sweep (4.0 / 6.0 / 8.0), not by taste: it is
+# where trade count stops rising materially and net expectancy is least bad.
+# It does NOT make the strategy profitable - see
+# docs/cloud-mss-backtest-results.md.
+MAX_STOP_ATR = 6.0
 
 
 def _cloud(h1_candles, ma_value):
