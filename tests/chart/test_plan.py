@@ -77,3 +77,32 @@ def test_ce_lwma_plan_has_lwma_and_trail():
     plan = build_chart_plan(candles, _signal(ind))
     assert any(a["kind"] == "series" and a["role"] == "lwma" for a in plan)
     assert any(a["role"] == "trail" for a in plan)
+
+
+def test_cloud_mss_plan_draws_the_cloud_ma_and_choch():
+    """The cloud is the whole setup — a chart showing only entry/SL/TP would
+    hide the reason the trade fired."""
+    candles = [_Candle(i * 900_000, 100.0, 101.0, 99.0, 100.0, 1.0)
+               for i in range(60)]
+    ind = {
+        "strategy": "cloud_mss", "side": "premium", "ce_trend": "down",
+        "cloud_low": 105.0, "cloud_high": 107.0,
+        "ma200": 106.0, "choch_level": 99.0,
+    }
+    plan = build_chart_plan(candles, _signal(ind, direction="short"))
+    assert _kinds(plan, "premium"), "the cloud zone must be drawn"
+    assert _kinds(plan, "choch"), "the level whose break confirmed the entry"
+    labels = " ".join(a.get("label", "") for a in plan)
+    assert "Cloud" in labels and "LWMA200" in labels
+
+
+def test_cloud_mss_discount_cloud_uses_the_discount_role():
+    candles = [_Candle(i * 900_000, 100.0, 101.0, 99.0, 100.0, 1.0)
+               for i in range(60)]
+    ind = {
+        "strategy": "cloud_mss", "side": "discount", "ce_trend": "up",
+        "cloud_low": 94.0, "cloud_high": 96.0,
+        "ma200": 95.0, "choch_level": 102.0,
+    }
+    plan = build_chart_plan(candles, _signal(ind))
+    assert _kinds(plan, "discount")

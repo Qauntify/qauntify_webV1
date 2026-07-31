@@ -110,12 +110,37 @@ def _bbma(candles, signal):
     return out
 
 
+def _cloud_mss(candles, signal):
+    """The cloud as a zone, the MA200 it is anchored to, and the structure
+    level whose break confirmed the entry.
+
+    The cloud is drawn in the premium/discount roles rather than a neutral one
+    so its side is readable at a glance — that side IS the bias, and a chart
+    that hid it would show the trade without its reason.
+    """
+    ind = signal.indicators
+    side = ind.get("side", "cloud")
+    out = [
+        zone(ind["cloud_high"], ind["cloud_low"], None,
+             f"Cloud ({side})", side if side in ("premium", "discount") else "sr"),
+    ]
+    closes = [c.close for c in candles]
+    pts = [{"time": c.open_time, "value": v}
+           for c, v in zip(candles, lwma(closes, 200))]
+    out.append(series(pts, "LWMA200", "lwma"))
+    if ind.get("choch_level") is not None:
+        out.append(level(ind["choch_level"], "CHoCH level", "choch",
+                         style="dashed"))
+    return out
+
+
 _BUILDERS = {
     "ict_fvg": _ict_fvg,
     "ict_smc": _ict_smc,
     "sr_zone": _sr_zone,
     "ema_cross": _ema_cross,
     "ce_lwma": _ce_lwma,
+    "cloud_mss": _cloud_mss,
     "bbma_extreme": _bbma,
     "bbma_reentry": _bbma,
 }
