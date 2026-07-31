@@ -329,3 +329,68 @@ def test_maker_tier_costs_less_than_the_default_taker_tier():
 
 def test_explicit_bps_of_zero_means_no_cost():
     assert net_r_multiples("BTCUSD", [1.0], [100.0], [98.0], bps=0.0) == [1.0]
+
+
+# --- multi-timeframe replay -------------------------------------------------
+
+def test_windowed_replay_passes_only_closed_htf_candles():
+    """A 15m bar must never see a 1h candle that had not finished forming.
+    Leaking the in-progress candle is lookahead, and it would flatter every
+    multi-timeframe result in a way nothing downstream could detect."""
+    hour = 3_600_000
+    primary = [Candle(i * 900_000, 100.0, 101.0, 99.0, 100.0, 1.0)
+               for i in range(400)]
+    htf = [Candle(i * hour, 100.0, 101.0, 99.0, 100.0, 1.0) for i in range(20)]
+
+    seen = []
+
+    def spy(symbol, candles, atr14, htf_trend=None, h1_candles=None):
+        seen.append((candles[-1].open_time,
+                     h1_candles[-1].open_time if h1_candles else None))
+        return None
+
+    backtest_windowed(spy, "BTCUSD", primary, [2.0] * len(primary),
+                      [None] * len(primary), window=200,
+                      htf_candles=htf, htf_minutes=60)
+
+    assert seen, "the detector was never called"
+    for bar_time, htf_time in seen:
+        assert htf_time is not None
+        assert htf_time + hour <= bar_time, (
+            f"htf candle at {htf_time} had not closed by {bar_time}")
+
+
+def test_windowed_replay_without_htf_candles_omits_the_argument():
+    """Single-timeframe detectors do not accept h1_candles. Passing it
+    unconditionally would break every existing strategy."""
+    primary = [Candle(i * 900_000, 100.0, 101.0, 99.0, 100.0, 1.0)
+               for i in range(300)]
+    calls = []
+
+    def spy(symbol, candles, atr14, htf_trend=None):
+        calls.append(1)
+        return None
+
+    backtest_windowed(spy, "BTCUSD", primary, [2.0] * len(primary),
+                      [None] * len(primary), window=200)
+    assert calls
+
+
+def test_windowed_replay_skips_bars_with_no_closed_htf_candle():
+    """Before the first HTF candle closes there is nothing causal to pass, so
+    those bars produce no setup rather than an empty or future slice."""
+    hour = 3_600_000
+    # Every primary bar precedes the first HTF close.
+    primary = [Candle(i * 900_000, 100.0, 101.0, 99.0, 100.0, 1.0)
+               for i in range(300)]
+    htf = [Candle(500 * hour, 100.0, 101.0, 99.0, 100.0, 1.0)]
+    calls = []
+
+    def spy(symbol, candles, atr14, htf_trend=None, h1_candles=None):
+        calls.append(1)
+        return None
+
+    backtest_windowed(spy, "BTCUSD", primary, [2.0] * len(primary),
+                      [None] * len(primary), window=200,
+                      htf_candles=htf, htf_minutes=60)
+    assert not calls
