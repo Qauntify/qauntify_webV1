@@ -1,5 +1,6 @@
 """Dispatch setup detection to the strategy selected for the session."""
 from signals.models import DEFAULT_SIGNAL_STRATEGY
+from signals.strategies.bbma import detect_extreme, detect_reentry
 from signals.strategies.ce_lwma import detect_setup as detect_ce_setup
 from signals.strategies.ema_cross import detect_setup as detect_ema_setup
 from signals.strategies.ict_fvg import detect_setup as detect_ict_fvg_setup
@@ -24,6 +25,14 @@ def detect_setup(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
         )
     if strategy == "ict_smc":
         return detect_ict_setup(
+            symbol, candles, atr14, adx14=adx14, htf_trend=htf_trend,
+        )
+    if strategy == "bbma_extreme":
+        return detect_extreme(
+            symbol, candles, atr14, adx14=adx14, htf_trend=htf_trend,
+        )
+    if strategy == "bbma_reentry":
+        return detect_reentry(
             symbol, candles, atr14, adx14=adx14, htf_trend=htf_trend,
         )
     if strategy == "sr_zone":

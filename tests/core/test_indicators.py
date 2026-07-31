@@ -1,4 +1,6 @@
-from signals.indicators import adx, atr, ema, macd_histogram, rsi
+import pytest
+
+from signals.indicators import adx, atr, bollinger, ema, macd_histogram, rsi, sma_atr
 
 
 def test_ema_constant_series_equals_constant():
@@ -163,3 +165,115 @@ def test_chandelier_exit_flips_on_close_through_trail():
     assert direction[-1] == -1
     # There was a bullish stretch before the crash.
     assert any(d == 1 for d in direction if d is not None)
+
+
+def test_bollinger_shorter_than_period_is_all_none():
+    upper, mid, lower = bollinger([1.0, 2.0, 3.0], 20)
+    assert upper == [None, None, None]
+    assert mid == [None, None, None]
+    assert lower == [None, None, None]
+
+
+def test_bollinger_constant_series_has_zero_width():
+    values = [50.0] * 30
+    upper, mid, lower = bollinger(values, 20)
+    assert upper[:19] == [None] * 19
+    for u, m, l in zip(upper[19:], mid[19:], lower[19:]):
+        assert abs(u - 50.0) < 1e-9
+        assert abs(m - 50.0) < 1e-9
+        assert abs(l - 50.0) < 1e-9
+
+
+def test_bollinger_uses_population_sigma():
+    """1..20 has population variance (n^2-1)/12 = 33.25, so sigma = 5.7663.
+
+    Sample sigma would widen the band by sqrt(20/19) — a material difference at
+    period 20, and MT4/TradingView (the charts BBMA is drawn on) use the
+    population form.
+    """
+    values = [float(i) for i in range(1, 21)]
+    upper, mid, lower = bollinger(values, 20, 2.0)
+    assert abs(mid[-1] - 10.5) < 1e-9
+    assert abs(upper[-1] - 22.0325626) < 1e-6
+    assert abs(lower[-1] - (-1.0325626)) < 1e-6
+
+
+def test_bollinger_series_are_aligned_to_input():
+    values = [float(i % 7) for i in range(40)]
+    upper, mid, lower = bollinger(values, 20)
+    assert len(upper) == len(mid) == len(lower) == 40
+
+
+def test_bollinger_rejects_non_positive_period():
+    with pytest.raises(ValueError):
+        bollinger([1.0, 2.0], 0)
+
+
+def test_sma_atr_is_a_plain_mean_of_true_range():
+    """MT5's iATR averages true range with a plain SMA. On a constant-range
+    series it equals that range exactly, same as Wilder."""
+    n = 30
+    highs = [102.0] * n
+    lows = [98.0] * n
+    closes = [100.0] * n
+    result = sma_atr(highs, lows, closes, 14)
+    assert result[:14] == [None] * 14
+    for v in result[14:]:
+        assert abs(v - 4.0) < 1e-9
+
+
+def test_sma_atr_differs_from_wilder_on_a_changing_series():
+    """The whole reason this exists. Wilder weights history far more heavily,
+    so after a volatility step the two disagree — and a Chandelier band built
+    on one sits somewhere the other would not put it."""
+    n = 40
+    highs = [101.0] * 20 + [110.0] * 20
+    lows = [99.0] * 20 + [90.0] * 20
+    closes = [100.0] * 40
+    wilder = atr(highs, lows, closes, 14)
+    simple = sma_atr(highs, lows, closes, 14)
+    assert abs(simple[-1] - wilder[-1]) > 0.5
+
+
+def test_sma_atr_aligns_and_pads_like_wilder():
+    n = 40
+    highs = [100.0 + i for i in range(n)]
+    lows = [99.0 + i for i in range(n)]
+    closes = [99.5 + i for i in range(n)]
+    simple = sma_atr(highs, lows, closes, 14)
+    wilder = atr(highs, lows, closes, 14)
+    assert len(simple) == n
+    assert [v is None for v in simple] == [v is None for v in wilder]
+
+
+def test_sma_atr_too_short_is_all_none():
+    assert sma_atr([1.0] * 5, [0.5] * 5, [0.8] * 5, 14) == [None] * 5
+
+
+def test_chandelier_exit_accepts_an_alternative_atr():
+    """The series must CHANGE volatility. On a constant-range series Wilder and
+    a simple mean agree exactly, so identical bands would prove nothing about
+    whether atr_fn was honoured."""
+    from signals.indicators import chandelier_exit
+
+    highs = [100.0 + i for i in range(40)] + [140.0 + i * 3 for i in range(20)]
+    lows = [99.0 + i for i in range(40)] + [130.0 + i * 3 for i in range(20)]
+    closes = [99.5 + i for i in range(40)] + [135.0 + i * 3 for i in range(20)]
+    default = chandelier_exit(highs, lows, closes, period=22, lookback=22)
+    swapped = chandelier_exit(highs, lows, closes, period=22, lookback=22,
+                              atr_fn=sma_atr)
+    assert default[0][-1] != swapped[0][-1]
+
+
+def test_chandelier_exit_default_path_is_unchanged():
+    """ce_lwma is live on this default. Adding the hook must not move it."""
+    from signals.indicators import chandelier_exit
+
+    n = 60
+    highs = [100.0 + i for i in range(n)]
+    lows = [99.0 + i for i in range(n)]
+    closes = [99.5 + i for i in range(n)]
+    explicit = chandelier_exit(highs, lows, closes, period=22, lookback=22,
+                               atr_fn=atr)
+    implicit = chandelier_exit(highs, lows, closes, period=22, lookback=22)
+    assert explicit == implicit

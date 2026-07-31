@@ -1,9 +1,26 @@
 """Fetches OHLCV candles (no API key required).
 
 Crypto + FX (BTCUSD, ETHUSD, GBPUSD) come from Kraken public OHLC.
-Spot-style gold (XAUUSD) comes from Yahoo Finance COMEX gold futures
-(GC=F) — Kraken has no XAUUSD pair. Legacy PAXG* symbols canonicalize to
-XAUUSD so older rows still settle.
+Legacy PAXG* symbols canonicalize to XAUUSD so older rows still settle.
+
+GOLD IS FUTURES, NOT SPOT. The symbol is labelled XAUUSD, but the prices come
+from Yahoo Finance's front-month COMEX gold future (GC=F) because Kraken has no
+XAUUSD pair. The future trades at a basis to spot — typically a few dollars,
+driven by carry — and that basis steps discontinuously at contract roll, when
+the front month changes underneath the same ticker.
+
+What that means in practice:
+  * Levels published for "XAUUSD" are futures levels. Someone executing them on
+    a spot gold CFD will not see the same prices.
+  * On the 1h swing session the basis is small against the stop distance and is
+    mostly noise. On the 1m scalper, whose targets are 0.5R of a very tight
+    stop, it is not.
+  * A roll can shift the series by more than a scalp's entire risk. Nothing
+    here detects or adjusts for a roll.
+
+Fixing this properly means either sourcing genuine spot XAU or renaming the
+symbol; both are larger changes than a data-source swap, since `symbol` is a
+stored key on every signal row.
 """
 from __future__ import annotations
 
@@ -113,6 +130,44 @@ def _fetch_kraken_candles(symbol, interval, limit, start_time, session):
     ]
 
 
+def _resample(candles, minutes):
+    """Fold candles into `minutes`-wide buckets aligned to the UTC epoch.
+
+    Yahoo publishes no 4h gold series, so a 4h request is served from its
+    hourly one and aggregated here. Buckets are keyed on floor(open_time /
+    width) rather than on the first bar of the response, so the same wall-clock
+    bar always lands in the same bucket regardless of when the fetch ran.
+
+    A partial trailing bucket is kept — callers drop the still-forming bar
+    themselves (backtest.py does this with `[:-1]`), and silently discarding it
+    here would hide a bar they expect to see.
+    """
+    width = minutes * 60_000
+    out: list[Candle] = []
+    for candle in candles:
+        bucket = candle.open_time - (candle.open_time % width)
+        if out and out[-1].open_time == bucket:
+            prev = out[-1]
+            out[-1] = Candle(
+                open_time=bucket,
+                open=prev.open,
+                high=max(prev.high, candle.high),
+                low=min(prev.low, candle.low),
+                close=candle.close,
+                volume=prev.volume + candle.volume,
+            )
+        else:
+            out.append(Candle(
+                open_time=bucket,
+                open=candle.open,
+                high=candle.high,
+                low=candle.low,
+                close=candle.close,
+                volume=candle.volume,
+            ))
+    return out
+
+
 def _fetch_yahoo_gold_candles(interval, limit, start_time, session):
     yahoo_interval, yahoo_range = YAHOO_INTERVAL.get(interval, ("60m", "3mo"))
     response = session.get(
@@ -158,6 +213,10 @@ def _fetch_yahoo_gold_candles(interval, limit, start_time, session):
                 volume=float(vol),
             )
         )
+    # YAHOO_INTERVAL maps "4h" to Yahoo's hourly series because no 4h gold
+    # series exists. Without this fold a 4h request returns 1h bars.
+    if interval == "4h":
+        candles = _resample(candles, INTERVAL_MINUTES["4h"])
     return candles
 
 

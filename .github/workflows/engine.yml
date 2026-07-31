@@ -43,7 +43,38 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           # LLM confirmation-gate A/B: fraction of REJECTED setups recorded as
           # shadow signals. Shadows are outcome-tracked but never delivered —
-          # RLS containment was verified before this was switched on. Set to
-          # "0.0" to stop collecting; nothing else needs to change.
+          # RLS containment was verified against the live database (06d090e)
+          # before this was ever switched on. Set to "0.0" to stop collecting;
+          # nothing else needs to change.
+          #
+          # Held at 0.0 through the staged rollout (f9b1d0d) so the shadow/
+          # experiment columns could deploy without writing a row. That cycle
+          # ran clean, so this is the planned flip to 0.25. The gate rejects
+          # ~87% of setups and nothing has ever measured whether the discarded
+          # ones were worse; at 250 per arm this is months of wall clock, so
+          # every run it stays off is a run that answer is deferred.
           # See docs/superpowers/specs/2026-07-26-ai-gate-ab-design.md
-          SHADOW_SAMPLE_RATE: "0.0"
+          SHADOW_SAMPLE_RATE: "0.25"
+          # BBMA Re-entry paper trial: detects on the 1h swing scan and records
+          # a shadow row tagged experiment="bbma_reentry". Never delivered, and
+          # never LLM-gated, so it cannot confound the gate A/B above.
+          #
+          # The backtest says this LOSES: -0.137R per trade over 8.87 years of
+          # verified history (docs/r-model-correction.md). It runs anyway
+          # because a forward result is the only way to confirm or refute that,
+          # and it costs nothing but rows. 1h rather than the milder 4h because
+          # 4h is not a scanned session and 1h yields ~4x the samples, so the
+          # question resolves in months instead of years.
+          #
+          # REQUIRES migration 20260728000000_shadow_rows_bypass_live_uniqueness
+          # to be applied first. Without it every paper row collides with an
+          # open live signal on the same symbol+timeframe and is silently
+          # dropped — biased, not random.
+          #
+          # OFF because BBMA is now admin-selectable for the swing session
+          # (migration 20260728000100). If the swing strategy is set to
+          # bbma_reentry, this would shadow-record the very setup being
+          # delivered — two rows per signal and a doubled outcome-tracker load
+          # for no extra information. Turn it back on only if the swing session
+          # is running something else and you still want the forward sample.
+          PAPER_BBMA_REENTRY: "false"

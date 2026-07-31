@@ -1,5 +1,16 @@
 # Quantify ML Research and Training
 
+> **NOT WIRED INTO THE LIVE ENGINE.** Nothing in this directory, in
+> `signals/ml/`, or in `model/` affects a delivered signal. Every signal a user
+> receives comes from the deterministic detectors in `signals/strategies/` plus
+> the SEA-LION confirmation gate. `tests/core/test_ml_not_wired.py` enforces
+> this and will fail if the live path ever imports the ML tree.
+>
+> This is research scaffolding, and it is not ready to gate real trades: the
+> progress report below is explicit that leakage-safety of the training data
+> has not been verified end to end. When connecting a model, put it behind a
+> sampling flag and shadow-record its verdicts first — measure, then enforce.
+
 This directory is the source of truth for offline data work, research, model
 training, calibration, and evaluation. Training code stays in the main Quantify
 repository even when it executes on Colab, Kaggle, CI, or another machine.

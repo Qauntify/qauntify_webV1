@@ -19,7 +19,7 @@ import random
 import statistics
 import sys
 
-from signals.backtest import scaled_r
+from signals.r_model import gross_r
 from signals.storage import list_closed_signals
 
 ALPHA = 0.05
@@ -48,29 +48,15 @@ def permutation_p(a, b, trials=20000, seed=7):
     return hits / trials
 
 
-def realised_r(row):
-    """Realised R for one closed signal, or None when it cannot be scored.
-
-    Mirrors the backtester exactly: a third booked at each target, stop trailed
-    to breakeven once TP1 is banked. The tp*_hit_at timestamps matter — a trade
-    that banked TP1 and then reversed ends with status 'sl_hit' but is not a
-    full -1R loss, and scoring it from the final status alone would understate
-    every partial win in both arms.
-    """
-    entry, stop = row.get("entry"), row.get("stop_loss")
-    if entry is None or stop is None or entry == stop:
-        return None
-    tps = [row.get("take_profit"), row.get("take_profit_2"),
-           row.get("take_profit_3")]
-    tps = [t for t in tps if t is not None]
-    if not tps:
-        return None
-    reached = sum(1 for k in ("tp1_hit_at", "tp2_hit_at", "tp3_hit_at")
-                  if row.get(k))
-    if row.get("status") in ("tp3_hit", "tp_hit"):
-        reached = len(tps)
-    return scaled_r(row["direction"], entry, stop, tps,
-                    min(reached, len(tps)), row.get("status") == "sl_hit")
+# GROSS, deliberately. The pre-registered metric is mean realised R under the
+# engine's scale-out model, fixed before any data was collected. Costs were
+# added to the reporting stack later (signals.r_model.net_r); switching this
+# arm-comparison to net mid-experiment would be changing the metric after
+# seeing data, which is the exact failure the pre-registration exists to
+# prevent. Both arms trade the same symbols at the same stop distances, so a
+# per-trade cost shifts both means near-identically and the difference — the
+# thing actually being tested — is unaffected.
+realised_r = gross_r
 
 
 def _describe(label, rs):

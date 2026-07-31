@@ -40,6 +40,18 @@ export const SIGNAL_STRATEGIES = [
     description:
       "Buy support / sell resistance on a confirmation candle at a tested zone. Favours ranging markets.",
   },
+  {
+    id: "bbma_reentry",
+    label: "BBMA Re-entry (continuation)",
+    description:
+      "After a CSAK or CSM direction candle, price pulls back into the MA5/MA10 zone and holds it; entry on the next candle. Backtested at −0.14R per trade over 8.87 years.",
+  },
+  {
+    id: "bbma_extreme",
+    label: "BBMA Extreme (reversal)",
+    description:
+      "MA5 escapes the Bollinger band, then price rejects back inside and retests MA5. Backtested at −0.15R per trade over 8.87 years.",
+  },
 ] as const;
 
 export type AiEvent = {

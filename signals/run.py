@@ -29,6 +29,7 @@ from signals.models import (
     NoSignalReport,
     ScanResult,
     make_signal,
+    session_scans,
 )
 from signals.outcome_tracker import track_open_signals
 from signals.session_clock import describe_market_session
@@ -363,6 +364,55 @@ def _record_paper_sr_limit(symbol, market, cfg, *, timeframe, session):
         print(f"paper sr_limit save failed ({type(exc).__name__}) — continuing")
 
 
+# Paper trial: BBMA Re-entry, the one pattern that survived a nine-year test
+# (docs/bbma-backtest-results.md). Over 2017-08 to 2026-06 on BTC and ETH it
+# returned +0.120R net across 905 trades, profitable in 7 of 10 calendar years
+# with a positive median and only 18% of its total from its top ten trades. Its
+# best years were the 2018 bear and the 2020 crash. Nothing was tuned: the
+# parameters were fixed before the long history was ever loaded.
+#
+# WHY 1h AND NOT 4h. 4h measured stronger (+0.250R vs +0.089R) because a wider
+# stop makes cost a smaller fraction of R. But 4h fires ~12 times per symbol
+# per year, so a readable forward sample would take upwards of two years. 1h
+# fires ~38, and the swing session already scans 1h against a 4h confluence
+# trend — which is exactly the configuration the backtest measured, at no extra
+# fetch. The weaker-but-readable arm is the one worth running forward.
+#
+# Recorded, never delivered. OFF by default.
+PAPER_BBMA_REENTRY = os.environ.get(
+    "PAPER_BBMA_REENTRY", "").lower() in ("1", "true")
+PAPER_BBMA_REENTRY_TIMEFRAME = "1h"
+
+
+def _record_paper_bbma_reentry(symbol, market, cfg, *, timeframe, session):
+    """Record a BBMA Re-entry setup as an undelivered paper signal.
+
+    Skips the LLM, Telegram and chart rendering for the same reason
+    `_record_paper_sr_limit` does: this measures the rules on forward data, and
+    running the confirmation gate over it would confound this trial with the
+    gate A/B. Failures are swallowed — a paper trial must never break a scan.
+    """
+    if not PAPER_BBMA_REENTRY or timeframe != PAPER_BBMA_REENTRY_TIMEFRAME:
+        return
+    try:
+        from signals.strategies.bbma import detect_reentry
+
+        setup = detect_reentry(
+            symbol, market.candles, market.atr14,
+            adx14=market.adx14, htf_trend=market.htf_trend,
+        )
+        if setup is None:
+            return
+        paper = make_signal(
+            setup, Confirmation("confirm", 0, "paper trial — not delivered"),
+            [], timeframe=timeframe,
+        )
+        save_signal(paper, cfg.supabase_url, cfg.supabase_service_key,
+                    session=session, shadow=True, experiment="bbma_reentry")
+    except Exception as exc:
+        print(f"paper bbma_reentry save failed ({type(exc).__name__}) — continuing")
+
+
 def _no_setup_indicators(strategy, atr14, adx14, htf_trend,
                          ema9, ema21, rsi14, macd_hist):
     """Indicators to attach to a no-setup ai_event, or None while a required
@@ -491,6 +541,8 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     # the live strategy — it must not influence what gets delivered.
     _record_paper_sr_limit(symbol, market, cfg,
                            timeframe=timeframe, session=session)
+    _record_paper_bbma_reentry(symbol, market, cfg,
+                               timeframe=timeframe, session=session)
 
     setup = detect_setup(
         strategy, symbol, candles, ema9, ema21, rsi14, macd_hist, atr14,
@@ -678,17 +730,11 @@ def maybe_send_alert(signal, settings, cfg):
               f"({type(exc).__name__}), continuing")
 
 
-def maybe_send_no_signal_alert(report, cfg):
-    """Intentionally a no-op: no-signal / rejected scans are not pushed.
-    Confirmed signals and SL/TP hits are the only Telegram alerts."""
-    return
-
-
-def maybe_send_run_summary(run_id: str, timeframe: str, outcomes: list[dict], cfg) -> None:
-    """Intentionally a no-op: per-run summaries are logged/stored only,
-    not pushed to Telegram."""
-    return
-
+# Telegram carries confirmed signals and TP/SL outcomes only. No-signal and
+# rejected scans, and per-run summaries, stay in Supabase and the logs — they
+# are noise in a channel people act on. The formatters for both still exist in
+# signals.telegram_client for ad-hoc use; this module deliberately never calls
+# them, and tests/core/test_telegram.py asserts that.
 
 OUTCOME_LABELS = {
     "tp_hit": "TP HIT",
@@ -723,7 +769,8 @@ def main():
               f"{len(settings.symbols)} symbol(s) in {len(TRADING_SESSIONS)} "
               f"session(s) ({session_label}), "
               f"swing_strategy={settings.signal_strategy}, "
-              f"scalp=sr_zone, super_scalp=ict_fvg.")
+              f"super_scalp=ict_fvg. (15m scalp retired — see "
+              f"docs/strategy-history-sweep.md)")
 
         def scan_one(item):
             """(index, symbol, TradingSession, recent_events, recent_signals, open_symbols)
@@ -758,25 +805,35 @@ def main():
         # Each session (scalp, swing) scans all symbols in parallel, one session
         # at a time — so a run's outcomes group by session for a clear summary.
         for trading_session in TRADING_SESSIONS:
+            # Not every symbol belongs on every session — see SESSION_SYMBOLS.
+            # Filtered once here so the prefetches, the scan tasks and the
+            # result pairing below all agree on the same list; querying for a
+            # symbol this session will not scan would also waste a round trip.
+            session_symbols = [
+                symbol for symbol in settings.symbols
+                if session_scans(trading_session.name, symbol)
+            ]
+            if not session_symbols:
+                continue
             # One query each for the whole session's symbol list, instead of
             # every symbol hitting Supabase individually before its scan even
             # starts — collapses up to 3*len(symbols) round trips into 3.
             recent_events = _prefetch_recent_events(
-                settings.symbols, trading_session.timeframe, cfg, session=db_session)
+                session_symbols, trading_session.timeframe, cfg, session=db_session)
             recent_signals = _prefetch_recent_signals(
-                settings.symbols, trading_session.timeframe, cfg, session=db_session)
+                session_symbols, trading_session.timeframe, cfg, session=db_session)
             open_symbols = _prefetch_open_symbols(
-                settings.symbols, trading_session.timeframe, cfg, session=db_session)
+                session_symbols, trading_session.timeframe, cfg, session=db_session)
             tasks = [
                 (i, symbol, trading_session, recent_events, recent_signals, open_symbols)
-                for i, symbol in enumerate(settings.symbols)
+                for i, symbol in enumerate(session_symbols)
             ]
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 results = list(pool.map(scan_one, tasks))
 
             # Alerts go out from the main thread, in symbol order, after the
             # session's scans finish.
-            for symbol, (result, error) in zip(settings.symbols, results):
+            for symbol, (result, error) in zip(session_symbols, results):
                 if error is not None:
                     print(f"[{symbol}] unexpected error, skipping: "
                           f"{type(error).__name__}: {error}")

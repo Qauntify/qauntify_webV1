@@ -6,7 +6,12 @@ from urllib.parse import quote
 
 import requests
 
-from signals.models import BotSettings, DEFAULT_SIGNAL_STRATEGY, SIGNAL_STRATEGIES, Signal
+from signals.models import (
+    ADMIN_SELECTABLE_STRATEGIES,
+    BotSettings,
+    DEFAULT_SIGNAL_STRATEGY,
+    Signal,
+)
 from signals.market_client import canonical_symbol
 
 
@@ -190,9 +195,12 @@ def list_open_signals(supabase_url: str, service_key: str, session=None):
         response = session.get(
             f"{supabase_url}/rest/v1/signals"
             "?status=in.(open,tp1_hit,tp2_hit)"
+            # `indicators` carries entry_style, which decides whether the
+            # outcome tracker counts the bar the order filled on.
             "&select=id,symbol,timeframe,direction,entry,stop_loss,"
             "take_profit,take_profit_1,take_profit_2,take_profit_3,"
-            "tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at,chart_data"
+            "tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at,chart_data,"
+            "indicators"
             "&order=created_at.asc",
             headers={
                 "apikey": service_key,
@@ -460,7 +468,7 @@ def fetch_bot_settings(supabase_url: str, service_key: str,
         store_raw = row.get("min_store_confidence", 0)
         store_confidence = int(store_raw if store_raw is not None else 0)
         strategy = row.get("signal_strategy", DEFAULT_SIGNAL_STRATEGY)
-        if strategy not in SIGNAL_STRATEGIES:
+        if strategy not in ADMIN_SELECTABLE_STRATEGIES:
             strategy = DEFAULT_SIGNAL_STRATEGY
         if not symbols or not 0 <= alert_confidence <= 100:
             raise ValueError("empty symbols or confidence out of range")

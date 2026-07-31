@@ -23,6 +23,11 @@ ROLE_LINE = {
     "stop": "#fb7185", "target": "#34d399", "trail": "#f59e0b",
     "ema-fast": "#38bdf8", "ema-slow": "#f59e0b", "lwma": "#a78bfa",
     "win": "#34d399", "loss": "#fb7185",
+    # BBMA stack. The upper/lower band share one colour because they are one
+    # envelope; MA5 High/Low and MA10 High/Low likewise pair up, which is how
+    # the system is read on a chart — eight lines in five colours.
+    "bb-band": "#64748b", "bb-mid": "#94a3b8",
+    "ma5": "#f472b6", "ma10": "#fbbf24", "ema50": "#a3e635",
 }
 ROLE_FILL = {"fvg": "#14b8a6", "sr": "#38bdf8", "premium": "#fb7185",
              "discount": "#2dd4bf", "win": "#34d399", "loss": "#fb7185"}
@@ -137,15 +142,25 @@ def _to_png(fig) -> bytes:
     return buf.getvalue()
 
 
-def render_chart(candles, plan, signal) -> bytes:
-    """Render the last RENDER_BARS candles + annotations to PNG bytes."""
+def render_chart(candles, plan, signal, title=None) -> bytes:
+    """Render the last RENDER_BARS candles + annotations to PNG bytes.
+
+    Pass MORE than RENDER_BARS candles when the plan draws indicator series:
+    the builder computes them over everything given, and only the final
+    RENDER_BARS are displayed. Passing exactly the view would recompute every
+    indicator from a cold start inside it, showing warm-up artefacts instead of
+    the values the detector actually saw.
+
+    `title` overrides the default headline for callers with no confidence score
+    to show, such as a backtest replay.
+    """
     view = candles[-RENDER_BARS:]
     fig, ax, x_of, last_x = _base_plot(view)
     _draw(ax, plan, x_of, last_x)
     ax.set_ylim(*_price_bounds(view, plan))
     ax.set_title(
-        f"{signal.symbol} · {signal.timeframe} · "
-        f"{signal.direction.upper()} · {signal.confidence}%",
+        title or (f"{signal.symbol} · {signal.timeframe} · "
+                  f"{signal.direction.upper()} · {signal.confidence}%"),
         color="#e2e8f0", fontsize=14, fontweight="bold", loc="left",
     )
     return _to_png(fig)

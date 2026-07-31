@@ -1,3 +1,6 @@
+import pytest
+
+from signals import r_model
 from signals.calibration import (
     _bucket_stats,
     _confidence_bucket,
@@ -8,10 +11,20 @@ from signals.calibration import (
 )
 
 
+TP1_AT = "2026-07-01T01:00:00+00:00"
+TP2_AT = "2026-07-01T02:00:00+00:00"
+
+# A 1R stop on a 100-price symbol at 20 bps round-trip costs 0.10R. Tests that
+# are about the R MODEL rather than the cost model use a zero-cost symbol so
+# the two concerns stay separately readable.
+FREE = "TESTUSD"
+
+
 def _row(**overrides):
     row = {
         "symbol": "BTCUSDT", "timeframe": "1h", "direction": "long",
-        "entry": 100.0, "stop_loss": 98.0, "take_profit": 104.0,
+        "entry": 100.0, "stop_loss": 98.0, "take_profit": 102.0,
+        "take_profit_2": 104.0, "take_profit_3": 106.0,
         "confidence": 80, "status": "tp_hit", "indicators": {},
         "created_at": "2026-07-01T00:00:00+00:00",
     }
@@ -19,80 +32,133 @@ def _row(**overrides):
     return row
 
 
-def test_r_multiple_tp_hit_uses_reward_risk_ratio():
-    row = _row(status="tp_hit", entry=100.0, stop_loss=98.0, take_profit=104.0)
-    assert _r_multiple(row) == 2.0
+def _free_row(**overrides):
+    """A row on a symbol with costs stubbed to zero (see monkeypatch below)."""
+    return _row(symbol=FREE, **overrides)
 
 
-def test_r_multiple_sl_hit_is_minus_one():
-    assert _r_multiple(_row(status="sl_hit")) == -1.0
+@pytest.fixture(autouse=True)
+def _zero_cost_test_symbol(monkeypatch):
+    monkeypatch.setitem(r_model.COST_BPS, FREE, 0.0)
 
 
-def test_r_multiple_sl_after_tp1_is_flat():
-    assert _r_multiple(_row(
-        status="sl_hit", tp1_hit_at="2026-07-01T01:00:00+00:00",
-    )) == 0.0
+def test_r_multiple_full_run_to_tp3_is_two_r_not_three():
+    # A third booked at 1R, 2R and 3R averages +2R. Crediting the full +3R
+    # assumes the entire position rode to the last target, which is not the
+    # trade the engine publishes.
+    assert _r_multiple(_free_row(status="tp3_hit")) == pytest.approx(2.0)
 
 
-def test_r_multiple_sl_after_tp2_is_plus_one():
-    assert _r_multiple(_row(
-        status="sl_hit",
-        tp1_hit_at="2026-07-01T01:00:00+00:00",
-        tp2_hit_at="2026-07-01T02:00:00+00:00",
-    )) == 1.0
+def test_r_multiple_sl_before_any_target_is_minus_one():
+    assert _r_multiple(_free_row(status="sl_hit")) == pytest.approx(-1.0)
 
 
-def test_r_multiple_tp3_uses_take_profit_3_distance():
-    row = _row(
-        status="tp3_hit", entry=100.0, stop_loss=98.0,
-        take_profit=102.0, take_profit_3=106.0,
-    )
-    assert _r_multiple(row) == 3.0
+def test_r_multiple_sl_after_tp1_is_a_net_loss():
+    """The published stop never moves, so the unbooked two thirds lose their
+    full risk: 1/3 - 2/3 = -0.333R. Banking TP1 does not make a trade safe."""
+    assert _r_multiple(_free_row(status="sl_hit", tp1_hit_at=TP1_AT)) \
+        == pytest.approx(-1 / 3)
 
 
-def test_r_multiple_expired_is_zero():
-    # outcome_tracker records no exit price for expired signals, so their
-    # true P&L is unknown — treated as neutral rather than guessed.
-    assert _r_multiple(_row(status="expired")) == 0.0
+def test_r_multiple_sl_after_tp2_keeps_two_thirds_and_loses_the_last():
+    # 1/3*1R + 1/3*2R - 1/3*1R = +0.667R
+    assert _r_multiple(_free_row(
+        status="sl_hit", tp1_hit_at=TP1_AT, tp2_hit_at=TP2_AT,
+    )) == pytest.approx(2 / 3)
+
+
+def test_r_multiple_expired_after_tp1_keeps_what_it_banked():
+    # Expiry is not a reset: a third was genuinely booked at TP1.
+    assert _r_multiple(_free_row(status="expired", tp1_hit_at=TP1_AT)) \
+        == pytest.approx(1 / 3)
+
+
+def test_r_multiple_untouched_expiry_is_zero():
+    assert _r_multiple(_free_row(status="expired")) == pytest.approx(0.0)
+
+
+def test_r_multiple_legacy_single_target_row():
+    # Old rows have only take_profit; one target means one 100% slice.
+    row = _free_row(status="tp_hit", take_profit=104.0,
+                    take_profit_2=None, take_profit_3=None)
+    assert _r_multiple(row) == pytest.approx(2.0)
 
 
 def test_r_multiple_short_direction_uses_absolute_distances():
-    row = _row(status="tp_hit", direction="short", entry=100.0,
-              stop_loss=102.0, take_profit=96.0)
-    assert _r_multiple(row) == 2.0
+    row = _free_row(status="tp3_hit", direction="short", entry=100.0,
+                    stop_loss=102.0, take_profit=98.0,
+                    take_profit_2=96.0, take_profit_3=94.0)
+    assert _r_multiple(row) == pytest.approx(2.0)
 
 
-def test_bucket_stats_counts_and_win_rate():
-    rows = [_row(status="tp_hit"), _row(status="tp_hit"),
-            _row(status="sl_hit"), _row(status="expired")]
+def test_r_multiple_is_net_of_costs():
+    # 20 bps round-trip on a 100-price entry with a 2-point stop = 0.10R.
+    gross = _r_multiple(_free_row(status="tp3_hit"))
+    net = _r_multiple(_row(symbol="BTCUSD", status="tp3_hit"))
+    assert gross - net == pytest.approx(0.10)
+
+
+def test_cost_scales_inversely_with_stop_distance():
+    # The same venue is far more expensive on a tight stop — this is why the
+    # 15m and 1h S/R variants measured so differently.
+    wide = r_model.cost_r("BTCUSD", 100.0, 98.0)
+    tight = r_model.cost_r("BTCUSD", 100.0, 99.0)
+    assert tight == pytest.approx(2 * wide)
+
+
+def test_bucket_stats_counts_wins_by_result_not_status():
+    rows = [_free_row(status="tp3_hit"), _free_row(status="tp3_hit"),
+            _free_row(status="sl_hit"), _free_row(status="expired")]
     stats = _bucket_stats(rows)
     assert stats["count"] == 4
     assert stats["wins"] == 2
     assert stats["losses"] == 1
+    assert stats["breakeven"] == 1  # untouched expiry is neither
     assert stats["expired"] == 1
-    # Win rate is decided-outcomes only: expired rows aren't a win or a loss.
     assert stats["win_rate"] == 2 / 3
 
 
-def test_bucket_stats_counts_partial_sl_as_win():
+def test_bucket_stats_counts_a_stop_after_tp1_as_a_loss():
+    """Under a fixed stop, TP1-then-reverse is -0.333R, so both of these are
+    losses. It counted as a win while the model assumed a breakeven trail."""
     rows = [
-        _row(status="sl_hit", tp1_hit_at="2026-07-01T01:00:00+00:00"),
-        _row(status="sl_hit"),
+        _free_row(status="sl_hit", tp1_hit_at=TP1_AT),
+        _free_row(status="sl_hit"),
     ]
     stats = _bucket_stats(rows)
+    assert stats["wins"] == 0
+    assert stats["losses"] == 2
+    assert stats["win_rate"] == 0.0
+
+
+def test_bucket_stats_counts_a_stop_after_tp2_as_a_win():
+    rows = [_free_row(status="sl_hit", tp1_hit_at=TP1_AT, tp2_hit_at=TP2_AT)]
+    stats = _bucket_stats(rows)
     assert stats["wins"] == 1
+    assert stats["losses"] == 0
+
+
+def test_bucket_stats_costs_deepen_a_losing_trade():
+    # TP1-then-reverse is -0.333R gross under a fixed stop. A 0.5-point stop on
+    # a 100 price costs 0.4R at 20 bps, so net lands near -0.733R.
+    row = _row(symbol="BTCUSD", status="sl_hit", tp1_hit_at=TP1_AT,
+               entry=100.0, stop_loss=99.5,
+               take_profit=100.5, take_profit_2=101.0, take_profit_3=101.5)
+    stats = _bucket_stats([row])
+    assert stats["avg_gross_r"] == pytest.approx(-1 / 3)
+    assert stats["avg_r"] == pytest.approx(-1 / 3 - 0.4)
     assert stats["losses"] == 1
-    assert stats["win_rate"] == 0.5
 
 
 def test_bucket_stats_win_rate_none_when_no_decided_outcomes():
-    assert _bucket_stats([_row(status="expired")])["win_rate"] is None
+    assert _bucket_stats([_free_row(status="expired")])["win_rate"] is None
 
 
 def test_bucket_stats_empty_rows():
     assert _bucket_stats([]) == {
-        "count": 0, "wins": 0, "losses": 0, "expired": 0,
-        "win_rate": None, "avg_r": None,
+        "count": 0, "wins": 0, "losses": 0, "breakeven": 0, "expired": 0,
+        "win_rate": None, "avg_r": None, "avg_gross_r": None,
+        "avg_cost_r": None,
     }
 
 

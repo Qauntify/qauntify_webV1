@@ -19,6 +19,10 @@ Assumptions (documented so results are read correctly):
 Usage: python -m signals.backtest
 """
 from signals.indicators import adx, atr, ema, macd_histogram, rsi
+# Re-exported: the R model lives in signals.r_model so the live reporting paths
+# and this backtester cannot drift apart. Imported here for call-site
+# compatibility.
+from signals.r_model import cost_r, scaled_r  # noqa: F401
 from signals.strategies import detect_setup
 
 # Default per-strategy timeframe (matches the live sessions) and warm-up bars
@@ -28,6 +32,8 @@ STRATEGY_TIMEFRAMES = {
     "ema_cross": "1h",
     "ict_smc": "1h",
     "sr_zone": "1h",
+    "bbma_extreme": "1h",
+    "bbma_reentry": "1h",
 }
 DEFAULT_WARMUP = 60
 DEFAULT_SYMBOLS = ("BTCUSD", "ETHUSD", "XAUUSD", "GBPUSD")
@@ -40,6 +46,9 @@ CONFLUENCE_TIMEFRAMES = {
     "ema_cross": "4h",
     "ict_smc": "4h",
     "sr_zone": "4h",
+    # bbma_extreme is deliberately absent: it is counter-trend by construction,
+    # so an HTF trend gate would veto nearly every setup.
+    "bbma_reentry": "4h",
 }
 TF_MINUTES = {"5m": 5, "15m": 15, "1h": 60, "4h": 240}
 
@@ -125,30 +134,6 @@ def simulate_scaled(direction, entry, stop, tps, future_candles):
     return reached, False, len(future_candles)
 
 
-def scaled_r(direction, entry, stop, tps, reached, stopped):
-    """Realized R for a 1/len-at-each-target scale-out with the stop trailed to
-    breakeven once the first target is booked.
-
-    - Nothing reached + stopped → full -1R.
-    - Each reached target books its slice at that target's R.
-    - The unbooked remainder exits at breakeven (0R) on a later stop or expiry.
-    """
-    risk = abs(entry - stop)
-    if risk == 0 or not tps:
-        return 0.0
-
-    def r_of(price):
-        return (price - entry) / risk if direction == "long" else (entry - price) / risk
-
-    portion = 1.0 / len(tps)
-    booked = sum(portion * r_of(tps[k]) for k in range(reached))
-    if reached >= len(tps):
-        return booked
-    if reached == 0 and stopped:
-        return -1.0
-    return booked  # remainder trails out at breakeven → contributes 0R
-
-
 def summarize(r_multiples):
     """Aggregate a list of realized R-multiples into headline stats."""
     trades = len(r_multiples)
@@ -167,6 +152,73 @@ def summarize(r_multiples):
     }
 
 
+def net_r_multiples(symbol, r_multiples, entries, stops, *, bps=None):
+    """Per-trade R after the round-trip cost for that trade's stop distance.
+
+    Cost is a fraction of PRICE while R is a fraction of the stop distance, so
+    it has to be charged per trade rather than as one average — a tight-stop
+    scalp and a wide-stop swing on the same symbol pay very different amounts
+    in R. `r_model` stays the single definition of what a trade cost.
+    """
+    return [
+        r - cost_r(symbol, entry, stop, bps=bps)
+        for r, entry, stop in zip(r_multiples, entries, stops)
+    ]
+
+
+def backtest_windowed(detector, symbol, candles, atr14, trends, *,
+                      window=200, max_hold=2000, bps=None):
+    """Replay `detector` bar by bar over a ROLLING window, non-overlapping.
+
+    Differs from `backtest_strategy` in two ways, both of which make it more
+    faithful to production rather than less:
+
+      * The live engine fetches `ScanConfig.candle_limit` bars and computes
+        indicators on the closed ones, so a detector never sees more than that.
+        Replaying with the same window means a setup fires here only if it
+        would have fired live. Passing the whole prefix, as `backtest_strategy`
+        does, is also quadratic — unusable across years of bars.
+      * A trade is abandoned after `max_hold` bars instead of being walked to
+        the end of history, mirroring the way live signals expire (see
+        `TradingSession.max_open`) and keeping the forward slice bounded.
+
+    `detector` is any `(symbol, candles, atr14, htf_trend=...) -> CandidateSetup
+    | None`. `trends` is aligned to `candles`; pass `[None] * len(candles)` for
+    an ungated strategy. Returns per-trade gross and net R plus target counts.
+    """
+    n = len(candles)
+    r_multiples, entries, stops = [], [], []
+    tp1_hits = tp3_hits = 0
+    i = window
+    while i < n - 1:
+        lo = i - window + 1
+        setup = detector(
+            symbol, candles[lo:i + 1], atr14[lo:i + 1], htf_trend=trends[i],
+        )
+        if setup is None:
+            i += 1
+            continue
+        tps = list(setup.resolved_take_profits())
+        reached, stopped, bars = simulate_scaled(
+            setup.direction, setup.entry, setup.stop_loss, tps,
+            candles[i + 1:i + 1 + max_hold],
+        )
+        r_multiples.append(scaled_r(setup.direction, setup.entry,
+                                    setup.stop_loss, tps, reached, stopped))
+        entries.append(setup.entry)
+        stops.append(setup.stop_loss)
+        tp1_hits += 1 if reached >= 1 else 0
+        tp3_hits += 1 if reached >= len(tps) else 0
+        # Always advance at least one bar, so a same-bar resolution cannot loop.
+        i = i + 1 + max(bars, 1)
+    return {
+        "gross": r_multiples,
+        "net": net_r_multiples(symbol, r_multiples, entries, stops, bps=bps),
+        "tp1_hits": tp1_hits,
+        "tp3_hits": tp3_hits,
+    }
+
+
 def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
                       htf_candles=None, htf_minutes=None):
     """Backtest one strategy on one symbol's candle history.
@@ -182,6 +234,8 @@ def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
         stats = summarize([])
         stats["tp1_rate"] = 0.0
         stats["tp3_rate"] = 0.0
+        stats["net_expectancy_r"] = 0.0
+        stats["net_total_r"] = 0.0
         return stats
     if htf_candles and htf_minutes:
         trends = htf_trend_series(candles, htf_candles, htf_minutes)
@@ -198,6 +252,8 @@ def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
     adx14 = adx(highs, lows, closes, 14)
 
     r_multiples = []
+    entries = []
+    stops = []
     tp1_hits = 0
     tp3_hits = 0
     i = warmup
@@ -221,6 +277,8 @@ def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
             scaled_r(setup.direction, setup.entry, setup.stop_loss, tps,
                      reached, stopped)
         )
+        entries.append(setup.entry)
+        stops.append(setup.stop_loss)
         tp1_hits += 1 if reached >= 1 else 0
         tp3_hits += 1 if reached >= len(tps) else 0
         i = end + bars  # resume after the closed trade (non-overlapping)
@@ -229,6 +287,9 @@ def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
     trades = stats["trades"]
     stats["tp1_rate"] = tp1_hits / trades if trades else 0.0
     stats["tp3_rate"] = tp3_hits / trades if trades else 0.0
+    net = net_r_multiples(symbol, r_multiples, entries, stops)
+    stats["net_expectancy_r"] = sum(net) / trades if trades else 0.0
+    stats["net_total_r"] = sum(net)
     return stats
 
 
@@ -239,7 +300,7 @@ def main():
 
     session = requests.Session()
     print("Scale-out model: 1/3 booked at each of TP1/TP2/TP3, stop trails to "
-          "breakeven after TP1. HTF confluence applied (as live).")
+          "fixed stop (as published). HTF confluence applied (as live).")
     print(f"{'strategy':10} {'symbol':7} {'tf':3} {'trades':>6} "
           f"{'tp1%':>6} {'tp3%':>6} {'exp/R':>7} {'total/R':>8}")
     print("-" * 64)

@@ -52,7 +52,7 @@ export async function GET(request: Request) {
 
   const body =
     format === "xlsx"
-      ? buildClosedSignalsXlsx(signals)
+      ? await buildClosedSignalsXlsx(signals)
       : buildClosedSignalsPdf(signals, tab);
   const filename = exportFilename(format, tab);
   const contentType =

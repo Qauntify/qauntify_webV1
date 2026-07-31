@@ -170,3 +170,68 @@ def test_fetch_candles_raises_on_kraken_error_payload():
     session = FakeSession({"error": ["EQuery:Unknown asset pair"], "result": {}})
     with pytest.raises(RuntimeError, match="Unknown asset pair"):
         fetch_candles("BTCUSD", session=session)
+
+
+# Eight hourly gold bars spanning exactly two 4h buckets. 1720008000 is a
+# multiple of 14400, so the bucket boundaries are unambiguous.
+HOURLY_GOLD_PAYLOAD = {
+    "chart": {
+        "result": [
+            {
+                "timestamp": [1720008000 + 3600 * i for i in range(8)],
+                "indicators": {
+                    "quote": [
+                        {
+                            "open": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0],
+                            "high": [15.0, 16.0, 17.0, 18.0, 20.0, 21.0, 22.0, 23.0],
+                            "low": [9.0, 8.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0],
+                            "close": [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0],
+                            "volume": [1, 2, 3, 4, 5, 6, 7, 8],
+                        }
+                    ]
+                },
+            }
+        ],
+        "error": None,
+    }
+}
+
+
+def test_gold_4h_folds_the_hourly_source_into_true_4h_bars():
+    """Yahoo has no 4h gold series, so a 4h request is served hourly and must
+    be aggregated — otherwise a '4h' backtest silently runs on 1h data."""
+    session = FakeSession(HOURLY_GOLD_PAYLOAD)
+    candles = fetch_candles("XAUUSD", "4h", 100, session=session)
+
+    assert len(candles) == 2
+    assert candles[1].open_time - candles[0].open_time == 4 * 3600 * 1000
+
+    first = candles[0]
+    assert first.open_time == 1720008000 * 1000
+    assert first.open == 10.0     # first open of the bucket
+    assert first.high == 18.0     # max high
+    assert first.low == 8.0       # min low
+    assert first.close == 14.0    # last close
+    assert first.volume == 10.0   # summed
+
+    second = candles[1]
+    assert second.open == 14.0
+    assert second.high == 23.0
+    assert second.low == 13.0
+    assert second.close == 18.0
+    assert second.volume == 26.0
+
+
+def test_gold_1h_is_not_resampled():
+    session = FakeSession(HOURLY_GOLD_PAYLOAD)
+    candles = fetch_candles("XAUUSD", "1h", 100, session=session)
+    assert len(candles) == 8
+
+
+def test_gold_4h_buckets_are_epoch_aligned_not_fetch_aligned():
+    """Boundaries must not depend on where the fetch happened to start, or the
+    same bar lands in different buckets on consecutive runs."""
+    session = FakeSession(HOURLY_GOLD_PAYLOAD)
+    candles = fetch_candles("XAUUSD", "4h", 100, session=session)
+    for candle in candles:
+        assert (candle.open_time // 1000) % (4 * 3600) == 0

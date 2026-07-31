@@ -2,7 +2,7 @@ import pytest
 
 from signals.config import Config
 from signals.models import BotSettings, CandidateSetup, Confirmation, NoSignalReport, make_signal
-from signals.run import maybe_send_alert, maybe_send_no_signal_alert, maybe_send_run_summary
+from signals.run import maybe_send_alert
 from signals.telegram_client import (
     format_alert,
     format_no_signal_alert,
@@ -307,43 +307,33 @@ def test_send_run_summary_posts_to_bot_api():
     assert "ENGINE RUN" in session.last_json["text"]
 
 
-def test_maybe_send_no_signal_alert_skips_without_telegram_config(monkeypatch):
-    calls = []
-    monkeypatch.setattr("signals.telegram_client.send_no_signal_alert",
-                        lambda *a, **k: calls.append(a))
-    maybe_send_no_signal_alert(_no_signal_report(), _cfg(token=""))
-    assert calls == []
+def test_run_module_never_pushes_no_signal_or_summary_alerts():
+    """Telegram carries confirmed signals and TP/SL outcomes only.
 
+    This used to be enforced by two functions in signals.run whose entire body
+    was `return`, which is a comment pretending to be code. The invariant is
+    that the run path never reaches the no-signal / run-summary senders, so
+    assert that directly.
+    """
+    import ast
+    import inspect
 
-def test_maybe_send_no_signal_alert_does_not_push(monkeypatch):
-    """No-signal / rejected scans must not hit Telegram."""
-    calls = []
-    monkeypatch.setattr("signals.telegram_client.send_no_signal_alert",
-                        lambda *a, **k: calls.append(a))
-    maybe_send_no_signal_alert(_no_signal_report(), _cfg())
-    assert calls == []
+    from signals import run as run_module
 
-
-def test_maybe_send_no_signal_alert_swallows_send_failure(monkeypatch):
-    # Kept as a no-op safety net — must never raise regardless of config.
-    maybe_send_no_signal_alert(_no_signal_report(), _cfg())
-
-
-def test_maybe_send_run_summary_skips_without_telegram_config(monkeypatch):
-    calls = []
-    monkeypatch.setattr("signals.telegram_client.send_run_summary",
-                        lambda *a, **k: calls.append(a))
-    maybe_send_run_summary("run-1", "1h", [], _cfg(token=""))
-    assert calls == []
-
-
-def test_maybe_send_run_summary_does_not_push(monkeypatch):
-    """Per-run summaries are stored/logged only — not pushed."""
-    calls = []
-    monkeypatch.setattr("signals.telegram_client.send_run_summary",
-                        lambda *a, **k: calls.append(a))
-    maybe_send_run_summary("run-1", "1h", [{"symbol": "BTCUSDT", "status": "NO SIGNAL"}], _cfg())
-    assert calls == []
+    tree = ast.parse(inspect.getsource(run_module))
+    called = {
+        node.func.id for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    } | {
+        node.func.attr for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    assert "send_no_signal_alert" not in called
+    assert "send_run_summary" not in called
+    # The senders themselves stay available for ad-hoc use.
+    from signals import telegram_client
+    assert hasattr(telegram_client, "send_no_signal_alert")
+    assert hasattr(telegram_client, "send_run_summary")
 
 
 def test_format_run_summary_tags_lines_with_timeframe():

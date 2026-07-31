@@ -1,6 +1,10 @@
 """Unit tests for the rules-only backtester's fill simulation + stats."""
+import pytest
+
 from signals.backtest import (
+    backtest_windowed,
     htf_trend_series,
+    net_r_multiples,
     realized_r,
     scaled_r,
     simulate_scaled,
@@ -84,7 +88,7 @@ def test_summarize_empty_is_safe():
     assert stats["expectancy_r"] == 0.0
 
 
-# --- scale-out (multi-TP + breakeven) model -------------------------------
+# --- scale-out (multi-TP, fixed stop) model -------------------------------
 # entry 100, stop 98 (risk 2), tps at 1R/2R/3R = 102/104/106.
 TPS = [102.0, 104.0, 106.0]
 
@@ -125,13 +129,21 @@ def test_scaled_r_full_tp3_is_two_r():
     assert scaled_r("long", 100, 98, TPS, reached=3, stopped=False) == 2.0
 
 
-def test_scaled_r_tp2_then_breakeven_stop():
-    # 1/3*1R + 1/3*2R + 1/3 at breakeven(0) = 1.0R
-    assert scaled_r("long", 100, 98, TPS, reached=2, stopped=True) == 1.0
+def test_scaled_r_tp2_then_stopped_loses_the_last_third():
+    """The stop never moves, so the unbooked third loses its full risk:
+    1/3*1R + 1/3*2R - 1/3*1R = +0.667R."""
+    assert scaled_r("long", 100, 98, TPS, reached=2, stopped=True) \
+        == pytest.approx(2.0 / 3.0)
 
 
 def test_scaled_r_full_loss_when_nothing_reached():
     assert scaled_r("long", 100, 98, TPS, reached=0, stopped=True) == -1.0
+
+
+def test_scaled_r_tp1_then_stopped_is_a_net_loss():
+    """Banking TP1 does not make a trade safe: 1/3*1R - 2/3*1R = -0.333R."""
+    assert scaled_r("long", 100, 98, TPS, reached=1, stopped=True) \
+        == pytest.approx(-1.0 / 3.0)
 
 
 def test_scaled_r_tp1_then_expire_books_first_third():
@@ -157,3 +169,163 @@ def test_htf_trend_series_none_before_any_htf_close():
     htf = [_tc(i * step, 100 + i) for i in range(30)]
     primary = [_tc(0, 100)]  # before the first htf bar has even closed
     assert htf_trend_series(primary, htf, 240) == [None]
+
+
+def test_net_r_subtracts_the_round_trip_cost():
+    """BTCUSD is 20 bps of notional. Entry 100 with a stop 2 away means risk 2,
+    so the cost in R is 0.0020 * 100 / 2 = 0.1R."""
+    assert net_r_multiples("BTCUSD", [1.0], [100.0], [98.0]) == [0.9]
+
+
+def test_cost_in_r_shrinks_as_the_stop_widens():
+    """The same venue is far more expensive on a tight stop than a wide one —
+    the reason a 0.5R scalp ladder needs its net number quoted."""
+    tight = net_r_multiples("BTCUSD", [1.0], [100.0], [99.0])   # risk 1 → 0.2R
+    wide = net_r_multiples("BTCUSD", [1.0], [100.0], [90.0])    # risk 10 → 0.02R
+    assert tight[0] < wide[0]
+    assert abs(tight[0] - 0.8) < 1e-9
+    assert abs(wide[0] - 0.98) < 1e-9
+
+
+def test_net_r_costs_a_loss_as_well_as_a_win():
+    assert abs(net_r_multiples("BTCUSD", [-1.0], [100.0], [98.0])[0] + 1.1) < 1e-9
+
+
+def test_net_r_is_empty_for_no_trades():
+    assert net_r_multiples("BTCUSD", [], [], []) == []
+
+
+# --- rolling-window replay -------------------------------------------------
+
+def _wc(i, high, low, close=None):
+    """Window candle: open_time matters for ordering, OHLC for fills."""
+    c = close if close is not None else (high + low) / 2
+    return Candle(open_time=i * 3_600_000, open=c, high=high, low=low,
+                  close=c, volume=1.0)
+
+
+def _never(*args, **kwargs):
+    return None
+
+
+def test_windowed_replay_finds_nothing_when_the_detector_never_fires():
+    candles = [_wc(i, 101, 99) for i in range(300)]
+    out = backtest_windowed(_never, "BTCUSD", candles, [1.0] * 300,
+                            [None] * 300, window=200)
+    assert out["gross"] == []
+    assert out["net"] == []
+
+
+def test_windowed_replay_only_shows_the_detector_its_window():
+    """A detector must never see more history than the live scan would."""
+    seen = []
+
+    def _spy(symbol, candles, atr14, htf_trend=None):
+        seen.append(len(candles))
+        return None
+
+    candles = [_wc(i, 101, 99) for i in range(400)]
+    backtest_windowed(_spy, "BTCUSD", candles, [1.0] * 400, [None] * 400,
+                      window=200)
+    assert seen, "detector was never called"
+    assert set(seen) == {200}
+
+
+def test_windowed_replay_passes_the_aligned_htf_trend():
+    """trends[i] must line up with the bar being evaluated, not the window."""
+    from signals.models import CandidateSetup
+
+    seen = []
+
+    def _spy(symbol, candles, atr14, htf_trend=None):
+        seen.append(htf_trend)
+        return None
+
+    n = 260
+    candles = [_wc(i, 101, 99) for i in range(n)]
+    trends = [f"t{i}" for i in range(n)]
+    backtest_windowed(_spy, "BTCUSD", candles, [1.0] * n, trends, window=200)
+    assert seen[0] == "t200"
+
+
+def test_windowed_replay_scores_a_win_and_advances_past_it():
+    from signals.models import CandidateSetup
+
+    n = 260
+    # Flat until the entry bar, then a rally that tags every target.
+    candles = [_wc(i, 101, 99, 100) for i in range(n)]
+    for i in range(201, n):
+        candles[i] = _wc(i, 130, 99, 129)
+
+    fired = []
+
+    def _once(symbol, window, atr14, htf_trend=None):
+        if fired:
+            return None
+        fired.append(True)
+        return CandidateSetup("BTCUSD", "long", 100.0, 98.0, 102.0,
+                              {}, take_profit_2=104.0, take_profit_3=106.0)
+
+    out = backtest_windowed(_once, "BTCUSD", candles, [1.0] * n, [None] * n,
+                            window=200)
+    assert len(out["gross"]) == 1
+    assert out["tp1_hits"] == 1
+    assert out["tp3_hits"] == 1
+    assert out["gross"][0] == 2.0          # (1R+2R+3R)/3 under the scale-out
+
+
+def test_windowed_replay_charges_costs_to_the_net_series():
+    from signals.models import CandidateSetup
+
+    n = 260
+    candles = [_wc(i, 101, 99, 100) for i in range(n)]
+    for i in range(201, n):
+        candles[i] = _wc(i, 130, 99, 129)
+
+    fired = []
+
+    def _once(symbol, window, atr14, htf_trend=None):
+        if fired:
+            return None
+        fired.append(True)
+        return CandidateSetup("BTCUSD", "long", 100.0, 98.0, 102.0,
+                              {}, take_profit_2=104.0, take_profit_3=106.0)
+
+    out = backtest_windowed(_once, "BTCUSD", candles, [1.0] * n, [None] * n,
+                            window=200)
+    assert out["net"][0] < out["gross"][0]
+
+
+def test_windowed_replay_abandons_a_trade_past_max_hold():
+    """Bounded hold mirrors live signal expiry and keeps the slice bounded."""
+    from signals.models import CandidateSetup
+
+    n = 400
+    candles = [_wc(i, 100.5, 99.5, 100) for i in range(n)]  # never resolves
+
+    def _always(symbol, window, atr14, htf_trend=None):
+        return CandidateSetup("BTCUSD", "long", 100.0, 90.0, 110.0,
+                              {}, take_profit_2=120.0, take_profit_3=130.0)
+
+    out = backtest_windowed(_always, "BTCUSD", candles, [1.0] * n, [None] * n,
+                            window=200, max_hold=10)
+    # Unresolved trades book nothing and the replay still advances rather than
+    # stalling on the same bar.
+    assert len(out["gross"]) > 1
+    assert out["tp1_hits"] == 0
+
+
+def test_maker_tier_costs_less_than_the_default_taker_tier():
+    """sr_limit rests an order rather than crossing the spread, so charging it
+    the taker rate measures a strategy nobody would run."""
+    from signals.r_model import MAKER_BPS
+
+    taker = net_r_multiples("BTCUSD", [1.0], [100.0], [98.0])
+    maker = net_r_multiples("BTCUSD", [1.0], [100.0], [98.0], bps=MAKER_BPS)
+    assert maker[0] > taker[0]
+    # 4 bps of 100 over a risk of 2 = 0.02R
+    assert abs(maker[0] - 0.98) < 1e-9
+
+
+def test_explicit_bps_of_zero_means_no_cost():
+    assert net_r_multiples("BTCUSD", [1.0], [100.0], [98.0], bps=0.0) == [1.0]

@@ -1,7 +1,7 @@
 """Core data types for the signals engine."""
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 # Staged take-profit R-multiples off |entry - stop|.
@@ -101,10 +101,27 @@ class NoSignalReport:
     confidence: int | None = None
 
 
-SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone")
+# Every strategy the router can dispatch to.
+SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone",
+                     "bbma_extreme", "bbma_reentry")
+
+# The subset the admin page may store in bot_settings.signal_strategy, which
+# only controls the SWING session — the scalp sessions pin their own strategy
+# in TRADING_SESSIONS and ignore the toggle, so offering those here would be a
+# control that silently does nothing.
+#
+# This tuple is the source of truth for three places that must agree:
+#   - the bot_settings_signal_strategy_check constraint in supabase/migrations
+#   - SIGNAL_STRATEGIES in web/src/lib/supabase/admin.ts (the admin dropdown)
+#   - fetch_bot_settings below
+# tests/core/test_strategy_choices.py pins them together. Validating against
+# the full list instead let Python accept a value the database would reject.
+ADMIN_SELECTABLE_STRATEGIES = ("ema_cross", "ict_smc", "sr_zone",
+                               "bbma_reentry", "bbma_extreme")
+
 DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
-TIMEFRAME_MINUTES = {"5m": 5, "15m": 15, "1h": 60}
+TIMEFRAME_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "1h": 60}
 
 # Terminal win statuses (legacy tp_hit + multi-TP final).
 WIN_STATUSES = frozenset({"tp_hit", "tp3_hit"})
@@ -119,6 +136,9 @@ class TradingSession:
     name: str        # "scalp" | "swing"
     timeframe: str   # Binance kline interval
     max_open_days: int
+    # Overrides max_open_days when set. Days are too coarse below the 5m
+    # session — one day of 1m bars is 1440 of them, which is not a scalp.
+    max_open_hours: int | None = None
     # When set, a setup on this session's timeframe only fires if it agrees
     # with the EMA9/21 trend direction on this higher timeframe — a faster
     # session confirming against a slower one, to cut whipsaws that go
@@ -127,23 +147,89 @@ class TradingSession:
     # When set, this session always uses this strategy (ignores admin toggle).
     strategy: str | None = None
 
+    @property
+    def max_open(self) -> timedelta:
+        """How long a signal on this session stays live before expiring."""
+        if self.max_open_hours is not None:
+            return timedelta(hours=self.max_open_hours)
+        return timedelta(days=self.max_open_days)
 
-# Super scalp = 5m ICT+FVG (tight R); scalp = 15m S/R bounce (best backtested
-# frequency + TP-hit rate, no HTF gate); swing = admin strategy.
+
+# Sessions the main engine scans, in order, every run.
+# Super scalp = 5m ICT+FVG (tight R); swing = admin strategy.
+#
+# The 15m sr_zone scalp was RETIRED — see AUXILIARY_SESSIONS below.
 TRADING_SESSIONS = (
     TradingSession(
         name="super_scalp", timeframe="5m", max_open_days=1,
         confluence_timeframe="15m", strategy="ict_fvg",
     ),
     TradingSession(
-        name="scalp", timeframe="15m", max_open_days=2,
-        confluence_timeframe=None, strategy="sr_zone",
-    ),
-    TradingSession(
         name="swing", timeframe="1h", max_open_days=14,
         confluence_timeframe="4h",
     ),
 )
+
+# Sessions the main engine does NOT scan but whose signals it still settles.
+# The 1m XAU scalper runs as its own workflow (signals/xau_scan.py against a
+# single symbol), so putting it in TRADING_SESSIONS would make every run scan
+# 1m for every symbol. It still has to be declared somewhere: the outcome
+# tracker resolves every open row regardless of which process created it, and
+# an unregistered timeframe silently inherited the 1h swing's 14-day expiry.
+AUXILIARY_SESSIONS = (
+    TradingSession(
+        name="xau_scalp", timeframe="1m", max_open_days=1, max_open_hours=4,
+        strategy="ict_fvg",
+    ),
+    # RETIRED 2026-07-28. Measured over 8.87 years of verified Binance history
+    # on BTC and ETH (docs/strategy-history-sweep.md): 16,157 trades,
+    # -0.280R per trade, -4,529R total, t = -27.6.
+    #
+    # The rules are not the problem — gross expectancy is +0.112R. A 15m stop
+    # is small relative to price, so a 20bps taker round trip costs 0.392R per
+    # trade and takes the edge three times over. Nothing available fixes it at
+    # this timeframe: adding 1h confluence makes it worse (-0.311R), and even
+    # limit entry at maker fees only reaches -0.006R on 15m. The whole S/R
+    # family needs 1h or slower to pay for itself (sr_limit at 1h: +0.113R).
+    #
+    # Kept as a registered session, NOT deleted: the outcome tracker resolves
+    # every open row regardless of which process created it, and an
+    # unregistered timeframe silently inherits the 1h swing's 14-day expiry.
+    # Existing open 15m rows must still settle on a 2-day clock.
+    TradingSession(
+        name="scalp", timeframe="15m", max_open_days=2,
+        confluence_timeframe=None, strategy="sr_zone",
+    ),
+)
+
+# Every declared session. Use this — not TRADING_SESSIONS — for any lookup
+# keyed on timeframe (expiry, bar length), so a stream that the engine does
+# not scan is never treated as an unknown timeframe.
+ALL_SESSIONS = TRADING_SESSIONS + AUXILIARY_SESSIONS
+
+
+# Symbols that only some sessions may scan. A symbol absent from this map is
+# scanned by every session, which is the default for crypto.
+#
+# GBPUSD is restricted to the swing session. Retail FX carries roughly a pip of
+# spread, and cost expressed in R scales inversely with the stop distance — so
+# the same spread that is a rounding error against a 1h stop is a large
+# fraction of a 5m or 15m one. The fast sessions cannot pay for themselves on
+# it. Same instrument and same rules; only the timeframe makes it viable.
+SESSION_SYMBOLS = {
+    "GBPUSD": ("swing",),
+}
+
+
+def session_scans(session_name: str, symbol: str) -> bool:
+    """Whether the named session should scan `symbol`."""
+    # Imported inside the function on purpose: market_client imports Candle
+    # from this module, so a top-level import here would be circular. Reusing
+    # canonical_symbol keeps one definition of how BTCUSDT maps to BTCUSD.
+    from signals.market_client import canonical_symbol
+
+    allowed = SESSION_SYMBOLS.get(canonical_symbol(symbol))
+    return allowed is None or session_name in allowed
 
 
 @dataclass(frozen=True)

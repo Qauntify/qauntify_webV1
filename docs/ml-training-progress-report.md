@@ -1,5 +1,9 @@
 # ML Training Section Progress Report
 
+> **Status: research only — not connected to the live engine.** No model in
+> this repository influences a delivered signal. See `ml/README.md` and
+> `signals/ml/__init__.py`; `tests/core/test_ml_not_wired.py` enforces it.
+
 **Project:** Quantify / XAUUSD signal engine  
 **Report date:** 2026-07-24  
 **Current phase:** Data preparation and historical candidate generation infrastructure
