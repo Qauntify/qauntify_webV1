@@ -816,13 +816,12 @@ def test_main_scans_gbpusd_on_the_swing_session_only(monkeypatch):
     run_module.main()
 
     assert sorted(scanned) == [
-        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
+        ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
         ("GBPUSD", "1h"),
     ]
-    # The fast sessions must not even query for it.
+    # The fast session must not even query for it.
     assert prefetched == [
         (("BTCUSDT",), "5m"),
-        (("BTCUSDT",), "15m"),
         (("BTCUSDT", "GBPUSD"), "1h"),
     ]
 
