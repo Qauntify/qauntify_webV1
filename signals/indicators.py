@@ -147,6 +147,38 @@ def atr(highs, lows, closes, period=14):
     return out
 
 
+def sma_atr(highs, lows, closes, period=14):
+    """Simple-average True Range — MetaTrader's iATR, not Wilder's.
+
+    MT5 averages true range with a plain SMA. Wilder's smoothing (see `atr`)
+    weights older bars far more heavily, so after any change in volatility the
+    two diverge, and a Chandelier band built on one sits where the other would
+    not put it.
+
+    strategy_doc/TrendFollowingClaud.pine calls this out deliberately —
+    "MT5 iATR is a simple average of True Range, not Wilder smoothing" — so a
+    strategy read off that chart has to use this definition or the engine's
+    levels will not match the levels a human is looking at.
+
+    Padding matches `atr` exactly so the two are interchangeable.
+    """
+    n = len(closes)
+    if n < period + 1:
+        return [None] * n
+    true_ranges = [None]
+    for i in range(1, n):
+        true_ranges.append(max(
+            highs[i] - lows[i],
+            abs(highs[i] - closes[i - 1]),
+            abs(lows[i] - closes[i - 1]),
+        ))
+    out = [None] * period
+    for i in range(period, n):
+        window = true_ranges[i - period + 1:i + 1]
+        out.append(sum(window) / period)
+    return out
+
+
 def lwma(values, period):
     """Linear Weighted Moving Average — newer bars weigh more (period, …, 1)."""
     if period <= 0:
@@ -191,7 +223,7 @@ def bollinger(values, period=20, num_std=2.0):
 
 
 def chandelier_exit(highs, lows, closes, period=22, multiplier=4.5,
-                    lookback=None):
+                    lookback=None, atr_fn=atr):
     """Chandelier Exit trails + direction (TradingView-style).
 
     Returns (long_stop, short_stop, direction) lists aligned with input.
@@ -200,7 +232,7 @@ def chandelier_exit(highs, lows, closes, period=22, multiplier=4.5,
     """
     n = len(closes)
     lb = lookback if lookback is not None else period
-    atr_vals = atr(highs, lows, closes, period)
+    atr_vals = atr_fn(highs, lows, closes, period)
     long_stop = [None] * n
     short_stop = [None] * n
     direction = [None] * n
