@@ -31,7 +31,7 @@ from signals.chart.plan import build_chart_plan
 from signals.chart.render import render_chart, render_outcome_chart
 from signals.history import binance_symbol, load_history
 from signals.indicators import atr
-from signals.market_client import fetch_candles
+from signals.market_client import _resample, fetch_candles
 from signals.models import Confirmation, make_signal
 from signals.r_model import cost_r, scaled_r
 from signals.strategies.cloud_mss import detect_setup
@@ -46,6 +46,32 @@ MAX_HOLD = 2000
 # Bars of context shown before entry on the outcome chart. Enough to see the
 # cloud rejection that set it up, without burying the resolution.
 PRE_ENTRY_BARS = 20
+# Above this many bars a candlestick chart is a wall of noise, so the outcome
+# chart is compressed into wider buckets until it fits. Trades here have run as
+# long as 1,143 fifteen-minute bars — twelve days — and drawing that raw is
+# unreadable. Multiples of 15m, coarsest last.
+MAX_OUTCOME_BARS = 220
+BUCKET_MINUTES = (15, 30, 60, 120, 240, 720, 1440)
+
+
+def compress_path(candles, entry_time):
+    """(candles, entry_time, bucket_minutes) trimmed to a readable bar count.
+
+    OHLC is aggregated, not sampled, so the true high and low of every bucket
+    survive — the TP and SL crossings the plan searches for stay real.
+    """
+    for minutes in BUCKET_MINUTES:
+        if minutes == 15:
+            out = candles
+        else:
+            out = _resample(candles, minutes)
+        if len(out) <= MAX_OUTCOME_BARS:
+            width = minutes * 60_000
+            return out, entry_time - (entry_time % width), minutes
+    minutes = BUCKET_MINUTES[-1]
+    width = minutes * 60_000
+    return (_resample(candles, minutes),
+            entry_time - (entry_time % width), minutes)
 
 
 def _utc(ms):
@@ -118,6 +144,14 @@ def collect_trades(symbol, session, count):
     return trades[-count:], source, candles
 
 
+def _tf_label(minutes):
+    if minutes >= 1440:
+        return f"{minutes // 1440}d"
+    if minutes >= 60:
+        return f"{minutes // 60}h"
+    return f"{minutes}m"
+
+
 def _outcome_of(trade):
     """(status, verdict) for a replayed trade.
 
@@ -132,8 +166,13 @@ def _outcome_of(trade):
     return "expired", "EXPIRED"
 
 
-def render_trade(trade, symbol, out_dir, ordinal):
-    """Write the entry chart and the outcome chart. Returns both paths."""
+def render_trade(trade, symbol, setup_dir, outcome_dir, ordinal):
+    """Write the setup chart and the outcome chart. Returns both paths.
+
+    They go to separate directories on purpose. A setup chart shows only what
+    was knowable at entry; an outcome chart shows what followed. Mixed in one
+    folder it is easy to look at a result and read it as a signal.
+    """
     setup = trade["setup"]
     net = trade["net"]
     status, verdict = _outcome_of(trade)
@@ -155,7 +194,7 @@ def render_trade(trade, symbol, out_dir, ordinal):
         trade["candles"], build_chart_plan(trade["candles"], signal), signal,
         title=f"{head} · SETUP",
     )
-    entry_path = out_dir / f"{stem}_1setup.png"
+    entry_path = setup_dir / f"{stem}.png"
     entry_path.write_bytes(entry_png)
 
     row = {
@@ -165,20 +204,21 @@ def render_trade(trade, symbol, out_dir, ordinal):
         "take_profit_2": setup.take_profit_2,
         "take_profit_3": setup.take_profit_3,
     }
-    plan = build_outcome_plan(row, status, trade["path"], trade["entry_time"])
+    path, entry_time, bucket = compress_path(trade["path"], trade["entry_time"])
+    plan = build_outcome_plan(row, status, path, entry_time)
     if status == "expired":
         # build_outcome_plan draws a loss zone for anything that is not a win.
         # This trade was closed out flat, so that zone would be a fiction.
         plan = [a for a in plan if a.get("label") != "Loss"]
     tag = {"tp3_hit": "✓ TP3 HIT", "sl_hit": "✗ SL HIT",
            "expired": "— EXPIRED"}[status]
+    scale = "" if bucket == 15 else f" · shown at {_tf_label(bucket)}"
     outcome_png = render_outcome_chart(
-        trade["path"], plan, row, trade["entry_time"], status,
-        max_bars=len(trade["path"]),
+        path, plan, row, entry_time, status, max_bars=len(path),
         title=(f"{head} · {tag} · {trade['reached']}/3 TP banked · "
-               f"{net:+.2f}R net"),
+               f"{net:+.2f}R net{scale}"),
     )
-    outcome_path = out_dir / f"{stem}_2outcome.png"
+    outcome_path = outcome_dir / f"{stem}.png"
     outcome_path.write_bytes(outcome_png)
     return entry_path, outcome_path
 
@@ -191,7 +231,10 @@ def main():
     args = parser.parse_args()
 
     out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    setup_dir = out_dir / "setups"
+    outcome_dir = out_dir / "outcomes"
+    for d in (setup_dir, outcome_dir):
+        d.mkdir(parents=True, exist_ok=True)
     session = requests.Session()
 
     print(f"Replaying cloud_mss on {args.symbol} {PRIMARY} "
@@ -205,23 +248,24 @@ def main():
         print("No trades found in the available history.")
         return
 
-    print(f"\nRendering {len(trades)} trades "
-          f"({len(trades) * 2} charts: setup + outcome) to {out_dir}/\n")
+    print(f"\nRendering {len(trades)} trades to {out_dir}/\n"
+          f"  setups   -> {setup_dir}/   (entry only, no outcome shown)\n"
+          f"  outcomes -> {outcome_dir}/ (price path through to TP or SL)\n")
     print(f"{'#':>3} {'entry time (UTC)':17} {'side':9} {'dir':5} "
           f"{'entry':>12} {'stop':>12} {'TP':>5} {'net R':>7}")
     print("-" * 82)
     total = 0.0
     for ordinal, trade in enumerate(trades, start=1):
         entry_path, outcome_path = render_trade(
-            trade, args.symbol, out_dir, ordinal)
+            trade, args.symbol, setup_dir, outcome_dir, ordinal)
         setup = trade["setup"]
         total += trade["net"]
         print(f"{ordinal:3d} {_utc(trade['time']):%Y-%m-%d %H:%M}  "
               f"{setup.indicators.get('side', '?'):9} {setup.direction:5} "
               f"{setup.entry:12,.2f} {setup.stop_loss:12,.2f} "
               f"{trade['reached']:3d}/3 {trade['net']:+6.2f}R")
-        print(f"    -> {entry_path.name}")
-        print(f"    -> {outcome_path.name}")
+        print(f"    -> setups/{entry_path.name}")
+        print(f"    -> outcomes/{outcome_path.name}")
 
     wins = sum(1 for t in trades if t["net"] > 0)
     print("-" * 82)
