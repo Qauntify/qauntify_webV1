@@ -184,9 +184,20 @@ def _outcome_title(signal_row, outcome) -> str:
             f"{direction.upper()} · {tag} · {r:+.1f}R ({move:+.2f}%)")
 
 
-def render_outcome_chart(candles, plan, signal_row, entry_time, outcome) -> bytes:
-    """Render an outcome (result) chart: price path + fills + HIT/STOP flag."""
-    view = candles[-OUTCOME_MAX_BARS:]
+def render_outcome_chart(candles, plan, signal_row, entry_time, outcome,
+                        title=None, max_bars=None) -> bytes:
+    """Render an outcome (result) chart: price path + fills + HIT/STOP flag.
+
+    `title` overrides the default headline. _outcome_title reads every
+    non-win as a stop, which is wrong for a trade that simply expired — a
+    backtest replay needs to say so rather than label it "SL HIT".
+
+    `max_bars` widens the window past OUTCOME_MAX_BARS. The default trims to
+    the most recent bars, which on a long-running trade drops the entry and its
+    early fills off the left edge — leaving a chart whose title claims targets
+    it does not show. Callers that know the trade's full length should pass it.
+    """
+    view = candles[-(max_bars or OUTCOME_MAX_BARS):]
     fig, ax, x_of, last_x = _base_plot(view)
     entry_x = x_of.get(entry_time)
     if entry_x is not None:
@@ -195,6 +206,6 @@ def render_outcome_chart(candles, plan, signal_row, entry_time, outcome) -> byte
                    linewidth=1, zorder=1)
     _draw(ax, plan, x_of, last_x)
     ax.set_ylim(*_price_bounds(view, plan))
-    ax.set_title(_outcome_title(signal_row, outcome), color="#e2e8f0",
+    ax.set_title(title or _outcome_title(signal_row, outcome), color="#e2e8f0",
                  fontsize=14, fontweight="bold", loc="left")
     return _to_png(fig)

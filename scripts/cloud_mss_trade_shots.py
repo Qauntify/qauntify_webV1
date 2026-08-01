@@ -26,8 +26,9 @@ from pathlib import Path
 import requests
 
 from signals.backtest import HTF_WINDOW, htf_close_index, simulate_scaled
+from signals.chart.outcome_plan import build_outcome_plan
 from signals.chart.plan import build_chart_plan
-from signals.chart.render import render_chart
+from signals.chart.render import render_chart, render_outcome_chart
 from signals.history import binance_symbol, load_history
 from signals.indicators import atr
 from signals.market_client import fetch_candles
@@ -42,6 +43,9 @@ HTF_MINUTES = 60
 # replay sees exactly what a live scan sees.
 WINDOW = 259
 MAX_HOLD = 2000
+# Bars of context shown before entry on the outcome chart. Enough to see the
+# cloud rejection that set it up, without burying the resolution.
+PRE_ENTRY_BARS = 20
 
 
 def _utc(ms):
@@ -95,6 +99,11 @@ def collect_trades(symbol, session, count):
                          reached, stopped)
         trades.append({
             "setup": setup,
+            # Entry-bar context PLUS the forward path to resolution, so the
+            # outcome chart can show what actually happened after entry.
+            "path": candles[max(0, i - PRE_ENTRY_BARS):i + 1 + max(bars, 1)],
+            "entry_time": candles[i].open_time,
+            "stopped": stopped,
             # The whole window the detector saw. render_chart displays only the
             # last RENDER_BARS, but the LWMA200 must be computed over all of it
             # or it is still warming up inside the view.
@@ -109,12 +118,28 @@ def collect_trades(symbol, session, count):
     return trades[-count:], source, candles
 
 
+def _outcome_of(trade):
+    """(status, verdict) for a replayed trade.
+
+    Three outcomes, not two. A trade that reached no target and was never
+    stopped EXPIRED — calling that a stop, as the live outcome title does,
+    would misreport it.
+    """
+    if trade["reached"] >= 3:
+        return "tp3_hit", "TP3"
+    if trade["stopped"]:
+        return "sl_hit", f"SL-after-TP{trade['reached']}" if trade["reached"] else "SL"
+    return "expired", "EXPIRED"
+
+
 def render_trade(trade, symbol, out_dir, ordinal):
-    """Write one annotated entry PNG. Returns the path."""
+    """Write the entry chart and the outcome chart. Returns both paths."""
     setup = trade["setup"]
     net = trade["net"]
-    verdict = "WIN" if net > 0 else ("LOSS" if net < 0 else "FLAT")
+    status, verdict = _outcome_of(trade)
     stamp = _utc(trade["time"]).strftime("%Y-%m-%d_%H%M")
+    stem = (f"{ordinal:02d}_{symbol}_{PRIMARY}_{stamp}_"
+            f"{setup.direction}_{verdict}_{net:+.2f}R")
 
     # Backtested trades carry no LLM score, so confidence stays 0 and the
     # headline is supplied explicitly rather than rendering "0%".
@@ -122,18 +147,40 @@ def render_trade(trade, symbol, out_dir, ordinal):
         setup, Confirmation("confirm", 0, "backtest replay"),
         [], timeframe=PRIMARY,
     )
-    plan = build_chart_plan(trade["candles"], signal)
     side = setup.indicators.get("side", "cloud")
-    title = (f"{symbol} · {PRIMARY} · {setup.direction.upper()} · "
-             f"cloud_mss ({side}) · {stamp.replace('_', ' ')} UTC · "
-             f"{trade['reached']}/3 TP · {net:+.2f}R net")
-    png = render_chart(trade["candles"], plan, signal, title=title)
+    head = (f"{symbol} · {PRIMARY} · {setup.direction.upper()} · "
+            f"cloud_mss ({side}) · {stamp.replace('_', ' ')} UTC")
 
-    name = (f"{ordinal:02d}_{symbol}_{PRIMARY}_{stamp}_"
-            f"{setup.direction}_{verdict}_{net:+.2f}R.png")
-    path = out_dir / name
-    path.write_bytes(png)
-    return path
+    entry_png = render_chart(
+        trade["candles"], build_chart_plan(trade["candles"], signal), signal,
+        title=f"{head} · SETUP",
+    )
+    entry_path = out_dir / f"{stem}_1setup.png"
+    entry_path.write_bytes(entry_png)
+
+    row = {
+        "symbol": symbol, "timeframe": PRIMARY, "direction": setup.direction,
+        "entry": setup.entry, "stop_loss": setup.stop_loss,
+        "take_profit": setup.take_profit,
+        "take_profit_2": setup.take_profit_2,
+        "take_profit_3": setup.take_profit_3,
+    }
+    plan = build_outcome_plan(row, status, trade["path"], trade["entry_time"])
+    if status == "expired":
+        # build_outcome_plan draws a loss zone for anything that is not a win.
+        # This trade was closed out flat, so that zone would be a fiction.
+        plan = [a for a in plan if a.get("label") != "Loss"]
+    tag = {"tp3_hit": "✓ TP3 HIT", "sl_hit": "✗ SL HIT",
+           "expired": "— EXPIRED"}[status]
+    outcome_png = render_outcome_chart(
+        trade["path"], plan, row, trade["entry_time"], status,
+        max_bars=len(trade["path"]),
+        title=(f"{head} · {tag} · {trade['reached']}/3 TP banked · "
+               f"{net:+.2f}R net"),
+    )
+    outcome_path = out_dir / f"{stem}_2outcome.png"
+    outcome_path.write_bytes(outcome_png)
+    return entry_path, outcome_path
 
 
 def main():
@@ -158,20 +205,23 @@ def main():
         print("No trades found in the available history.")
         return
 
-    print(f"\nRendering {len(trades)} entries to {out_dir}/\n")
+    print(f"\nRendering {len(trades)} trades "
+          f"({len(trades) * 2} charts: setup + outcome) to {out_dir}/\n")
     print(f"{'#':>3} {'entry time (UTC)':17} {'side':9} {'dir':5} "
           f"{'entry':>12} {'stop':>12} {'TP':>5} {'net R':>7}")
     print("-" * 82)
     total = 0.0
     for ordinal, trade in enumerate(trades, start=1):
-        path = render_trade(trade, args.symbol, out_dir, ordinal)
+        entry_path, outcome_path = render_trade(
+            trade, args.symbol, out_dir, ordinal)
         setup = trade["setup"]
         total += trade["net"]
         print(f"{ordinal:3d} {_utc(trade['time']):%Y-%m-%d %H:%M}  "
               f"{setup.indicators.get('side', '?'):9} {setup.direction:5} "
               f"{setup.entry:12,.2f} {setup.stop_loss:12,.2f} "
               f"{trade['reached']:3d}/3 {trade['net']:+6.2f}R")
-        print(f"    -> {path.name}")
+        print(f"    -> {entry_path.name}")
+        print(f"    -> {outcome_path.name}")
 
     wins = sum(1 for t in trades if t["net"] > 0)
     print("-" * 82)
