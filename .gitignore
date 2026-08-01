@@ -37,3 +37,6 @@ optuna.db
 
 # Generated review images (regenerate with scripts/bbma_trade_shots.py).
 artifacts/bbma-trades/
+
+# Generated review images (regenerate with scripts/cloud_mss_trade_shots.py).
+artifacts/cloud-mss-trades/
