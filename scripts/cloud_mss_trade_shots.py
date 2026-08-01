@@ -230,7 +230,11 @@ def main():
     parser.add_argument("--out", default="artifacts/cloud-mss-trades")
     args = parser.parse_args()
 
-    out_dir = Path(args.out)
+    # Symbol first, then setup/outcome: one instrument's material stays
+    # together, which is how it actually gets reviewed. Nine years of verified
+    # BTC and a month of live gold are not comparable evidence, and filing them
+    # in one folder invites reading them as if they were.
+    out_dir = Path(args.out) / args.symbol
     setup_dir = out_dir / "setups"
     outcome_dir = out_dir / "outcomes"
     for d in (setup_dir, outcome_dir):
@@ -249,8 +253,8 @@ def main():
         return
 
     print(f"\nRendering {len(trades)} trades to {out_dir}/\n"
-          f"  setups   -> {setup_dir}/   (entry only, no outcome shown)\n"
-          f"  outcomes -> {outcome_dir}/ (price path through to TP or SL)\n")
+          f"  {setup_dir}/   — entry only, no outcome shown\n"
+          f"  {outcome_dir}/ — price path through to TP or SL\n")
     print(f"{'#':>3} {'entry time (UTC)':17} {'side':9} {'dir':5} "
           f"{'entry':>12} {'stop':>12} {'TP':>5} {'net R':>7}")
     print("-" * 82)
@@ -264,8 +268,8 @@ def main():
               f"{setup.indicators.get('side', '?'):9} {setup.direction:5} "
               f"{setup.entry:12,.2f} {setup.stop_loss:12,.2f} "
               f"{trade['reached']:3d}/3 {trade['net']:+6.2f}R")
-        print(f"    -> setups/{entry_path.name}")
-        print(f"    -> outcomes/{outcome_path.name}")
+        print(f"    -> {args.symbol}/setups/{entry_path.name}")
+        print(f"    -> {args.symbol}/outcomes/{outcome_path.name}")
 
     wins = sum(1 for t in trades if t["net"] > 0)
     print("-" * 82)
