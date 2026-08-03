@@ -17,20 +17,17 @@ export function Footer() {
           <nav className="flex gap-12 text-sm">
             <div className="flex flex-col gap-2">
               <p className="font-semibold text-ink">Product</p>
-              <Link href="/#features" className="text-slate hover:text-accent">
-                Features
+              <Link href="/signals" className="text-slate hover:text-accent">
+                Signals
               </Link>
-              <Link href="/#pricing" className="text-slate hover:text-accent">
-                Pricing
+              <Link href="/war-room" className="text-slate hover:text-accent">
+                War Room
               </Link>
-              <Link href="/dashboard" className="text-slate hover:text-accent">
-                Dashboard
+              <Link href="/markets" className="text-slate hover:text-accent">
+                Markets
               </Link>
-            </div>
-            <div className="flex flex-col gap-2">
-              <p className="font-semibold text-ink">Support</p>
-              <Link href="/#faq" className="text-slate hover:text-accent">
-                FAQ
+              <Link href="/track-record" className="text-slate hover:text-accent">
+                Track Record
               </Link>
             </div>
           </nav>

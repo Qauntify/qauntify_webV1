@@ -9,7 +9,7 @@ export function SignalsPreview({ signals }: { signals: Signal[] }) {
     <section id="signals" className="section-block bg-card">
       <div className="page-container py-16 md:py-20">
         <SectionHeader eyebrow="Live signals" title="Straight from the engine.">
-          <Link href="/dashboard" className="link-arrow">
+          <Link href="/signals" className="link-arrow">
             View all →
           </Link>
         </SectionHeader>
