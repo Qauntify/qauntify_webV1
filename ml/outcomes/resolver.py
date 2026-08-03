@@ -152,7 +152,10 @@ def resolve_candidate(
 
     def stop_trade(event_ns: int) -> None:
         nonlocal gross_booked, remaining, sl_time, resolution_ns, exit_price, outcome_class
-        gross_booked -= remaining
+        # Breakeven trail: once any target is banked the remainder exits at
+        # entry and forfeits nothing. Only a stop before TP1 is a full loss.
+        if hit_count == 0:
+            gross_booked -= remaining
         remaining = 0.0
         sl_time = event_ns
         resolution_ns = event_ns

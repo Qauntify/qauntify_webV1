@@ -112,16 +112,25 @@ def realized_r(direction, entry, stop, take_profit, outcome):
 
 
 def simulate_scaled(direction, entry, stop, tps, future_candles):
-    """Walk forward under a FIXED stop (matching the live outcome tracker).
+    """Walk forward with the stop TRAILED TO BREAKEVEN once TP1 is banked.
 
     Returns (reached, stopped, bars): `reached` is how many ordered targets
-    (0..len(tps)) price tagged before the stop; `stopped` is whether the stop
-    was hit; `bars` is candles consumed. Stop wins same-candle ties, so a bar
-    that spans both the stop and a target counts only the stop.
+    price tagged, `stopped` is whether the ACTIVE stop was hit, `bars` is
+    candles consumed. Stop wins same-candle ties, so a bar spanning both the
+    stop and a target counts only the stop.
+
+    The stop MUST move here, not only in `r_model.scaled_r`. Walking the
+    original stop while scoring the remainder at breakeven credits a trade
+    twice — for surviving a pullback to entry AND for losing nothing when the
+    stop finally hits. That is no real trade, and it overstated every strategy
+    in this repo by roughly 0.24R each. Whichever exit is modelled, both ends
+    must model the same one.
     """
     reached = 0
+    active_stop = stop
     for idx, bar in enumerate(future_candles, start=1):
-        hit_stop = bar.low <= stop if direction == "long" else bar.high >= stop
+        hit_stop = (bar.low <= active_stop if direction == "long"
+                    else bar.high >= active_stop)
         if hit_stop:
             return reached, True, idx
         for k in range(reached, len(tps)):
@@ -131,6 +140,9 @@ def simulate_scaled(direction, entry, stop, tps, future_candles):
             reached = k + 1
         if reached >= len(tps):
             return reached, False, idx
+        if reached >= 1:
+            # Banked TP1: the remainder now rides a stop at entry.
+            active_stop = entry
     return reached, False, len(future_candles)
 
 

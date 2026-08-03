@@ -15,11 +15,17 @@ OUTCOME_LABELS = (
     "expired",
 )
 
+# Must agree with signals.r_model.scaled_r: one third booked at each target,
+# stop trailed to breakeven once TP1 is banked.
+#   tp1_then_sl  1/3        booked, remainder out at BE
+#   tp2_then_sl  (1+2)/3    = 1.0
+#   tp3_hit      (1+2+3)/3  = 2.0, NOT 3.0 — a scale-out never realises the
+#                            full TP3 distance on the whole position
 DEFAULT_OUTCOME_R = {
     "sl_before_tp1": -1.0,
     "tp1_then_sl": 1.0 / 3.0,
     "tp2_then_sl": 1.0,
-    "tp3_hit": 3.0,
+    "tp3_hit": 2.0,
     "expired": 0.0,
 }
 

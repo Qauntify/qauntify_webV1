@@ -540,3 +540,31 @@ def test_terminal_outcome_attaches_and_stores_chart_url(monkeypatch):
     closed = ot.track_open_signals(_Cfg())
     assert stored.get("s1") == "http://x/s1-outcome.png"
     assert closed and closed[0][0].get("outcome_chart_url") == "http://x/s1-outcome.png"
+
+
+def test_stop_trails_to_breakeven_once_a_target_is_banked():
+    """After TP1 the remainder rides a stop at entry, so a pullback to entry
+    closes the trade — it does not run on to the original stop. This must match
+    r_model.scaled_r and backtest.simulate_scaled; settling against the
+    original stop while scoring at breakeven is the hybrid that overstated
+    every strategy by ~0.24R per trade."""
+    row = _live_row(days_old=1)
+    row["status"] = "tp1_hit"          # TP1 already banked on a previous run
+    entry = float(row["entry"])
+    stop = float(row["stop_loss"])
+    # A bar that dips to entry but nowhere near the original stop.
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    candles = [Candle(open_time=now_ms, open=entry, high=entry + 1,
+                      low=entry - 0.01, close=entry, volume=1.0)]
+    events = outcome_tracker.check_outcome_events(row, candles)
+    assert [e[0] for e in events] == ["sl_hit"]
+    assert entry - 0.01 > stop, "fixture must not reach the original stop"
+
+
+def test_stop_does_not_trail_before_any_target_is_banked():
+    row = _live_row(days_old=1)
+    entry = float(row["entry"])
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    candles = [Candle(open_time=now_ms, open=entry, high=entry + 1,
+                      low=entry - 0.01, close=entry, volume=1.0)]
+    assert outcome_tracker.check_outcome_events(row, candles) == []

@@ -47,7 +47,14 @@ def _risk_reward(entry: float, stop: float, target: float) -> str:
 
 
 def format_alert(signal: Signal) -> str:
-    """Telegram HTML-mode message for one confirmed signal."""
+    """Telegram HTML-mode message for one confirmed signal.
+
+    Carries the breakeven instruction because the engine depends on it. Every
+    trade is scored as thirds booked at TP1/TP2/TP3 with the stop trailed to
+    entry once TP1 banks, and `outcome_tracker` settles live trades that way.
+    A follower who never moves the stop is not making the trade the public
+    track record reports, so this cannot live only in a methodology page.
+    """
     direction = signal.direction.upper()
     dot = _direction_dot(signal.direction)
     symbol = _esc(signal.symbol)
@@ -68,6 +75,7 @@ def format_alert(signal: Signal) -> str:
         f"🎯 TP1     {_price(signal.take_profit)}\n"
         f"🎯 TP2     {_price(tp2)}\n"
         f"🎯 TP3     {_price(tp3)}\n"
+        f"↩️ Once TP1 hits, <b>move your stop to entry</b>\n"
         f"\n"
         f"⚖️ <b>Risk : Reward</b>  {_risk_reward(signal.entry, signal.stop_loss, tp3)}\n"
         f"\n"
@@ -90,6 +98,7 @@ def format_caption(signal: Signal) -> str:
         f"🎯 Confidence {signal.confidence}%\n"
         f"📍 Entry {_price(signal.entry)}  🛑 SL {_price(signal.stop_loss)}\n"
         f"🎯 TP {_price(signal.take_profit)} / {_price(tp2)} / {_price(tp3)}\n"
+        f"↩️ TP1 hit → move SL to entry\n"
         f"⚖️ R:R {_risk_reward(signal.entry, signal.stop_loss, tp3)}"
     )
 

@@ -1,3 +1,5 @@
+import pytest
+
 from signals.ml.feature_schema import schema_from_features
 from signals.ml.predictor import score_candidate
 
@@ -25,7 +27,8 @@ def test_score_candidate_returns_structured_expected_r_decision():
     )
 
     assert result.accepted is True
-    assert result.expected_r == 1.6
+    # .10(-1) + .10(1/3) + .20(1) + .50(2) + .10(0) = 1.1333
+    assert result.expected_r == pytest.approx(1 + 2 / 15)
     assert result.reason == "expected_r_above_threshold"
     assert result.to_dict()["probabilities"]["tp3_hit"] == 0.5
 

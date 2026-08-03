@@ -1,3 +1,4 @@
+import pathlib
 from pathlib import Path
 import json
 import pytest
@@ -18,6 +19,11 @@ def test_loader_has_no_test_parameter():
     assert 'split' not in inspect.signature(load_training_v3).parameters
 
 
+_MANIFEST = pathlib.Path("ml/data/datasets/training_v3/training_manifest.json")
+
+
+@pytest.mark.skipif(not _MANIFEST.exists(),
+                    reason=f"needs local dataset {_MANIFEST} (gitignored)")
 def test_frozen_training_manifest():
     manifest=json.loads(Path('ml/data/datasets/training_v3/training_manifest.json').read_text('utf-8'))
     assert manifest['approval_status']=='approved_frozen'

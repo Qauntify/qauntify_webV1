@@ -5,6 +5,7 @@ from signals.models import BotSettings, CandidateSetup, Confirmation, NoSignalRe
 from signals.run import maybe_send_alert
 from signals.telegram_client import (
     format_alert,
+    format_caption,
     format_no_signal_alert,
     format_outcome_alert,
     format_run_summary,
@@ -445,3 +446,12 @@ def test_outcome_alert_falls_back_to_message_without_chart():
     rec = _ChartRec()
     send_outcome_alert(_outcome_row(None), "sl_hit", "tok", "chat", session=rec)
     assert rec.calls[0]["url"].endswith("/sendMessage")
+
+
+def test_signal_message_tells_the_follower_to_trail_to_breakeven():
+    """The engine books thirds and trails the stop to entry after TP1, and
+    outcome_tracker settles trades that way. A follower who never moves the
+    stop is not making the trade the track record reports, so the instruction
+    has to travel with the signal."""
+    assert "move your stop to entry" in format_alert(_signal())
+    assert "move SL to entry" in format_caption(_signal())

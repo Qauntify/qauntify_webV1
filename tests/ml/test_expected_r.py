@@ -13,10 +13,12 @@ def test_calculate_expected_r_includes_costs():
         "expired": 0.10,
     }
 
-    # Weighted gross R = .2(-1) + .2(1/3) + .2(1) + .3(3) + .1(0) ≈ 0.9667.
-    # Net of the configured .05R execution estimate ≈ 0.9167R.
+    # Weighted gross R = .2(-1) + .2(1/3) + .2(1) + .3(2) + .1(0) ≈ 0.6667.
+    # tp3_hit is 2R, not 3R: a scale-out books thirds at 1R/2R/3R, so a full
+    # winner realises (1+2+3)/3 = 2R on the whole position.
+    # Net of the configured .05R execution estimate ≈ 0.6167R.
     assert calculate_expected_r(probabilities, estimated_cost_r=0.05) == pytest.approx(
-        0.2 * (-1) + 0.2 * (1 / 3) + 0.2 * 1 + 0.3 * 3 + 0.1 * 0 - 0.05
+        0.2 * (-1) + 0.2 * (1 / 3) + 0.2 * 1 + 0.3 * 2 + 0.1 * 0 - 0.05
     )
 
 

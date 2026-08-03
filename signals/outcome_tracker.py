@@ -137,6 +137,7 @@ def check_outcome_events(signal_row: dict, candles: list, *,
     candles = candles[start:]
     is_long = signal_row["direction"] == "long"
     stop = float(signal_row["stop_loss"])
+    entry = float(signal_row["entry"])
     targets = _targets(signal_row)
     already = _already_hit(signal_row)
     events: list[tuple[str, str]] = []
@@ -148,10 +149,36 @@ def check_outcome_events(signal_row: dict, candles: list, *,
     else:
         level_names = list(_TP_ORDER[:len(targets)])
 
+    # Once any target is banked the stop trails to entry, matching
+    # r_model.scaled_r and backtest.simulate_scaled. Settling a partially-
+    # banked trade against the ORIGINAL stop while scoring it at breakeven is
+    # the hybrid that overstated every strategy here by ~0.24R per trade.
+    # The status stays "sl_hit" — with tp*_hit_at set, scaled_r already reads
+    # that as "booked slices kept, remainder out flat", so no schema changes.
+    final_name = level_names[-1]
+
+    def _closed_out():
+        """True once the LAST target is banked — the position is flat."""
+        return final_name in already or any(e[0] == final_name for e in events)
+
+    def _active_stop():
+        """Original stop until a target banks, entry thereafter.
+
+        Only partial fills trail: with the final target hit there is no
+        remainder left to protect, which `_closed_out` handles by ending the
+        scan.
+        """
+        banked = bool(already & set(_TP_ORDER)) or any(
+            event[0] in _TP_ORDER or event[0] == "tp_hit" for event in events)
+        return entry if banked else stop
+
+    if _closed_out():
+        return events
+
     for candle in candles:
         stamp = _candle_closed_at(candle)
         if is_long:
-            if candle.low <= stop:
+            if candle.low <= _active_stop():
                 events.append(("sl_hit", stamp))
                 break
             for target, name in zip(targets, level_names):
@@ -159,8 +186,10 @@ def check_outcome_events(signal_row: dict, candles: list, *,
                     continue
                 if candle.high >= target:
                     events.append((name, stamp))
+            if _closed_out():
+                break
         else:
-            if candle.high >= stop:
+            if candle.high >= _active_stop():
                 events.append(("sl_hit", stamp))
                 break
             for target, name in zip(targets, level_names):
@@ -168,6 +197,8 @@ def check_outcome_events(signal_row: dict, candles: list, *,
                     continue
                 if candle.low <= target:
                     events.append((name, stamp))
+            if _closed_out():
+                break
     return events
 
 

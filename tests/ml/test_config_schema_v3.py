@@ -13,6 +13,19 @@ from ml.config_schema_v3 import (
     load_and_validate_v3_configs,
 )
 
+import pathlib
+
+import pytest
+
+# These configs point at ml/data/raw/*.csv, which .gitignore excludes — a
+# multi-gigabyte local dataset, not repository content. In CI the file cannot
+# exist, so these fail on missing input rather than on anything they were
+# written to check. Skip when the data is absent; they run in full for anyone
+# who has fetched it.
+_M5 = pathlib.Path("ml/data/raw/xauusd_m5_2016_2026.csv")
+pytestmark = pytest.mark.skipif(
+    not _M5.exists(), reason=f"needs local dataset {_M5} (gitignored)")
+
 
 def test_repository_v3_configs_are_valid_and_approved():
     bundle = load_and_validate_v3_configs()
