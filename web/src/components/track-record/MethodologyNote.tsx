@@ -4,11 +4,11 @@ export function MethodologyNote() {
       <p>
         <strong className="text-slate/80">How R is counted.</strong> R = reward ÷ risk, where risk is the
         distance from entry to stop. Every trade is scored as a scale-out, matching the three targets on
-        the signal: one third of the position is booked at each of TP1, TP2 and TP3, and the stop stays
-        where the signal put it. A trade that runs to the final target is therefore <strong>+2R</strong>,
-        not +3R. A trade that banks TP1 and then reverses into the stop is <strong>−0.33R</strong> — the
-        booked third is kept and the remaining two thirds lose their full risk. A stop hit before any
-        target is a full −1R.
+        the signal: one third of the position is booked at each of TP1, TP2 and TP3. Once TP1 is banked,
+        the remainder is treated as trailed to breakeven, so banking TP1 locks a win even if price later
+        tags the original stop. A trade that runs to the final target is therefore <strong>+2R</strong>,
+        not +3R. A trade that banks TP1 and then reverses into the stop keeps about <strong>+0.33R</strong>.
+        A stop hit before any target is a full −1R.
       </p>
       <p>
         <strong className="text-slate/80">Costs are deducted.</strong> Every trade is charged an estimated

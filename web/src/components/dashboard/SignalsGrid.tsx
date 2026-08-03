@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { Signal } from "@/lib/signals";
 import { formatDateTime, formatPrice, formatRelativeTime } from "@/lib/format";
+import { SignalWarRoomSection } from "@/components/dashboard/SignalWarRoomSection";
 
 function riskReward(signal: Signal): string {
   const risk = Math.abs(signal.entry - signal.stopLoss);
@@ -85,7 +86,13 @@ function DirectionPill({ direction }: { direction: Signal["direction"] }) {
   );
 }
 
-function StatusPill({ status }: { status: Signal["status"] }) {
+function StatusPill({
+  status,
+  closedAt,
+}: {
+  status: Signal["status"];
+  closedAt?: string | null;
+}) {
   if (status === "open") {
     return (
       <span className="inline-flex items-center rounded-md bg-line px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide text-slate">
@@ -100,21 +107,31 @@ function StatusPill({ status }: { status: Signal["status"] }) {
       </span>
     );
   }
-  if (status === "tp1_hit" || status === "tp2_hit") {
+  if ((status === "tp1_hit" || status === "tp2_hit") && !closedAt) {
     return (
       <span className="inline-flex items-center rounded-md bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-accent">
         {status === "tp1_hit" ? "TP1 hit" : "TP2 hit"}
       </span>
     );
   }
-  const isWin = status === "tp_hit" || status === "tp3_hit";
+  const label =
+    status === "tp3_hit"
+      ? "TP3 hit"
+      : status === "tp2_hit"
+        ? "TP2 hit"
+        : status === "tp1_hit"
+          ? "TP1 hit"
+          : status === "tp_hit"
+            ? "TP hit"
+            : "SL hit";
+  const isWin = status !== "sl_hit";
   return (
     <span
       className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide ${
         isWin ? "bg-long-soft text-long" : "bg-short-soft text-short"
       }`}
     >
-      {isWin ? (status === "tp3_hit" ? "TP3 hit" : "TP hit") : "SL hit"}
+      {label}
     </span>
   );
 }
@@ -137,12 +154,17 @@ export function SignalCard({
   signal,
   onSelect,
   adminSlot,
+  showLlmBadge = false,
+  showWarRoomBadge = false,
 }: {
   signal: Signal;
   onSelect?: (signal: Signal) => void;
   adminSlot?: React.ReactNode;
+  showLlmBadge?: boolean;
+  showWarRoomBadge?: boolean;
 }) {
   const isLong = signal.direction === "long";
+  // Pure SL only — closed TP1/TP2 wins are not losses.
   const isSlHit = signal.status === "sl_hit";
   const Component = onSelect ? "button" : "div";
 
@@ -165,12 +187,22 @@ export function SignalCard({
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-lg font-bold tracking-tight text-ink drop-shadow-sm">{signal.symbol}</span>
             <DirectionPill direction={signal.direction} />
+            {showLlmBadge ? (
+              <span className="rounded-md bg-accent-soft px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-accent">
+                LLM
+              </span>
+            ) : null}
+            {showWarRoomBadge ? (
+              <span className="rounded-md bg-accent-soft px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-accent">
+                War Room
+              </span>
+            ) : null}
           </div>
           <div className="mt-2 flex items-center gap-2">
             <span className="rounded-md bg-accent/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-accent border border-accent/20">
               {signal.timeframe}
             </span>
-            <StatusPill status={signal.status} />
+            <StatusPill status={signal.status} closedAt={signal.closedAt} />
           </div>
         </div>
         <div className="flex flex-col items-end justify-center pt-1">
@@ -297,7 +329,7 @@ function SignalDetailModal({
               <span className="rounded bg-accent-soft px-2 py-0.5 font-mono text-[10px] font-medium uppercase text-accent">
                 {signal.timeframe}
               </span>
-              <StatusPill status={signal.status} />
+              <StatusPill status={signal.status} closedAt={signal.closedAt} />
             </div>
             <p className="mt-1 text-sm text-slate">
               Opened {formatDateTime(signal.createdAt)}
@@ -369,6 +401,8 @@ function SignalDetailModal({
             <p className="mt-2 text-sm leading-relaxed text-ink">{signal.rationale}</p>
           </div>
 
+          <SignalWarRoomSection signalId={signal.id} />
+
           <div className="mt-5">
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate">
               Indicators
@@ -411,14 +445,25 @@ function CloseIcon() {
   );
 }
 
-export function SignalsGrid({ signals }: { signals: Signal[] }) {
+export function SignalsGrid({
+  signals,
+  showWarRoomBadge = false,
+}: {
+  signals: Signal[];
+  showWarRoomBadge?: boolean;
+}) {
   const [selected, setSelected] = useState<Signal | null>(null);
 
   return (
     <>
-      <div className="grid w-full gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <div className="grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {signals.map((signal) => (
-          <SignalCard key={signal.id} signal={signal} onSelect={setSelected} />
+          <SignalCard
+            key={signal.id}
+            signal={signal}
+            onSelect={setSelected}
+            showWarRoomBadge={showWarRoomBadge}
+          />
         ))}
       </div>
       {selected ? (

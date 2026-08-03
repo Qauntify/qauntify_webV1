@@ -21,6 +21,8 @@ const SIGNAL: Signal = {
   createdAt: new Date().toISOString(),
   closedAt: null,
   status: "open",
+  tp1HitAt: null,
+  tp2HitAt: null,
   chartUrl: null,
   outcomeChartUrl: null,
 };
@@ -52,6 +54,17 @@ describe("TradeTicket", () => {
     expect(screen.getByText("TP hit")).toBeDefined();
     rerender(<TradeTicket signal={{ ...SIGNAL, status: "sl_hit" }} />);
     expect(screen.getByText("SL hit")).toBeDefined();
+    rerender(
+      <TradeTicket
+        signal={{
+          ...SIGNAL,
+          status: "tp1_hit",
+          closedAt: "2026-07-01T01:00:00Z",
+          tp1HitAt: "2026-07-01T01:00:00Z",
+        }}
+      />,
+    );
+    expect(screen.getByText("TP1 hit")).toBeDefined();
     rerender(<TradeTicket signal={{ ...SIGNAL, status: "expired" }} />);
     expect(screen.getByText("Expired")).toBeDefined();
   });

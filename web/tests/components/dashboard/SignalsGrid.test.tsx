@@ -21,6 +21,8 @@ const SIGNAL: Signal = {
   createdAt: new Date().toISOString(),
   closedAt: null,
   status: "open",
+  tp1HitAt: null,
+  tp2HitAt: null,
   chartUrl: null,
   outcomeChartUrl: null,
 };
@@ -56,6 +58,22 @@ describe("SignalsGrid", () => {
   it("shows closed status on cards", () => {
     render(<SignalsGrid signals={[{ ...SIGNAL, status: "tp_hit" }]} />);
     expect(screen.getByText("TP hit")).toBeDefined();
+  });
+
+  it("shows TP1 hit when a closed partial win freezes at TP1", () => {
+    render(
+      <SignalsGrid
+        signals={[{
+          ...SIGNAL,
+          status: "tp1_hit",
+          closedAt: "2026-07-01T01:00:00Z",
+          tp1HitAt: "2026-07-01T01:00:00Z",
+        }]}
+      />,
+    );
+    expect(screen.getByText("TP1 hit")).toBeDefined();
+    const card = screen.getByRole("button", { name: /btcusdt/i });
+    expect(card.className).not.toContain("grayscale");
   });
 
   it("grays out the card when the signal hit stop loss", () => {

@@ -107,7 +107,8 @@ export function DailyPnLCalendar({ data }: { data: DailyPnL[] }) {
   return (
     <div className="card-surface rounded-xl border border-line p-6">
       <p className="mb-6 text-sm text-slate">
-        Closed TP/SL hits by day — green days net wins, red days net losses.
+        Closed LLM signals by day — includes full TP hits and TP1/TP2 wins
+        (even if price later tagged the stop). Green = more wins than losses.
       </p>
 
       {/* Year Tabs */}
@@ -213,16 +214,16 @@ export function DailyPnLCalendar({ data }: { data: DailyPnL[] }) {
                     {day.totalTrades > 0 ? (
                       <>
                         <span className={`text-sm font-bold ${textColor}`}>
-                          {day.wins} TP
+                          {day.wins} W
                         </span>
                         <span className={`text-sm font-bold ${textColor}`}>
-                          {day.losses} SL
+                          {day.losses} L
                         </span>
                       </>
                     ) : (
                       <>
-                        <span className="text-sm font-semibold text-ink">0 TP</span>
-                        <span className="text-sm font-semibold text-ink">0 SL</span>
+                        <span className="text-sm font-semibold text-ink">0 W</span>
+                        <span className="text-sm font-semibold text-ink">0 L</span>
                       </>
                     )}
                   </div>

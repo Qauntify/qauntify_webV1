@@ -6,7 +6,11 @@ import { ExportSignalsMenu } from "@/components/admin/ExportSignalsMenu";
 import { SignalCard } from "@/components/dashboard/SignalsGrid";
 import { Pagination } from "@/components/shared/Pagination";
 import { requireAdminPage } from "@/lib/admin-guard";
-import { getSignalsPaginated, getStats } from "@/lib/signals";
+import {
+  getSignalsPaginated,
+  getStats,
+  getWarRoomSignalsPaginated,
+} from "@/lib/signals";
 import { serviceRoleToken } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
@@ -14,6 +18,23 @@ export const metadata: Metadata = {
 };
 
 export const revalidate = 30;
+
+type SignalsTab =
+  | "all"
+  | "llm"
+  | "war-room"
+  | "super-scalping"
+  | "scalping"
+  | "swing";
+
+function parseTab(tab: string | undefined): SignalsTab {
+  if (tab === "llm") return "llm";
+  if (tab === "war-room") return "war-room";
+  if (tab === "swing") return "swing";
+  if (tab === "scalping") return "scalping";
+  if (tab === "super-scalping") return "super-scalping";
+  return "all";
+}
 
 export default async function AdminSignals({
   searchParams,
@@ -23,14 +44,7 @@ export default async function AdminSignals({
   await requireAdminPage();
   const { tab, page: pageParam } = await searchParams;
 
-  const currentTab =
-    tab === "swing"
-      ? "swing"
-      : tab === "scalping"
-        ? "scalping"
-        : tab === "super-scalping"
-          ? "super-scalping"
-          : "all";
+  const currentTab = parseTab(tab);
   const timeframe =
     currentTab === "swing"
       ? "1h"
@@ -40,35 +54,64 @@ export default async function AdminSignals({
           ? "5m"
           : undefined;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
+  const isLlmTab = currentTab === "llm";
+  const isWarRoomTab = currentTab === "war-room";
 
   const token = serviceRoleToken();
-  const [{ signals, total, totalPages, pageSize }, stats] = await Promise.all([
-    getSignalsPaginated(page, token, timeframe),
+  const [pageData, stats] = await Promise.all([
+    isWarRoomTab
+      ? getWarRoomSignalsPaginated(page, token)
+      : getSignalsPaginated(page, token, timeframe),
     getStats(token, timeframe),
   ]);
+  const { signals, total, totalPages, pageSize } = pageData;
   const exportableCount = stats.tpHits + stats.partialWins + stats.slHits;
 
-  // Extra params to preserve the active tab when paginating
-  const extraParams: Record<string, string> = currentTab !== "all" ? { tab: currentTab } : {};
+  const extraParams: Record<string, string> =
+    currentTab !== "all" ? { tab: currentTab } : {};
+
+  const exportTab =
+    currentTab === "llm" || currentTab === "war-room" ? "all" : currentTab;
+
+  const title = isWarRoomTab
+    ? "War Room Signals"
+    : isLlmTab
+      ? "LLM Signals"
+      : "Signals";
+  const subtitle = isWarRoomTab
+    ? "Signal cards that have an AI War Room debate on file — same cards as the main list."
+    : isLlmTab
+      ? "Every signal SEA-LION confirmed and stored. Same cards as the main list, scoped to LLM-approved setups."
+      : "Manage and view all stored signals. Export includes TP/SL hits only.";
 
   return (
     <>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Signals</h1>
-          <p className="mt-1 text-sm text-slate">
-            Manage and view all stored signals. Export includes TP/SL hits only.
-          </p>
+          <h1 className="text-2xl font-bold">{title}</h1>
+          <p className="mt-1 text-sm text-slate">{subtitle}</p>
         </div>
-        <ExportSignalsMenu tab={currentTab} disabled={exportableCount === 0} />
+        <ExportSignalsMenu tab={exportTab} disabled={exportableCount === 0} />
       </div>
 
-      <nav className="flex gap-2 border-b border-line pb-4 mb-6 overflow-x-auto">
+      <nav className="mb-6 flex gap-2 overflow-x-auto border-b border-line pb-4">
         <Link
           href="/admin/signals"
           className={`nav-item ${currentTab === "all" ? "nav-item-active" : ""}`}
         >
           All
+        </Link>
+        <Link
+          href="/admin/signals?tab=llm"
+          className={`nav-item ${isLlmTab ? "nav-item-active" : ""}`}
+        >
+          LLM
+        </Link>
+        <Link
+          href="/admin/signals?tab=war-room"
+          className={`nav-item ${isWarRoomTab ? "nav-item-active" : ""}`}
+        >
+          War Room
         </Link>
         <Link
           href="/admin/signals?tab=super-scalping"
@@ -90,13 +133,28 @@ export default async function AdminSignals({
         </Link>
       </nav>
 
+      {isLlmTab || isWarRoomTab ? (
+        <div className="mb-5 rounded-lg border border-accent/20 bg-accent-soft/40 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+            {isWarRoomTab ? "War Room" : "LLM Signal"}
+          </p>
+          <p className="mt-1 text-sm text-slate">
+            {isWarRoomTab
+              ? `Showing ${total} signal${total === 1 ? "" : "s"} with a War Room debate.`
+              : `Showing ${total} SEA-LION-confirmed signal${total === 1 ? "" : "s"} across every timeframe.`}
+          </p>
+        </div>
+      ) : null}
+
       {signals.length > 0 ? (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {signals.map((s) => (
               <SignalCard
                 key={s.id}
                 signal={s}
+                showLlmBadge={isLlmTab}
+                showWarRoomBadge={isWarRoomTab}
                 adminSlot={
                   <DeleteSignalButton
                     id={s.id}
@@ -116,7 +174,13 @@ export default async function AdminSignals({
           />
         </>
       ) : (
-        <p className="mt-8 text-sm text-slate">No signals found for this category.</p>
+        <p className="mt-8 text-sm text-slate">
+          {isWarRoomTab
+            ? "No War Room signals yet."
+            : isLlmTab
+              ? "No LLM-confirmed signals yet."
+              : "No signals found for this category."}
+        </p>
       )}
     </>
   );

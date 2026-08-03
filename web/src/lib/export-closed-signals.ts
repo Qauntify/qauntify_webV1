@@ -38,7 +38,15 @@ function rowsForExport(signals: Signal[]): Record<string, string | number>[] {
     "Take Profit 2": s.takeProfit2 ?? "",
     "Take Profit 3": s.takeProfit3 ?? "",
     Confidence: s.confidence,
-    Status: s.status === "tp_hit" || s.status === "tp3_hit" ? "TP hit" : "SL hit",
+    Status: s.status === "sl_hit"
+      ? "SL hit"
+      : s.status === "tp3_hit"
+        ? "TP3 hit"
+        : s.status === "tp2_hit"
+          ? "TP2 hit"
+          : s.status === "tp1_hit"
+            ? "TP1 hit"
+            : "TP hit",
     Created: formatWhen(s.createdAt),
     Closed: formatWhen(s.closedAt),
     Rationale: s.rationale,
@@ -112,7 +120,15 @@ export function buildClosedSignalsPdf(
       String(s.takeProfit2 ?? ""),
       String(s.takeProfit3 ?? ""),
       String(s.confidence),
-      s.status === "tp_hit" || s.status === "tp3_hit" ? "TP hit" : "SL hit",
+      s.status === "sl_hit"
+        ? "SL hit"
+        : s.status === "tp3_hit"
+          ? "TP3 hit"
+          : s.status === "tp2_hit"
+            ? "TP2 hit"
+            : s.status === "tp1_hit"
+              ? "TP1 hit"
+              : "TP hit",
       formatWhen(s.createdAt),
       formatWhen(s.closedAt),
       s.rationale.slice(0, 80),

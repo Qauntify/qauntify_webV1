@@ -23,12 +23,12 @@ describe("scaledR", () => {
   it("a full run to the last target is +2R, not +3R", () => {
     expect(scaledR("long", 100, 98, [102, 104, 106], 3, false)).toBeCloseTo(2);
   });
-  it("TP1 then reversing into the stop is a net loss", () => {
-    // Fixed stop: the booked third is kept, the other two thirds lose 1R each.
-    expect(scaledR("long", 100, 98, [102, 104, 106], 1, true)).toBeCloseTo(-1 / 3);
+  it("TP1 then reversing into the stop keeps the booked third", () => {
+    // After TP1 the remainder is at BE — later stop does not claw it back.
+    expect(scaledR("long", 100, 98, [102, 104, 106], 1, true)).toBeCloseTo(1 / 3);
   });
-  it("TP2 then reversing keeps two thirds and loses the last", () => {
-    expect(scaledR("long", 100, 98, [102, 104, 106], 2, true)).toBeCloseTo(2 / 3);
+  it("TP2 then reversing keeps everything that was banked", () => {
+    expect(scaledR("long", 100, 98, [102, 104, 106], 2, true)).toBeCloseTo(1);
   });
   it("TP1 then expiring flat keeps the booked third", () => {
     // Expiry is not a stop — nothing is given back.
@@ -82,23 +82,20 @@ describe("tradeR", () => {
     expect(grossR(t)).toBeCloseTo(2);
     expect(tradeR(t)).toBeCloseTo(2 - 0.1);
   });
-  it("counts a win by result, not by status", () => {
-    // Banking TP2 then reversing ends as "sl_hit" but finished above water.
+  it("counts a win once TP1 is banked, even if status is sl_hit", () => {
     expect(isWin(trade({ status: "sl_hit", reached: 2 }))).toBe(true);
-    // Banking only TP1 does not: the unbooked two thirds lose their full risk.
-    expect(isWin(trade({ status: "sl_hit", reached: 1 }))).toBe(false);
+    expect(isWin(trade({ status: "sl_hit", reached: 1 }))).toBe(true);
     expect(isWin(trade({ status: "sl_hit", reached: 0 }))).toBe(false);
   });
-  it("a win whose targets do not cover costs is a loss", () => {
-    // 0.25-point stop on BTCUSD: 20 bps of a 100 price is 0.8R of cost,
-    // against +0.67R kept after TP2. Tight stops carry the most cost in R.
+  it("TP1 locks a win even when costs eat the booked R", () => {
+    // Tight stop: cost > booked third, but TP1 still counts as a win.
     const t = trade({
       symbol: "BTCUSD", entry: 100, stopLoss: 99.75,
-      targets: [100.25, 100.5, 100.75], reached: 2, status: "sl_hit",
+      targets: [100.25, 100.5, 100.75], reached: 1, status: "sl_hit",
     });
-    expect(grossR(t)).toBeCloseTo(2 / 3);
+    expect(grossR(t)).toBeCloseTo(1 / 3);
     expect(tradeR(t)).toBeLessThan(0);
-    expect(isWin(t)).toBe(false);
+    expect(isWin(t)).toBe(true);
   });
 });
 
@@ -204,7 +201,35 @@ describe("recentTrades + toClosedTrade", () => {
       tp1_hit_at: "2026-07-01T01:00:00Z",
     });
     expect(t?.reached).toBe(1);
-    expect(grossR(t as ClosedTrade)).toBeCloseTo(-1 / 3);
+    expect(grossR(t as ClosedTrade)).toBeCloseTo(1 / 3);
+    expect(isWin(t as ClosedTrade)).toBe(true);
+  });
+  it("keeps banked count when a partial is stored as tp1_hit", () => {
+    const t = toClosedTrade({
+      id: "s2b", symbol: "BTCUSD", direction: "long",
+      entry: 100, stop_loss: 98, take_profit: 102,
+      take_profit_2: 104, take_profit_3: 106, status: "tp1_hit",
+      created_at: "2026-07-01T00:00:00Z",
+      closed_at: "2026-07-01T02:00:00Z",
+      tp1_hit_at: "2026-07-01T01:00:00Z",
+    });
+    expect(t?.reached).toBe(1);
+    expect(grossR(t as ClosedTrade)).toBeCloseTo(1 / 3);
+    expect(isWin(t as ClosedTrade)).toBe(true);
+  });
+  it("maps a closed tp2_hit as a TP2 win", () => {
+    const t = toClosedTrade({
+      id: "s2c", symbol: "BTCUSD", direction: "long",
+      entry: 100, stop_loss: 98, take_profit: 102,
+      take_profit_2: 104, take_profit_3: 106, status: "tp2_hit",
+      created_at: "2026-07-01T00:00:00Z",
+      closed_at: "2026-07-01T03:00:00Z",
+      tp1_hit_at: "2026-07-01T01:00:00Z",
+      tp2_hit_at: "2026-07-01T02:00:00Z",
+    });
+    expect(t?.reached).toBe(2);
+    expect(grossR(t as ClosedTrade)).toBeCloseTo(1);
+    expect(isWin(t as ClosedTrade)).toBe(true);
   });
   it("a legacy row with only take_profit is a single-target trade", () => {
     const t = toClosedTrade({

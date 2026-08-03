@@ -2,7 +2,7 @@
 // rows. Every exported function below is pure (no network) so it is unit-tested
 // directly; getTrackRecord (added in a later task) does the fetch.
 
-export type ClosedStatus = "tp_hit" | "tp3_hit" | "sl_hit";
+export type ClosedStatus = "tp_hit" | "tp3_hit" | "tp1_hit" | "tp2_hit" | "sl_hit";
 
 export type ClosedTrade = {
   id: string;
@@ -52,15 +52,11 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // ---------------------------------------------------------------------------
 // The R model. Port of signals/r_model.py — keep the two in step.
 //
-// One third of the position is booked at each of TP1/TP2/TP3, and the stop
-// does NOT move — the signal carries one SL and the outcome tracker settles
-// against it for the whole life of the trade. So a trade that runs all the way
-// to the last target returns (1 + 2 + 3) / 3 = +2R, not +3R, and a trade that
-// banks TP1 and then reverses into the stop returns 0.33 − 0.67 = −0.33R.
-//
-// This scored the remainder at breakeven until 2026-07-28, which credited a
-// stop-out with losing nothing on the unbooked two thirds. Nobody was ever
-// told to trail the stop, so that was not a trade any follower made.
+// One third of the position is booked at each of TP1/TP2/TP3. Once TP1 is
+// banked, the remainder is treated as trailed to breakeven: a later stop-out
+// does not claw back the booked third. So a trade that runs to the last
+// target returns (1 + 2 + 3) / 3 = +2R, not +3R, and a trade that banks TP1
+// then reverses into the stop keeps ~+0.33R. A stop before any target is −1R.
 // ---------------------------------------------------------------------------
 
 export function scaledR(
@@ -79,9 +75,9 @@ export function scaledR(
   let booked = 0;
   for (let k = 0; k < reached; k += 1) booked += portion * rOf(targets[k]);
   if (reached >= targets.length) return booked;
-  // Fixed stop: the unbooked remainder loses 1R of its share.
-  if (stopped) return booked - (1 - reached * portion);
-  return booked; // expired flat, remainder scores 0
+  if (stopped && reached === 0) return -1;
+  // reached >= 1: remainder trailed to BE; keep what was booked.
+  return booked;
 }
 
 // Round-trip cost (spread + commission) in basis points of notional.
@@ -130,13 +126,18 @@ export function tradeR(t: ClosedTrade): number {
 }
 
 /**
- * A win is a trade that finished above water, not one that reached a
- * particular status. Under a scale-out model those differ: banking TP1 and
- * then reversing is a small win, and a "winner" whose targets did not cover
- * its costs is a loss.
+ * A win is any trade that banked at least TP1 — even if price later hit the
+ * original stop. Net R can still be small (or cost-eaten); the hit locks the
+ * classification.
  */
 export function isWin(t: ClosedTrade): boolean {
-  return tradeR(t) > 0;
+  return (
+    t.reached >= 1
+    || t.status === "tp_hit"
+    || t.status === "tp3_hit"
+    || t.status === "tp1_hit"
+    || t.status === "tp2_hit"
+  );
 }
 
 function byClosedAsc(a: ClosedTrade, b: ClosedTrade): number {
@@ -146,8 +147,8 @@ function byClosedAsc(a: ClosedTrade, b: ClosedTrade): number {
 export function summarize(trades: ClosedTrade[]): Summary {
   const total = trades.length;
   const rs = trades.map(tradeR);
-  const wins = rs.filter((r) => r > 0).length;
-  const losses = rs.filter((r) => r < 0).length;
+  const wins = trades.filter(isWin).length;
+  const losses = trades.filter((t) => !isWin(t) && t.status === "sl_hit").length;
   const netR = rs.reduce((s, r) => s + r, 0);
   const grossTotal = trades.reduce((s, t) => s + grossR(t), 0);
   const sorted = [...trades].sort(byClosedAsc);
@@ -244,7 +245,13 @@ type RawRow = {
 
 export function toClosedTrade(row: RawRow): ClosedTrade | null {
   const status = row.status;
-  if (status !== "tp_hit" && status !== "tp3_hit" && status !== "sl_hit") return null;
+  const closed =
+    status === "tp_hit"
+    || status === "tp3_hit"
+    || status === "sl_hit"
+    || ((status === "tp1_hit" || status === "tp2_hit")
+      && typeof row.closed_at === "string");
+  if (!closed) return null;
   const ind: Record<string, unknown> = row.indicators ?? {};
   const strategy =
     typeof ind.strategy === "string"
@@ -259,14 +266,19 @@ export function toClosedTrade(row: RawRow): ClosedTrade | null {
   ]
     .filter((t): t is number => t !== null && t !== undefined)
     .map(Number);
-  // How many targets were banked, read from the hit timestamps rather than the
-  // final status: a trade that took TP1 and then reversed ends as "sl_hit" but
-  // is not a full loss. A terminal win means every target was reached.
+  // Prefer hit timestamps. Status alone must not invent a full ladder fill —
+  // a reclassified TP1-then-SL win may be stored as tp1_hit with only tp1_hit_at.
   const banked = [row.tp1_hit_at, row.tp2_hit_at, row.tp3_hit_at].filter(Boolean).length;
   const reached =
-    status === "tp_hit" || status === "tp3_hit"
-      ? targets.length
-      : Math.min(banked, targets.length);
+    banked > 0
+      ? Math.min(banked, targets.length)
+      : status === "tp_hit" || status === "tp3_hit"
+        ? targets.length
+        : status === "tp2_hit"
+          ? Math.min(2, targets.length)
+          : status === "tp1_hit"
+            ? Math.min(1, targets.length)
+            : 0;
   return {
     id: row.id,
     symbol: row.symbol,
@@ -277,7 +289,7 @@ export function toClosedTrade(row: RawRow): ClosedTrade | null {
     stopLoss: Number(row.stop_loss),
     targets,
     reached,
-    status,
+    status: status as ClosedStatus,
     closedAt: typeof row.closed_at === "string" ? row.closed_at : row.created_at,
     outcomeChartUrl: typeof row.outcome_chart_url === "string" ? row.outcome_chart_url : null,
   };
@@ -294,7 +306,8 @@ async function fetchClosedRows(accessToken?: string): Promise<RawRow[] | null> {
     // The tp*_hit_at timestamps are what make a partial win scoreable.
     "tp1_hit_at,tp2_hit_at,tp3_hit_at," +
     "indicators,outcome_chart_url" +
-    "&status=in.(tp_hit,tp3_hit,sl_hit)" +
+    "&or=(status.in.(tp_hit,tp3_hit,sl_hit)," +
+    "and(status.in.(tp1_hit,tp2_hit),closed_at.not.is.null))" +
     // Shadow rows are LLM-rejected setups kept only to measure the gate; they
     // are not recommendations and must never reach the public track record.
     // RLS already blocks them — this is defence in depth.

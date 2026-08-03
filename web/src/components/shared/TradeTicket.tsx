@@ -14,7 +14,13 @@ function DirectionBadge({ direction }: { direction: Signal["direction"] }) {
   );
 }
 
-function StatusBadge({ status }: { status: Signal["status"] }) {
+function StatusBadge({
+  status,
+  closedAt,
+}: {
+  status: Signal["status"];
+  closedAt?: string | null;
+}) {
   if (status === "open") return null;
   if (status === "expired") {
     return (
@@ -23,21 +29,32 @@ function StatusBadge({ status }: { status: Signal["status"] }) {
       </span>
     );
   }
-  if (status === "tp1_hit" || status === "tp2_hit") {
+  // Open partials (no closedAt) stay accent; closed TP1/TP2 wins go green.
+  if ((status === "tp1_hit" || status === "tp2_hit") && !closedAt) {
     return (
       <span className="inline-flex items-center rounded-md bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-accent">
         {status === "tp1_hit" ? "TP1 hit" : "TP2 hit"}
       </span>
     );
   }
-  const isWin = status === "tp_hit" || status === "tp3_hit";
+  const label =
+    status === "tp3_hit"
+      ? "TP3 hit"
+      : status === "tp2_hit"
+        ? "TP2 hit"
+        : status === "tp1_hit"
+          ? "TP1 hit"
+          : status === "tp_hit"
+            ? "TP hit"
+            : "SL hit";
+  const isWin = status !== "sl_hit";
   return (
     <span
       className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide ${
         isWin ? "bg-long-soft text-long" : "bg-short-soft text-short"
       }`}
     >
-      {isWin ? (status === "tp3_hit" ? "TP3 hit" : "TP hit") : "SL hit"}
+      {label}
     </span>
   );
 }
@@ -102,7 +119,7 @@ export function TradeTicket({
           <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase text-accent">
             {signal.timeframe}
           </span>
-          <StatusBadge status={signal.status} />
+          <StatusBadge status={signal.status} closedAt={signal.closedAt} />
         </div>
         <ConfidenceGauge value={signal.confidence} />
       </div>
