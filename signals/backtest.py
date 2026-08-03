@@ -166,8 +166,33 @@ def net_r_multiples(symbol, r_multiples, entries, stops, *, bps=None):
     ]
 
 
+# 1h bars handed to a multi-timeframe detector per primary bar. The Chandelier
+# needs ~44; 120 leaves headroom without making the slice cost grow with the
+# length of the backtest.
+HTF_WINDOW = 120
+
+
+def htf_close_index(primary_candles, htf_candles, htf_minutes):
+    """Per primary bar, the index of the last HTF candle that had CLOSED.
+
+    -1 means none had. Same causality rule as `htf_trend_series`, computed once
+    with a forward-walking cursor rather than re-scanned per bar. A detector
+    that saw the in-progress HTF candle would be reading the future.
+    """
+    htf_ms = htf_minutes * 60_000
+    out = []
+    j = -1
+    for bar in primary_candles:
+        while (j + 1 < len(htf_candles)
+               and htf_candles[j + 1].open_time + htf_ms <= bar.open_time):
+            j += 1
+        out.append(j)
+    return out
+
+
 def backtest_windowed(detector, symbol, candles, atr14, trends, *,
-                      window=200, max_hold=2000, bps=None):
+                      window=200, max_hold=2000, bps=None,
+                      htf_candles=None, htf_minutes=None):
     """Replay `detector` bar by bar over a ROLLING window, non-overlapping.
 
     Differs from `backtest_strategy` in two ways, both of which make it more
@@ -187,14 +212,23 @@ def backtest_windowed(detector, symbol, candles, atr14, trends, *,
     an ungated strategy. Returns per-trade gross and net R plus target counts.
     """
     n = len(candles)
+    htf_index = (htf_close_index(candles, htf_candles, htf_minutes)
+                 if htf_candles and htf_minutes else None)
     r_multiples, entries, stops = [], [], []
     tp1_hits = tp3_hits = 0
     i = window
     while i < n - 1:
         lo = i - window + 1
-        setup = detector(
-            symbol, candles[lo:i + 1], atr14[lo:i + 1], htf_trend=trends[i],
-        )
+        kwargs = {"htf_trend": trends[i]}
+        if htf_index is not None:
+            j = htf_index[i]
+            if j < 0:
+                # No higher-timeframe candle has closed yet — nothing causal
+                # to hand over, so this bar cannot produce a setup.
+                i += 1
+                continue
+            kwargs["h1_candles"] = htf_candles[max(0, j + 1 - HTF_WINDOW):j + 1]
+        setup = detector(symbol, candles[lo:i + 1], atr14[lo:i + 1], **kwargs)
         if setup is None:
             i += 1
             continue

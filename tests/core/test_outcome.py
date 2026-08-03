@@ -111,6 +111,7 @@ def test_list_open_signals_queries_open_only():
     rows = list_open_signals("https://abc.supabase.co", "key", session=session)
     assert rows == [_row()]
     assert "status=in.(open,tp1_hit,tp2_hit)" in session.last_url
+    assert "closed_at=is.null" in session.last_url
 
 
 def test_close_signal_patches_status_and_closed_at():

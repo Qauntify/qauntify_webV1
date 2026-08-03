@@ -542,41 +542,38 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
 
     assert seen["prefetched"] == {
         ("BTCUSDT", "5m"): candles,
+        ("BTCUSDT", "15m"): candles,
         ("BTCUSDT", "1h"): candles,
     }
 
 
-def test_trading_sessions_define_super_scalp_and_swing():
+def test_trading_sessions_define_all_three_streams():
     from signals.models import ALL_SESSIONS, TRADING_SESSIONS
 
     by_name = {s.name: s for s in TRADING_SESSIONS}
-    assert set(by_name) == {"super_scalp", "swing"}
+    assert set(by_name) == {"super_scalp", "scalp", "swing"}
     assert by_name["super_scalp"].timeframe == "5m"
     assert by_name["super_scalp"].strategy == "ict_fvg"
     assert by_name["super_scalp"].confluence_timeframe == "15m"
+    assert by_name["scalp"].timeframe == "15m"
     assert by_name["swing"].timeframe == "1h"
     assert by_name["swing"].confluence_timeframe == "4h"
     assert by_name["swing"].strategy is None
-    # Super scalp must expire much faster than swing: a 5m setup that sat open
-    # for two weeks is meaningless.
-    assert by_name["super_scalp"].max_open_days < by_name["swing"].max_open_days
-    # The 15m scalp is RETIRED from scanning, but must remain a REGISTERED
-    # session. The outcome tracker keys expiry off ALL_SESSIONS, and an
-    # unregistered timeframe silently inherits the 1h swing's 14-day clock —
-    # which would leave already-open 15m rows hanging for a fortnight.
-    retired = {s.name: s for s in ALL_SESSIONS}
-    assert "scalp" in retired
-    assert retired["scalp"].timeframe == "15m"
-    assert retired["scalp"].max_open_days == 2
-    assert "scalp" not in {s.name for s in TRADING_SESSIONS}
+    # Faster sessions must expire faster: a 5m setup left open for two weeks
+    # is meaningless.
+    assert by_name["super_scalp"].max_open_days <= by_name["scalp"].max_open_days
+    assert by_name["scalp"].max_open_days < by_name["swing"].max_open_days
+    # One session per timeframe — outcome_tracker keys expiry off a dict built
+    # from ALL_SESSIONS, so a duplicate would win at random.
+    timeframes = [s.timeframe for s in ALL_SESSIONS]
+    assert len(timeframes) == len(set(timeframes))
 
 
-def test_retired_scalp_is_never_scanned():
-    """sr_zone lost 0.280R/trade over 16,157 trades at 15m. Re-adding it to the
-    scanned set would resume delivering it."""
+def test_sr_zone_is_never_scanned_again():
+    """sr_zone lost 0.415R per trade over 16,157 trades at 15m. The slot is
+    scanned again, but by cloud_mss — sr_zone must not creep back into it."""
     from signals.models import TRADING_SESSIONS
 
-    assert "15m" not in {s.timeframe for s in TRADING_SESSIONS}
     assert "sr_zone" not in {s.strategy for s in TRADING_SESSIONS if s.strategy}
 
 
@@ -699,10 +696,12 @@ def test_main_prefetches_recent_maps_once_per_session_not_per_symbol(monkeypatch
     # not one call per symbol.
     assert events_calls == [
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "5m"),
+        (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "15m"),
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "1h"),
     ]
     assert signals_calls == [
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "5m"),
+        (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "15m"),
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "1h"),
     ]
 
@@ -771,13 +770,13 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
     run_module.main()
 
     assert sorted(scanned) == [
-        ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
-        ("ETHUSDT", "1h"), ("ETHUSDT", "5m"),
+        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
+        ("ETHUSDT", "15m"), ("ETHUSDT", "1h"), ("ETHUSDT", "5m"),
     ]
     outcomes = runs[0]["outcomes"]
     assert [(o["symbol"], o["timeframe"]) for o in outcomes] == [
         ("BTCUSDT", "5m"), ("ETHUSDT", "5m"),
-
+        ("BTCUSDT", "15m"), ("ETHUSDT", "15m"),
         ("BTCUSDT", "1h"), ("ETHUSDT", "1h"),
     ]
 
@@ -816,12 +815,13 @@ def test_main_scans_gbpusd_on_the_swing_session_only(monkeypatch):
     run_module.main()
 
     assert sorted(scanned) == [
-        ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
+        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
         ("GBPUSD", "1h"),
     ]
-    # The fast session must not even query for it.
+    # The fast sessions must not even query for it.
     assert prefetched == [
         (("BTCUSDT",), "5m"),
+        (("BTCUSDT",), "15m"),
         (("BTCUSDT", "GBPUSD"), "1h"),
     ]
 
@@ -852,7 +852,7 @@ def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypat
 
     run_module.main()
 
-    assert sorted(seen) == [("1h", "4h"), ("5m", "15m")]
+    assert sorted(seen) == [("15m", None), ("1h", "4h"), ("5m", "15m")]
 
 
 def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
@@ -885,6 +885,7 @@ def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
 
     assert seen["prefetched"] == {
         ("BTCUSDT", "5m"): candles,
+        ("BTCUSDT", "15m"): candles,
         ("BTCUSDT", "1h"): candles,
     }
 
@@ -1112,3 +1113,62 @@ def test_paper_failure_never_breaks_the_scan(monkeypatch):
     cfg = type("C", (), {"supabase_url": "u", "supabase_service_key": "k"})()
     run._record_paper_sr_limit("BTCUSD", market, cfg,
                                timeframe="1h", session=None)  # must not raise
+
+
+def test_fifteen_minute_session_runs_cloud_mss():
+    from signals.models import ALL_SESSIONS, TRADING_SESSIONS
+
+    by_tf = {s.timeframe: s for s in TRADING_SESSIONS}
+    assert "15m" in by_tf, "the 15m session must be scanned again"
+    assert by_tf["15m"].strategy == "cloud_mss"
+    assert by_tf["15m"].max_open_days == 2
+    # Exactly one session may claim a timeframe: outcome_tracker keys expiry
+    # off ALL_SESSIONS by timeframe, so a duplicate would win at random.
+    timeframes = [s.timeframe for s in ALL_SESSIONS]
+    assert len(timeframes) == len(set(timeframes))
+
+
+def test_load_market_data_fetches_h1_for_cloud_mss(monkeypatch):
+    """cloud_mss builds its cloud from 1h candles. Without them the detector
+    returns None on every bar and the session silently produces nothing."""
+    from signals.models import Candle
+
+    fetched = []
+
+    def fake_fetch(symbol, interval, limit, session=None):
+        fetched.append((interval, limit))
+        return [Candle(i * 900_000, 100.0, 100.5, 99.5, 100.0, 1.0)
+                for i in range(limit)]
+
+    monkeypatch.setattr(run_module, "fetch_candles", fake_fetch)
+    market, _ = run_module._load_market_data(
+        "BTCUSDT", "15m", "cloud_mss", _config(), session=None)
+
+    assert market is not None
+    assert market.h1_candles, "1h candles were not loaded"
+    assert "1h" in [i for i, _ in fetched]
+
+
+def test_cloud_mss_candle_limit_clears_its_own_minimum():
+    """A fetch yielding fewer closed bars than MIN_CANDLES would leave a
+    detector that can never fire — silently, with no error anywhere."""
+    from signals.strategies.cloud_mss.detector import MIN_CANDLES
+
+    limit = run_module._candle_limit_for("cloud_mss", _config())
+    # _load_market_data drops the still-forming bar.
+    assert limit - 1 > MIN_CANDLES
+
+
+def test_no_setup_indicators_for_cloud_mss_are_relevant():
+    """A no-setup ai_event must log what the strategy actually reads. Falling
+    through to the ema_cross default would record EMA/RSI/MACD for a strategy
+    that uses none of them — misleading rows in ai_events."""
+    n = 30
+    indicators = run_module._no_setup_indicators(
+        "cloud_mss", [2.0] * n, [25.0] * n, "up",
+        [1.0] * n, [1.0] * n, [50.0] * n, [0.0] * n,
+    )
+    assert indicators["strategy"] == "cloud_mss"
+    assert indicators["atr"] == 2.0
+    assert "ema9" not in indicators
+    assert "rsi" not in indicators

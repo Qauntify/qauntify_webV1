@@ -21,6 +21,8 @@ _DEFAULT_MAX_OPEN = next(
 HISTORY_LIMIT = 1000
 
 _TP_ORDER = ("tp1_hit", "tp2_hit", "tp3_hit")
+# Terminal outcomes. tp1_hit / tp2_hit are also terminal when closed_at is set
+# (TP banked, later stop — we freeze the highest level reached as the win).
 _TERMINAL = frozenset({"tp3_hit", "sl_hit", "expired", "tp_hit"})
 
 
@@ -28,6 +30,22 @@ def _candle_closed_at(candle) -> str:
     return datetime.fromtimestamp(
         candle.open_time / 1000, tz=timezone.utc,
     ).isoformat()
+
+
+def _stop_to_partial_win(already: set[str], events: list[tuple[str, str]]) -> str | None:
+    """If a stop arrives after banking TP1+, freeze the highest banked level.
+
+    Returns the win status to store instead of sl_hit, or None for a pure stop.
+    """
+    hit = set(already)
+    for name, _ in events:
+        if name in _TP_ORDER or name == "tp_hit":
+            hit.add(name if name != "tp_hit" else "tp1_hit")
+    if "tp2_hit" in hit or "tp3_hit" in hit:
+        return "tp2_hit"
+    if "tp1_hit" in hit:
+        return "tp1_hit"
+    return None
 
 
 def _targets(signal_row: dict) -> list[float]:
@@ -222,8 +240,20 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
             continue
 
         latest = None
+        applied: list[tuple[str, str]] = []
         for outcome, closed_at in events:
-            terminal = outcome in _TERMINAL
+            freeze_only = False
+            if outcome == "sl_hit":
+                locked = _stop_to_partial_win(_already_hit(row), applied)
+                if locked is not None:
+                    # Banked TP1+ then stopped: freeze as a TP1/TP2 win.
+                    outcome = locked
+                    terminal = True
+                    freeze_only = True
+                else:
+                    terminal = True
+            else:
+                terminal = outcome in _TERMINAL
             try:
                 update_signal_outcome(
                     row["id"], outcome, closed_at,
@@ -238,7 +268,9 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
                   f"{row['direction']} from {row['entry']}")
             latest = outcome
             row = {**row, "status": outcome}
-            if outcome in ("tp3_hit", "tp_hit", "sl_hit"):
+            if terminal:
+                row = {**row, "closed_at": closed_at}
+            if terminal and outcome != "expired":
                 chart_url = attach_outcome_chart(
                     row, outcome, window,
                     supabase_url=cfg.supabase_url,
@@ -255,7 +287,9 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
                     except Exception as exc:
                         print(f"[{symbol}] failed to store outcome_chart_url "
                               f"({type(exc).__name__}), continuing")
-            if (outcome in ("tp1_hit", "tp2_hit", "tp3_hit", "tp_hit", "sl_hit")
+            if (not freeze_only
+                    and outcome in ("tp1_hit", "tp2_hit", "tp3_hit", "tp_hit",
+                                    "sl_hit")
                     and cfg.telegram_bot_token and cfg.telegram_channel_id):
                 try:
                     send_outcome_alert(row, outcome, cfg.telegram_bot_token,
@@ -264,6 +298,7 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
                 except Exception as exc:
                     print(f"[{symbol}] Telegram outcome alert failed "
                           f"({type(exc).__name__}: {exc}), continuing")
+            applied.append((outcome, closed_at))
         if latest is not None:
             closed.append((row, latest))
     return closed

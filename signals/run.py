@@ -417,7 +417,7 @@ def _no_setup_indicators(strategy, atr14, adx14, htf_trend,
                          ema9, ema21, rsi14, macd_hist):
     """Indicators to attach to a no-setup ai_event, or None while a required
     series is still warming up (mirrors the previous per-strategy branches)."""
-    if strategy in ("ict_smc", "ict_fvg", "sr_zone"):
+    if strategy in ("ict_smc", "ict_fvg", "sr_zone", "cloud_mss"):
         if atr14[-1] is None:
             return None
         indicators = {"strategy": strategy, "atr": atr14[-1]}
@@ -444,13 +444,29 @@ class MarketData(NamedTuple):
     h1_candles: object
 
 
+# Strategies needing more history than the default scan window, and why.
+#   ce_lwma   — LWMA200 on the 15m series
+#   cloud_mss — LWMA200 plus the structure window. 260 fetched leaves 259
+#               closed bars against a MIN_CANDLES of 230; at ce_lwma's 220 the
+#               detector would be starved by its own limit and never fire.
+EXTRA_HISTORY = {"ce_lwma": 220, "cloud_mss": 260}
+# Strategies whose detector reads 1h candles directly, rather than only taking
+# a higher-timeframe trend string.
+NEEDS_H1 = ("ce_lwma", "cloud_mss")
+
+
+def _candle_limit_for(strategy, cfg):
+    """Bars to fetch for `strategy` on its primary timeframe."""
+    return max(cfg.candle_limit, EXTRA_HISTORY.get(strategy, 0))
+
+
 def _load_market_data(symbol, timeframe, strategy, cfg, *,
                       confluence_timeframe=None, session=None):
     """Fetch closed candles + indicators (+ H1 for ce_lwma / HTF trend for
     confluence). Returns (MarketData, candles) on success, (None, None) when the
     initial candle fetch fails, or (None, candles) when a required H1/HTF fetch
     fails after candles were already fetched."""
-    candle_limit = max(cfg.candle_limit, 220) if strategy == "ce_lwma" else cfg.candle_limit
+    candle_limit = _candle_limit_for(strategy, cfg)
     try:
         candles = with_retry(
             lambda: fetch_candles(symbol, timeframe, candle_limit, session=session)
@@ -471,7 +487,7 @@ def _load_market_data(symbol, timeframe, strategy, cfg, *,
     adx14 = adx(highs, lows, closes, 14)
     htf_trend = None
     h1_candles = None
-    if strategy == "ce_lwma":
+    if strategy in NEEDS_H1:
         try:
             h1_raw = with_retry(
                 lambda: fetch_candles(symbol, "1h", max(cfg.candle_limit, 80),
@@ -769,8 +785,7 @@ def main():
               f"{len(settings.symbols)} symbol(s) in {len(TRADING_SESSIONS)} "
               f"session(s) ({session_label}), "
               f"swing_strategy={settings.signal_strategy}, "
-              f"super_scalp=ict_fvg. (15m scalp retired — see "
-              f"docs/strategy-history-sweep.md)")
+              f"scalp=cloud_mss, super_scalp=ict_fvg.")
 
         def scan_one(item):
             """(index, symbol, TradingSession, recent_events, recent_signals, open_symbols)

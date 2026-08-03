@@ -65,7 +65,18 @@ def build_outcome_plan(signal_row, outcome, candles, entry_time):
             plan.append(level(lvl, lbl, "target", style="dashed"))
 
     post = [c for c in candles if c.open_time >= entry_time]
-    win = outcome in ("tp3_hit", "tp_hit")
+    full_win = outcome in ("tp3_hit", "tp_hit")
+    # Closed partial wins (status frozen at tp1_hit / tp2_hit) or TP crossed
+    # before a later stop still count as a win.
+    tp1_time = first_cross(post, tp1, direction, "tp") if tp1 is not None else None
+    partial_win = (
+        outcome in ("tp1_hit", "tp2_hit")
+        or (
+            outcome == "sl_hit"
+            and (bool(signal_row.get("tp1_hit_at")) or tp1_time is not None)
+        )
+    )
+    win = full_win or partial_win
 
     for lvl, lbl in ((tp1, "TP1 ✓"), (tp2, "TP2 ✓")):
         if lvl is None:
@@ -74,12 +85,22 @@ def build_outcome_plan(signal_row, outcome, candles, entry_time):
         if t is not None:
             plan.append(marker(t, lvl, lbl, "target"))
 
-    if win:
+    if full_win:
         top = tp3 if tp3 is not None else tp1
         t = first_cross(post, top, direction, "tp")
         if t is not None:
             plan.append(marker(t, top, "✓ TP3 HIT", "win"))
         plan.append(zone(top, entry, entry_time, "Captured move", "win"))
+    elif partial_win:
+        top = tp2 if outcome == "tp2_hit" and tp2 is not None else tp1
+        tag = "✓ TP2 WIN" if outcome == "tp2_hit" else "✓ TP1 WIN"
+        t = first_cross(post, top, direction, "tp") if top is not None else None
+        if t is not None and top is not None:
+            plan.append(marker(t, top, tag, "win"))
+        elif tp1_time is not None and tp1 is not None:
+            plan.append(marker(tp1_time, tp1, "✓ TP1 WIN", "win"))
+        if top is not None:
+            plan.append(zone(top, entry, entry_time, "Captured move", "win"))
     else:
         t = first_cross(post, stop, direction, "sl")
         if t is not None:

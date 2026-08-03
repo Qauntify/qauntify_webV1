@@ -103,7 +103,7 @@ class NoSignalReport:
 
 # Every strategy the router can dispatch to.
 SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone",
-                     "bbma_extreme", "bbma_reentry")
+                     "bbma_extreme", "bbma_reentry", "cloud_mss")
 
 # The subset the admin page may store in bot_settings.signal_strategy, which
 # only controls the SWING session — the scalp sessions pin their own strategy
@@ -123,10 +123,15 @@ DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
 TIMEFRAME_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "1h": 60}
 
-# Terminal win statuses (legacy tp_hit + multi-TP final).
+# Terminal full wins (legacy tp_hit + multi-TP final).
 WIN_STATUSES = frozenset({"tp_hit", "tp3_hit"})
-# Still polled by the outcome tracker.
+# In-progress (or closed-at-partial-win) statuses the open-poll filter sees —
+# callers MUST also require closed_at IS NULL so frozen TP1/TP2 wins stay closed.
 OPEN_POLL_STATUSES = frozenset({"open", "tp1_hit", "tp2_hit"})
+# Banked-TP wins that froze after a later stop (status stays tp1_hit / tp2_hit).
+PARTIAL_WIN_STATUSES = frozenset({"tp1_hit", "tp2_hit"})
+# Every closed status that counts as a decided win for public stats.
+CLOSED_WIN_STATUSES = WIN_STATUSES | PARTIAL_WIN_STATUSES
 
 
 @dataclass(frozen=True)
@@ -156,13 +161,20 @@ class TradingSession:
 
 
 # Sessions the main engine scans, in order, every run.
-# Super scalp = 5m ICT+FVG (tight R); swing = admin strategy.
+# Super scalp = 5m ICT+FVG (tight R); scalp = 15m cloud rejection + CHoCH;
+# swing = admin strategy.
 #
-# The 15m sr_zone scalp was RETIRED — see AUXILIARY_SESSIONS below.
+# The 15m slot ran sr_zone until 2026-07-28, when it was retired at -0.415R
+# per trade over 8.87 years. It is scanned again here carrying cloud_mss,
+# whose own measurement gates whether it stays (docs/r-model-correction.md).
 TRADING_SESSIONS = (
     TradingSession(
         name="super_scalp", timeframe="5m", max_open_days=1,
         confluence_timeframe="15m", strategy="ict_fvg",
+    ),
+    TradingSession(
+        name="scalp", timeframe="15m", max_open_days=2,
+        confluence_timeframe=None, strategy="cloud_mss",
     ),
     TradingSession(
         name="swing", timeframe="1h", max_open_days=14,
@@ -180,25 +192,6 @@ AUXILIARY_SESSIONS = (
     TradingSession(
         name="xau_scalp", timeframe="1m", max_open_days=1, max_open_hours=4,
         strategy="ict_fvg",
-    ),
-    # RETIRED 2026-07-28. Measured over 8.87 years of verified Binance history
-    # on BTC and ETH (docs/strategy-history-sweep.md): 16,157 trades,
-    # -0.280R per trade, -4,529R total, t = -27.6.
-    #
-    # The rules are not the problem — gross expectancy is +0.112R. A 15m stop
-    # is small relative to price, so a 20bps taker round trip costs 0.392R per
-    # trade and takes the edge three times over. Nothing available fixes it at
-    # this timeframe: adding 1h confluence makes it worse (-0.311R), and even
-    # limit entry at maker fees only reaches -0.006R on 15m. The whole S/R
-    # family needs 1h or slower to pay for itself (sr_limit at 1h: +0.113R).
-    #
-    # Kept as a registered session, NOT deleted: the outcome tracker resolves
-    # every open row regardless of which process created it, and an
-    # unregistered timeframe silently inherits the 1h swing's 14-day expiry.
-    # Existing open 15m rows must still settle on a 2-day clock.
-    TradingSession(
-        name="scalp", timeframe="15m", max_open_days=2,
-        confluence_timeframe=None, strategy="sr_zone",
     ),
 )
 

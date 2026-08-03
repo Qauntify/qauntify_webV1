@@ -13,9 +13,11 @@ def test_calculate_expected_r_includes_costs():
         "expired": 0.10,
     }
 
-    # Weighted gross R = .2(-1) + .2(0) + .2(1) + .3(3) + .1(0) = .90.
-    # Net of the configured .05R execution estimate, expected R is .85R.
-    assert calculate_expected_r(probabilities, estimated_cost_r=0.05) == pytest.approx(0.85)
+    # Weighted gross R = .2(-1) + .2(1/3) + .2(1) + .3(3) + .1(0) ≈ 0.9667.
+    # Net of the configured .05R execution estimate ≈ 0.9167R.
+    assert calculate_expected_r(probabilities, estimated_cost_r=0.05) == pytest.approx(
+        0.2 * (-1) + 0.2 * (1 / 3) + 0.2 * 1 + 0.3 * 3 + 0.1 * 0 - 0.05
+    )
 
 
 def test_calculate_expected_r_rejects_invalid_probabilities():

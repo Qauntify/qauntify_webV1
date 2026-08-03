@@ -3,7 +3,7 @@
 Each strategy builder emits only its *structure* elements; entry/SL/TP levels
 are appended by the dispatcher so every plan has them (DRY).
 """
-from signals.chart.annotations import level, marker, series, zone
+from signals.chart.annotations import band, level, marker, series, zone
 from signals.indicators import ema, lwma
 
 
@@ -110,12 +110,91 @@ def _bbma(candles, signal):
     return out
 
 
+def cloud_series(candles, h1_candles):
+    """Per-15m-bar (cloud_low, cloud_high, ce_band) from the 1h Chandelier.
+
+    The cloud is a fill between two MOVING lines, so drawing it as a fixed
+    rectangle — which this did until 2026-08-01 — shows a shape the indicator
+    never has. Each bar takes the last 1h candle that had CLOSED by its open
+    time, the same causality rule the detector and the backtester use, so the
+    drawn cloud is the one the setup was actually read against.
+    """
+    from signals.indicators import chandelier_exit, sma_atr
+    from signals.strategies.cloud_mss.detector import (
+        CE_ATR_PERIOD, CE_LOOKBACK, CE_MULTIPLIER, MA_PERIOD,
+    )
+
+    long_stop, short_stop, direction = chandelier_exit(
+        [c.high for c in h1_candles], [c.low for c in h1_candles],
+        [c.close for c in h1_candles], period=CE_ATR_PERIOD,
+        multiplier=CE_MULTIPLIER, lookback=CE_LOOKBACK, atr_fn=sma_atr,
+    )
+    ma = lwma([c.close for c in candles], MA_PERIOD)
+
+    htf_ms = 60 * 60_000
+    out = []
+    j = -1
+    for bar, ma_value in zip(candles, ma):
+        while (j + 1 < len(h1_candles)
+               and h1_candles[j + 1].open_time + htf_ms <= bar.open_time):
+            j += 1
+        trend = direction[j] if j >= 0 else None
+        band = None
+        if trend == 1:
+            band = long_stop[j]
+        elif trend == -1:
+            band = short_stop[j]
+        if band is None or ma_value is None:
+            out.append((bar.open_time, None, None, None))
+        else:
+            out.append((bar.open_time, min(band, ma_value),
+                        max(band, ma_value), band))
+    return out
+
+
+def _cloud_mss(candles, signal, h1_candles=None):
+    """The cloud as a band that follows both its boundaries, the MA200 anchor,
+    the Chandelier band itself, and the level whose break confirmed entry.
+
+    Without `h1_candles` the Chandelier cannot be recomputed, so it falls back
+    to a flat zone at the values recorded on the signal. That fallback is a
+    degraded picture, not the indicator — pass the 1h candles where you have
+    them.
+    """
+    ind = signal.indicators
+    side = ind.get("side", "cloud")
+    role = side if side in ("premium", "discount") else "sr"
+    out = []
+
+    if h1_candles:
+        rows = cloud_series(candles, h1_candles)
+        out.append(band(
+            [{"time": t, "upper": hi, "lower": lo} for t, lo, hi, _ in rows],
+            f"Cloud ({side})", role))
+        out.append(series(
+            [{"time": t, "value": ce} for t, _, _, ce in rows],
+            "Chandelier (1h)", "trail"))
+    else:
+        out.append(zone(ind["cloud_high"], ind["cloud_low"], None,
+                        f"Cloud ({side})", role))
+
+    closes = [c.close for c in candles]
+    out.append(series([{"time": c.open_time, "value": v}
+                       for c, v in zip(candles, lwma(closes, 200))],
+                      "LWMA200", "lwma"))
+    if ind.get("choch_level") is not None:
+        out.append(level(ind["choch_level"], "CHoCH level", "choch",
+                         style="dashed"))
+    return out
+
+
 _BUILDERS = {
     "ict_fvg": _ict_fvg,
     "ict_smc": _ict_smc,
     "sr_zone": _sr_zone,
     "ema_cross": _ema_cross,
     "ce_lwma": _ce_lwma,
+    "cloud_mss": _cloud_mss,
     "bbma_extreme": _bbma,
     "bbma_reentry": _bbma,
 }
@@ -125,13 +204,21 @@ def _no_structure(candles, signal):
     return []
 
 
-def build_chart_plan(candles, signal):
-    """Return the full annotation list for one signal (structure + trade levels)."""
+def build_chart_plan(candles, signal, h1_candles=None):
+    """Return the full annotation list for one signal (structure + trade levels).
+
+    `h1_candles` is only used by multi-timeframe strategies, which need the
+    higher-timeframe series to draw their structure truthfully. Builders that
+    do not take it are called unchanged.
+    """
     ind = signal.indicators or {}
     strategy = ind.get("strategy")
     if strategy is None and "ema9" in ind:
         strategy = "ema_cross"  # ema_cross detector omits the "strategy" key
     builder = _BUILDERS.get(strategy, _no_structure)
-    plan = list(builder(candles, signal))
+    if builder is _cloud_mss:
+        plan = list(builder(candles, signal, h1_candles=h1_candles))
+    else:
+        plan = list(builder(candles, signal))
     plan.extend(_trade_levels(signal))
     return plan

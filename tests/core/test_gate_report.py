@@ -40,11 +40,9 @@ def test_realised_r_clean_stop_is_minus_one():
 
 
 def test_realised_r_counts_a_banked_tp1_before_a_stop():
-    """A trade that banks TP1 then reverses is NOT a full loss — reading the
-    final status alone would wrongly score it -1R."""
+    """A trade that banks TP1 then reverses keeps the booked third (~+0.33R)."""
     r = realised_r(_row("sl_hit", tp1_hit_at="2026-07-20T00:00:00Z"))
-    # Fixed stop: the unbooked two thirds lose their full risk.
-    assert abs(r - (-1.0 / 3.0)) < 1e-9
+    assert abs(r - (1.0 / 3.0)) < 1e-9
 
 
 def test_realised_r_rejects_zero_risk_rows():

@@ -40,3 +40,6 @@ artifacts/bbma-trades/
 
 # Root-level npm install (web/ has its own ignore for web/node_modules).
 /node_modules/
+
+# Generated review images (regenerate with scripts/cloud_mss_trade_shots.py).
+artifacts/cloud-mss-trades/

@@ -57,11 +57,38 @@ def test_build_outcome_plan_win_has_ticks_flag_and_zone():
 
 def test_build_outcome_plan_loss_shows_partial_and_stop():
     row = _win_row()
-    # rise through TP1 then drop to SL
-    candles = [_c(0, 100, 100.2, 99.8, 100), _c(1, 100, 101.2, 100, 101),
-               _c(2, 101, 101, 97.5, 98)]
+    # Pure stop: never tags TP1.
+    candles = [_c(0, 100, 100.2, 99.8, 100), _c(1, 100, 100, 97.5, 98)]
     plan = build_outcome_plan(row, "sl_hit", candles, 0)
     labels = [a.get("label") for a in plan if a["kind"] == "marker"]
-    assert "TP1 ✓" in labels  # honest: banked TP1 before reversing
+    assert "TP1 ✓" not in labels
     assert "✗ SL HIT" in labels
     assert any(a["kind"] == "zone" and a["role"] == "loss" for a in plan)
+
+
+def test_build_outcome_plan_tp1_then_sl_counts_as_win():
+    row = {**_win_row(), "tp1_hit_at": "2026-07-01T01:00:00Z"}
+    # Rise through TP1 then drop to SL — still a win once TP1 banked.
+    candles = [_c(0, 100, 100.2, 99.8, 100), _c(1, 100, 101.2, 100, 101),
+               _c(2, 101, 101, 97.5, 98)]
+    plan = build_outcome_plan(row, "tp1_hit", candles, 0)
+    labels = [a.get("label") for a in plan if a["kind"] == "marker"]
+    assert "TP1 ✓" in labels
+    assert "✓ TP1 WIN" in labels
+    assert "✗ SL HIT" not in labels
+    assert any(a["kind"] == "zone" and a["role"] == "win" for a in plan)
+    assert not any(a["kind"] == "zone" and a["role"] == "loss" for a in plan)
+
+
+def test_build_outcome_plan_closed_tp2_win():
+    row = {
+        **_win_row(),
+        "tp1_hit_at": "2026-07-01T01:00:00Z",
+        "tp2_hit_at": "2026-07-01T02:00:00Z",
+    }
+    candles = [_c(0, 100, 100.2, 99.8, 100), _c(1, 100, 101.2, 100, 101),
+               _c(2, 101, 102.2, 101, 102), _c(3, 102, 102, 97.5, 98)]
+    plan = build_outcome_plan(row, "tp2_hit", candles, 0)
+    labels = [a.get("label") for a in plan if a["kind"] == "marker"]
+    assert "✓ TP2 WIN" in labels
+    assert any(a["kind"] == "zone" and a["role"] == "win" for a in plan)

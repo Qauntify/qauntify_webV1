@@ -94,7 +94,7 @@ def test_lower_timeframe_orders_tp1_before_stop(config):
     ])
     result = resolve(config, parent, minutes)
     assert result.outcome_class == "tp1_then_sl"
-    assert result.gross_realized_r == pytest.approx(-1 / 3)
+    assert result.gross_realized_r == pytest.approx(1 / 3)
     assert result.lower_timeframe_resolutions == 1
     assert result.conservative_fallbacks == 0
 

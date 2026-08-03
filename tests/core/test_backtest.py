@@ -129,21 +129,20 @@ def test_scaled_r_full_tp3_is_two_r():
     assert scaled_r("long", 100, 98, TPS, reached=3, stopped=False) == 2.0
 
 
-def test_scaled_r_tp2_then_stopped_loses_the_last_third():
-    """The stop never moves, so the unbooked third loses its full risk:
-    1/3*1R + 1/3*2R - 1/3*1R = +0.667R."""
+def test_scaled_r_tp2_then_stopped_keeps_what_was_banked():
+    """After TP1 the remainder is at BE: 1/3*1R + 1/3*2R = +1.0R."""
     assert scaled_r("long", 100, 98, TPS, reached=2, stopped=True) \
-        == pytest.approx(2.0 / 3.0)
+        == pytest.approx(1.0)
 
 
 def test_scaled_r_full_loss_when_nothing_reached():
     assert scaled_r("long", 100, 98, TPS, reached=0, stopped=True) == -1.0
 
 
-def test_scaled_r_tp1_then_stopped_is_a_net_loss():
-    """Banking TP1 does not make a trade safe: 1/3*1R - 2/3*1R = -0.333R."""
+def test_scaled_r_tp1_then_stopped_keeps_the_booked_third():
+    """Banking TP1 locks the booked third; a later stop does not claw it back."""
     assert scaled_r("long", 100, 98, TPS, reached=1, stopped=True) \
-        == pytest.approx(-1.0 / 3.0)
+        == pytest.approx(1.0 / 3.0)
 
 
 def test_scaled_r_tp1_then_expire_books_first_third():
@@ -329,3 +328,68 @@ def test_maker_tier_costs_less_than_the_default_taker_tier():
 
 def test_explicit_bps_of_zero_means_no_cost():
     assert net_r_multiples("BTCUSD", [1.0], [100.0], [98.0], bps=0.0) == [1.0]
+
+
+# --- multi-timeframe replay -------------------------------------------------
+
+def test_windowed_replay_passes_only_closed_htf_candles():
+    """A 15m bar must never see a 1h candle that had not finished forming.
+    Leaking the in-progress candle is lookahead, and it would flatter every
+    multi-timeframe result in a way nothing downstream could detect."""
+    hour = 3_600_000
+    primary = [Candle(i * 900_000, 100.0, 101.0, 99.0, 100.0, 1.0)
+               for i in range(400)]
+    htf = [Candle(i * hour, 100.0, 101.0, 99.0, 100.0, 1.0) for i in range(20)]
+
+    seen = []
+
+    def spy(symbol, candles, atr14, htf_trend=None, h1_candles=None):
+        seen.append((candles[-1].open_time,
+                     h1_candles[-1].open_time if h1_candles else None))
+        return None
+
+    backtest_windowed(spy, "BTCUSD", primary, [2.0] * len(primary),
+                      [None] * len(primary), window=200,
+                      htf_candles=htf, htf_minutes=60)
+
+    assert seen, "the detector was never called"
+    for bar_time, htf_time in seen:
+        assert htf_time is not None
+        assert htf_time + hour <= bar_time, (
+            f"htf candle at {htf_time} had not closed by {bar_time}")
+
+
+def test_windowed_replay_without_htf_candles_omits_the_argument():
+    """Single-timeframe detectors do not accept h1_candles. Passing it
+    unconditionally would break every existing strategy."""
+    primary = [Candle(i * 900_000, 100.0, 101.0, 99.0, 100.0, 1.0)
+               for i in range(300)]
+    calls = []
+
+    def spy(symbol, candles, atr14, htf_trend=None):
+        calls.append(1)
+        return None
+
+    backtest_windowed(spy, "BTCUSD", primary, [2.0] * len(primary),
+                      [None] * len(primary), window=200)
+    assert calls
+
+
+def test_windowed_replay_skips_bars_with_no_closed_htf_candle():
+    """Before the first HTF candle closes there is nothing causal to pass, so
+    those bars produce no setup rather than an empty or future slice."""
+    hour = 3_600_000
+    # Every primary bar precedes the first HTF close.
+    primary = [Candle(i * 900_000, 100.0, 101.0, 99.0, 100.0, 1.0)
+               for i in range(300)]
+    htf = [Candle(500 * hour, 100.0, 101.0, 99.0, 100.0, 1.0)]
+    calls = []
+
+    def spy(symbol, candles, atr14, htf_trend=None, h1_candles=None):
+        calls.append(1)
+        return None
+
+    backtest_windowed(spy, "BTCUSD", primary, [2.0] * len(primary),
+                      [None] * len(primary), window=200,
+                      htf_candles=htf, htf_minutes=60)
+    assert not calls
