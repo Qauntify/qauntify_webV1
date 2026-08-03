@@ -2,4 +2,8 @@
 scikit-learn>=1.5,<2
 catboost>=1.2.8,<2
 joblib>=1.4,<2
+# feature_v3_pipeline imports ta.momentum/trend/volatility. It was only
+# declared in requirements-ml.txt, which CI does not install (that file
+# also pulls tensorflow), so collection failed on a missing module.
+ta>=0.11,<0.12
 
