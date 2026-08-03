@@ -64,9 +64,11 @@ wraps to two lines on a narrow screen makes that token wrong, and `/war-room` is
 `overflow-hidden`, so it would clip content rather than fail visibly. The mobile
 wording is short enough to hold one line at 320px.
 
-Colour is a colder amber than the `#c9a227` brand accent. The accent already
-marks buttons, links and confidence badges; a warning in the same colour reads
-as more branding and stops registering.
+Colour is amber, deliberately unlike the brand accent. `--accent` is indigo
+(`#6366f1` light, `#818cf8` dark) and marks buttons, links and badges; the gold
+`#c9a227` that also appears in `globals.css` is confined to the war-room floor
+styling. Amber is used nowhere else, so the bar reads as a warning rather than
+as another branded surface.
 
 ### `web/src/app/layout.tsx`
 
@@ -104,8 +106,27 @@ no-op when nothing else is sticky.
 `/markets` and `/war-room`, so existing links and bookmarks keep working.
 
 `DashboardShell` and `DashboardNav` fall out of use and are deleted.
-`app/signup/page.tsx` and the `signUp` action in `app/auth/actions.ts` are
-removed. `proxy.ts` continues to gate `/admin` unchanged.
+`app/signup/page.tsx` and the `signup` action in `app/auth/actions.ts` are
+removed. `proxy.ts` continues to gate `/admin`.
+
+**Eleven other files point at `/dashboard`** and must be repointed, or every
+sign-in takes a pointless extra hop through a redirect:
+
+- `app/auth/actions.ts` — `login` success, and the `signup` branch being deleted
+- `app/auth/confirm/route.ts` — two email-confirmation redirects
+- `app/login/page.tsx` — already-signed-in redirect
+- `app/admin/layout.tsx` — two "back" links
+- `app/admin/actions.ts`, `lib/admin-guard.ts`, `proxy.ts` — non-admin denial
+
+All become `/signals`.
+
+**The `admin=denied` notice needs a new home.** Today `proxy.ts`,
+`admin-guard.ts` and `admin/actions.ts` send a rejected non-admin to
+`/dashboard?admin=denied`, and `dashboard/page.tsx` renders the explanation. A
+plain redirect to `/signals` would silently swallow that message, leaving
+someone who typed `/admin` with no idea why nothing happened. The denial target
+becomes `/signals?admin=denied`, and `/signals` renders the same `Notice` when
+the param is present.
 
 ### `web/src/app/disclaimer/page.tsx` (new)
 
