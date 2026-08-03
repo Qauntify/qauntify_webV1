@@ -15,8 +15,8 @@ export const metadata: Metadata = {
 export const revalidate = 20;
 
 const TABS = [
-  { id: "war-room", label: "War Room 🤖", href: "/dashboard/war-room" },
-  { id: "earlier", label: "Earlier debates", href: "/dashboard/war-room?tab=earlier" },
+  { id: "war-room", label: "Live Stage", href: "/dashboard/war-room" },
+  { id: "earlier", label: "All Debates", href: "/dashboard/war-room?tab=earlier" },
 ] as const;
 
 export default async function WarRoomPage({
@@ -43,7 +43,7 @@ export default async function WarRoomPage({
     >
       <div className="w-full space-y-6">
         <div className="lg:hidden">
-          <h1 className="text-xl font-bold">AI War Room 🤖⚔️</h1>
+          <h1 className="text-xl font-bold">AI War Room</h1>
           <p className="text-sm text-slate">
             Three robots debate every confirmed signal — the Manager decides.
           </p>

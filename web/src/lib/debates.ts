@@ -8,6 +8,7 @@ export type DebateMessage = {
 
 export type Debate = {
   id: string;
+  signalId: string | null;
   symbol: string;
   timeframe: string;
   direction: "long" | "short";
@@ -42,6 +43,7 @@ function parseDebate(row: Record<string, unknown>): Debate | null {
   const confidence = Number(row.manager_confidence);
   return {
     id: row.id,
+    signalId: typeof row.signal_id === "string" ? row.signal_id : null,
     symbol: String(row.symbol ?? ""),
     timeframe: String(row.timeframe ?? ""),
     direction,
@@ -78,5 +80,37 @@ export async function getDebates(limit = 8): Promise<Debate[]> {
       .filter((d): d is Debate => d !== null && d.transcript.length > 0);
   } catch {
     return [];
+  }
+}
+
+/** Latest war-room transcript linked to one signal, or null if none. */
+export async function getDebateForSignal(signalId: string): Promise<Debate | null> {
+  const config = supabaseConfig();
+  if (!config || !signalId) return null;
+  try {
+    const query = new URLSearchParams({
+      select: "*",
+      signal_id: `eq.${signalId}`,
+      order: "created_at.desc",
+      limit: "1",
+    });
+    const response = await fetch(
+      `${config.url}/rest/v1/agent_debates?${query.toString()}`,
+      {
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${config.anonKey}`,
+        },
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) return null;
+    const rows = (await response.json()) as Record<string, unknown>[];
+    const debate = rows.map(parseDebate).find(
+      (d): d is Debate => d !== null && d.transcript.length > 0,
+    );
+    return debate ?? null;
+  } catch {
+    return null;
   }
 }
