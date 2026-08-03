@@ -47,18 +47,28 @@ function DebateBody({ debate }: { debate: Debate }) {
 
 /** War Room block shown on every signal detail — same layout with or without a debate. */
 export function SignalWarRoomSection({ signalId }: { signalId: string }) {
-  const [debate, setDebate] = useState<Debate | null | undefined>(undefined);
+  // The fetched debate is stored alongside the signalId it belongs to, so
+  // switching signals falls back to the loading state by DERIVATION during
+  // render. Resetting it with a setDebate(undefined) inside the effect body
+  // does the same thing but costs an extra render pass, and trips
+  // react-hooks/set-state-in-effect.
+  const [loaded, setLoaded] = useState<{
+    signalId: string;
+    debate: Debate | null;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setDebate(undefined);
     getDebateForSignal(signalId).then((row) => {
-      if (!cancelled) setDebate(row);
+      if (!cancelled) setLoaded({ signalId, debate: row });
     });
     return () => {
       cancelled = true;
     };
   }, [signalId]);
+
+  // undefined while this signal's debate is still in flight.
+  const debate = loaded?.signalId === signalId ? loaded.debate : undefined;
 
   return (
     <div className="mt-5 rounded-lg border border-line bg-paper/40 p-4">
