@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getClosedOutcomeSignals, getSignals, getStats } from "@/lib/signals";
+import { getClosedOutcomeSignals, getDailyPnLStats, getSignals, getStats, getWarRoomSignalsPaginated } from "@/lib/signals";
 
 const ROW = {
   id: "abc-123",
@@ -178,11 +178,12 @@ describe("getStats", () => {
 });
 
 describe("getClosedOutcomeSignals", () => {
-  it("requests only tp_hit and sl_hit rows", async () => {
+  it("requests closed TP/SL rows including frozen tp1/tp2 wins", async () => {
     const fetchFn = mockFetch([]);
     await getClosedOutcomeSignals();
     const [url] = fetchFn.mock.calls[0];
-    expect(url).toContain("status=in.(tp_hit,tp3_hit,sl_hit)");
+    expect(url).toContain("status.in.(tp_hit,tp3_hit,sl_hit)");
+    expect(url).toContain("tp1_hit,tp2_hit");
     expect(url).toContain("order=closed_at.desc.nullslast");
     expect(url).not.toContain("timeframe=eq.");
   });
@@ -192,7 +193,7 @@ describe("getClosedOutcomeSignals", () => {
     await getClosedOutcomeSignals(undefined, "15m");
     const [url] = fetchFn.mock.calls[0];
     expect(url).toContain("timeframe=eq.15m");
-    expect(url).toContain("status=in.(tp_hit,tp3_hit,sl_hit)");
+    expect(url).toContain("status.in.(tp_hit,tp3_hit,sl_hit)");
   });
 
   it("maps closed_at and keeps only TP/SL statuses", async () => {
@@ -200,10 +201,90 @@ describe("getClosedOutcomeSignals", () => {
       { ...ROW, status: "tp_hit", closed_at: "2026-07-07T10:00:00+00:00" },
       { ...ROW, id: "open-1", status: "open" },
       { ...ROW, id: "exp-1", status: "expired" },
+      {
+        ...ROW,
+        id: "p1",
+        status: "tp1_hit",
+        closed_at: "2026-07-07T11:00:00+00:00",
+        tp1_hit_at: "2026-07-07T10:30:00+00:00",
+      },
     ]);
     const signals = await getClosedOutcomeSignals();
-    expect(signals).toHaveLength(1);
-    expect(signals[0].status).toBe("tp_hit");
-    expect(signals[0].closedAt).toBe("2026-07-07T10:00:00+00:00");
+    expect(signals.map((s) => s.id).sort()).toEqual(["abc-123", "p1"]);
+    expect(signals.find((s) => s.id === "abc-123")?.status).toBe("tp_hit");
+    expect(signals.find((s) => s.id === "p1")?.status).toBe("tp1_hit");
+    expect(signals.find((s) => s.id === "abc-123")?.closedAt).toBe(
+      "2026-07-07T10:00:00+00:00",
+    );
+  });
+});
+
+describe("getDailyPnLStats", () => {
+  it("counts closed TP1/TP2 and TP1-then-SL as wins", async () => {
+    const fetchFn = mockFetch([
+      {
+        ...ROW,
+        status: "tp3_hit",
+        closed_at: "2026-07-07T10:00:00+00:00",
+      },
+      {
+        ...ROW,
+        id: "p1",
+        status: "tp1_hit",
+        closed_at: "2026-07-07T11:00:00+00:00",
+        tp1_hit_at: "2026-07-07T10:30:00+00:00",
+      },
+      {
+        ...ROW,
+        id: "hybrid",
+        status: "sl_hit",
+        closed_at: "2026-07-07T12:00:00+00:00",
+        tp1_hit_at: "2026-07-07T11:30:00+00:00",
+      },
+      {
+        ...ROW,
+        id: "loss",
+        status: "sl_hit",
+        closed_at: "2026-07-07T13:00:00+00:00",
+      },
+    ]);
+    const days = await getDailyPnLStats();
+    expect(days).toEqual([
+      { date: "2026-07-07", wins: 3, losses: 1, net: 2 },
+    ]);
+    const url = String(fetchFn.mock.calls[0][0]);
+    expect(url).toContain("tp1_hit_at");
+    expect(url).toContain("tp1_hit,tp2_hit");
+  });
+});
+
+describe("getWarRoomSignalsPaginated", () => {
+  it("loads signals linked from agent_debates newest first", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            { signal_id: "sig-b", created_at: "2026-08-02T00:00:00Z" },
+            { signal_id: "sig-a", created_at: "2026-08-01T00:00:00Z" },
+            { signal_id: "sig-b", created_at: "2026-07-30T00:00:00Z" },
+          ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            { ...ROW, id: "sig-a", created_at: "2026-08-01T00:00:00Z" },
+            { ...ROW, id: "sig-b", created_at: "2026-08-02T00:00:00Z" },
+          ]),
+      });
+    vi.stubGlobal("fetch", fetchFn);
+
+    const page = await getWarRoomSignalsPaginated(1);
+    expect(page.total).toBe(2);
+    expect(page.signals.map((s) => s.id)).toEqual(["sig-b", "sig-a"]);
+    expect(String(fetchFn.mock.calls[0][0])).toContain("agent_debates");
+    expect(String(fetchFn.mock.calls[1][0])).toContain("id=in.(sig-b,sig-a)");
   });
 });

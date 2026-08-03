@@ -48,6 +48,8 @@ export type Signal = {
   createdAt: string;
   closedAt: string | null;
   status: SignalStatus;
+  tp1HitAt: string | null;
+  tp2HitAt: string | null;
   chartUrl: string | null;
   outcomeChartUrl: string | null;
 };
@@ -82,6 +84,8 @@ type SignalRow = {
   created_at: string;
   closed_at?: string | null;
   status?: string;
+  tp1_hit_at?: string | null;
+  tp2_hit_at?: string | null;
   chart_url?: string | null;
   outcome_chart_url?: string | null;
 };
@@ -257,6 +261,8 @@ function parseRow(row: SignalRow): Signal | null {
     createdAt: row.created_at,
     closedAt: typeof row.closed_at === "string" ? row.closed_at : null,
     status: parseStatus(row.status),
+    tp1HitAt: typeof row.tp1_hit_at === "string" ? row.tp1_hit_at : null,
+    tp2HitAt: typeof row.tp2_hit_at === "string" ? row.tp2_hit_at : null,
     chartUrl: typeof row.chart_url === "string" ? row.chart_url : null,
     outcomeChartUrl: typeof row.outcome_chart_url === "string" ? row.outcome_chart_url : null,
   };
@@ -356,6 +362,79 @@ export async function getSignalsPaginated(
   };
 }
 
+/**
+ * Signals that have a War Room debate, newest debate first.
+ * Uses agent_debates.signal_id to filter the signals grid.
+ */
+export async function getWarRoomSignalsPaginated(
+  page = 1,
+  accessToken?: string,
+  pageSize = SIGNALS_PAGE_SIZE,
+): Promise<SignalsPage> {
+  const config = supabaseConfig();
+  const empty: SignalsPage = { signals: [], page: 1, pageSize, total: 0, totalPages: 1 };
+  if (!config) return empty;
+
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  try {
+    // Debate volume is modest — load linked ids newest-first, then unique + page.
+    const debateRes = await fetch(
+      `${config.url}/rest/v1/agent_debates?select=signal_id,created_at` +
+        `&signal_id=not.is.null&order=created_at.desc&limit=1000`,
+      {
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${accessToken ?? config.anonKey}`,
+        },
+        cache: "no-store",
+      },
+    );
+    if (!debateRes.ok) return empty;
+    const debateRows = (await debateRes.json()) as { signal_id?: string | null }[];
+    const orderedIds: string[] = [];
+    const seen = new Set<string>();
+    for (const row of debateRows) {
+      const id = row.signal_id;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      orderedIds.push(id);
+    }
+    const total = orderedIds.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const pageClamped = Math.min(safePage, totalPages);
+    const start = (pageClamped - 1) * pageSize;
+    const pageIds = orderedIds.slice(start, start + pageSize);
+    if (pageIds.length === 0) {
+      return { signals: [], page: pageClamped, pageSize, total, totalPages };
+    }
+
+    const idList = pageIds.join(",");
+    const signalRows = await fetchRows(
+      `select=*&id=in.(${idList})&order=created_at.desc`,
+      accessToken,
+    );
+    const byId = new Map(
+      (signalRows ?? [])
+        .map(parseRow)
+        .filter((s): s is Signal => s !== null)
+        .map((s) => [s.id, s]),
+    );
+    const signals = pageIds
+      .map((id) => byId.get(id))
+      .filter((s): s is Signal => s !== undefined);
+
+    return {
+      signals,
+      page: pageClamped,
+      pageSize,
+      total,
+      totalPages,
+    };
+  } catch {
+    return empty;
+  }
+}
+
 /** Closed TP/SL outcomes only — open and expired are excluded from exports. */
 export async function getClosedOutcomeSignals(
   accessToken?: string,
@@ -364,14 +443,21 @@ export async function getClosedOutcomeSignals(
   const timeframeFilter = timeframe ? `&timeframe=eq.${timeframe}` : "";
   const rows = await fetchRows(
     `select=*${timeframeFilter}` +
-      `&status=in.(tp_hit,tp3_hit,sl_hit)&order=closed_at.desc.nullslast`,
+      `&or=(status.in.(tp_hit,tp3_hit,sl_hit),` +
+      `and(status.in.(tp1_hit,tp2_hit),closed_at.not.is.null))` +
+      `&order=closed_at.desc.nullslast`,
     accessToken,
   );
   if (!rows) return [];
   return rows
     .map(parseRow)
     .filter((s): s is Signal => s !== null)
-    .filter((s) => s.status === "tp_hit" || s.status === "tp3_hit" || s.status === "sl_hit");
+    .filter((s) =>
+      s.status === "tp_hit"
+      || s.status === "tp3_hit"
+      || s.status === "sl_hit"
+      || ((s.status === "tp1_hit" || s.status === "tp2_hit") && s.closedAt != null)
+    );
 }
 
 export type DailyPnL = {
@@ -390,8 +476,9 @@ export async function getDailyPnLStats(
   cutoff.setDate(cutoff.getDate() - days);
   
   const query =
-    `select=created_at,closed_at,status` +
-    `&status=in.(tp_hit,tp3_hit,sl_hit)` +
+    `select=created_at,closed_at,status,tp1_hit_at` +
+    `&or=(status.in.(tp_hit,tp3_hit,sl_hit),` +
+    `and(status.in.(tp1_hit,tp2_hit),closed_at.not.is.null))` +
     `&created_at=gte.${cutoff.toISOString()}` +
     `&order=created_at.desc`;
   const rows = await fetchRows(query, accessToken);
@@ -402,7 +489,24 @@ export async function getDailyPnLStats(
 
   for (const r of rows) {
     const status = parseStatus(r.status);
-    if (status !== "tp_hit" && status !== "tp3_hit" && status !== "sl_hit") continue;
+    const closedPartial =
+      (status === "tp1_hit" || status === "tp2_hit")
+      && typeof r.closed_at === "string";
+    // TP1 banked then later SL still counts as a win (same rule as stats RPC).
+    const partialAfterStop =
+      status === "sl_hit" && typeof r.tp1_hit_at === "string";
+    const isClosedOutcome =
+      status === "tp_hit"
+      || status === "tp3_hit"
+      || status === "sl_hit"
+      || closedPartial;
+    if (!isClosedOutcome) continue;
+
+    const isWin =
+      status === "tp_hit"
+      || status === "tp3_hit"
+      || closedPartial
+      || partialAfterStop;
     
     // Prefer closed day when available — that's when the outcome landed.
     const stamp = typeof r.closed_at === "string" ? r.closed_at : r.created_at;
@@ -413,8 +517,8 @@ export async function getDailyPnLStats(
     }
     
     const stats = dailyMap.get(dateStr)!;
-    if (status === "tp_hit" || status === "tp3_hit") stats.wins++;
-    if (status === "sl_hit") stats.losses++;
+    if (isWin) stats.wins++;
+    else stats.losses++;
   }
 
   const result: DailyPnL[] = [];

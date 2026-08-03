@@ -6,13 +6,10 @@ import { isAdminEmail } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const links = [
-  { href: "/#features", label: "Features" },
-  { href: "/#signals", label: "Signals" },
+  { href: "/signals", label: "Signals" },
   { href: "/war-room", label: "War Room" },
+  { href: "/markets", label: "Markets" },
   { href: "/track-record", label: "Track Record" },
-  { href: "/#markets", label: "Markets" },
-  { href: "/#pricing", label: "Pricing" },
-  { href: "/#faq", label: "FAQ" },
 ];
 
 export async function Nav() {
@@ -33,22 +30,16 @@ export async function Nav() {
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          {email ? (
-            <>
-              {isAdminEmail(email) ? (
-                <Link href="/admin" className="btn-secondary !py-2 !px-4 !text-sm hidden sm:inline-flex">
-                  Admin
-                </Link>
-              ) : null}
-              <Link href="/dashboard" className="btn-primary-sm">
-                Dashboard
-              </Link>
-            </>
-          ) : (
-            <Link href="/signup" className="btn-primary-sm">
-              Get Started
+          {email && isAdminEmail(email) ? (
+            <Link href="/admin" className="btn-secondary !py-2 !px-4 !text-sm">
+              Admin
             </Link>
-          )}
+          ) : null}
+          {!email ? (
+            <Link href="/login" className="btn-primary-sm">
+              Log in
+            </Link>
+          ) : null}
         </div>
       </div>
     </header>
