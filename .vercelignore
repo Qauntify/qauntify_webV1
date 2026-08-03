@@ -1,5 +1,9 @@
-signals/
-.claude/
+# Anchored with a leading slash: these name the Python engine and the agent
+# config at the REPO ROOT. Unanchored, they match at any depth, which silently
+# excluded web/src/app/signals/ and web/src/components/signals/ from the
+# upload and failed the build with "Can't resolve @/components/signals/...".
+/signals/
+/.claude/
 **/node_modules
 **/.next
 **/.git
