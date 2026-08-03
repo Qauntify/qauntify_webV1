@@ -43,3 +43,6 @@ artifacts/bbma-trades/
 
 # Generated review images (regenerate with scripts/cloud_mss_trade_shots.py).
 artifacts/cloud-mss-trades/
+
+# macOS finder metadata
+.DS_Store
