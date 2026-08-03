@@ -123,10 +123,15 @@ DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
 TIMEFRAME_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "1h": 60}
 
-# Terminal win statuses (legacy tp_hit + multi-TP final).
+# Terminal full wins (legacy tp_hit + multi-TP final).
 WIN_STATUSES = frozenset({"tp_hit", "tp3_hit"})
-# Still polled by the outcome tracker.
+# In-progress (or closed-at-partial-win) statuses the open-poll filter sees —
+# callers MUST also require closed_at IS NULL so frozen TP1/TP2 wins stay closed.
 OPEN_POLL_STATUSES = frozenset({"open", "tp1_hit", "tp2_hit"})
+# Banked-TP wins that froze after a later stop (status stays tp1_hit / tp2_hit).
+PARTIAL_WIN_STATUSES = frozenset({"tp1_hit", "tp2_hit"})
+# Every closed status that counts as a decided win for public stats.
+CLOSED_WIN_STATUSES = WIN_STATUSES | PARTIAL_WIN_STATUSES
 
 
 @dataclass(frozen=True)

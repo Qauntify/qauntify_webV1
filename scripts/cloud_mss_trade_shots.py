@@ -27,7 +27,8 @@ import requests
 
 from signals.backtest import HTF_WINDOW, htf_close_index, simulate_scaled
 from signals.chart.outcome_plan import build_outcome_plan
-from signals.chart.plan import build_chart_plan
+from signals.chart.annotations import band
+from signals.chart.plan import build_chart_plan, cloud_series
 from signals.chart.render import render_chart, render_outcome_chart
 from signals.history import binance_symbol, load_history
 from signals.indicators import atr
@@ -134,6 +135,17 @@ def collect_trades(symbol, session, count):
             # last RENDER_BARS, but the LWMA200 must be computed over all of it
             # or it is still warming up inside the view.
             "candles": candles[lo:i + 1],
+            # The 1h window the detector saw. Both charts need it to redraw
+            # the Chandelier that forms one edge of the cloud.
+            "h1": h1,
+            # Extended 1h so the cloud can also be drawn across the forward
+            # path on the outcome chart, not just up to entry.
+            "h1_path": htf[max(0, j + 1 - HTF_WINDOW):],
+            # Detector window start through resolution, at full 15m
+            # resolution. The outcome path alone is ~60 bars, and LWMA200
+            # needs 200 — computing the cloud on the path would silently
+            # produce an all-None band that draws nothing.
+            "ctx": candles[lo:i + 1 + max(bars, 1) + 1],
             "reached": reached,
             "gross": gross,
             "net": gross - cost_r(symbol, setup.entry, setup.stop_loss),
@@ -142,6 +154,32 @@ def collect_trades(symbol, session, count):
         i = i + 1 + max(bars, 1)
 
     return trades[-count:], source, candles
+
+
+def _cloud_band(trade, path, bucket, side):
+    """Cloud band aligned to `path`, which may have been bucketed.
+
+    The cloud is computed at full 15m resolution over the whole context — the
+    MA needs 200 bars of history the outcome path does not carry — then each
+    output bar takes the value of the LAST source bar inside its bucket, which
+    is the value that stood when that bar closed.
+    """
+    rows = cloud_series(trade["ctx"], trade["h1_path"])
+    width = bucket * 60_000
+    latest = {}
+    for t, lo, hi, _ in rows:
+        if lo is None:
+            continue
+        latest[t - (t % width)] = (lo, hi)
+    points = []
+    for candle in path:
+        lo_hi = latest.get(candle.open_time - (candle.open_time % width))
+        points.append({
+            "time": candle.open_time,
+            "lower": lo_hi[0] if lo_hi else None,
+            "upper": lo_hi[1] if lo_hi else None,
+        })
+    return band(points, f"Cloud ({side})", side)
 
 
 def _tf_label(minutes):
@@ -191,7 +229,9 @@ def render_trade(trade, symbol, setup_dir, outcome_dir, ordinal):
             f"cloud_mss ({side}) · {stamp.replace('_', ' ')} UTC")
 
     entry_png = render_chart(
-        trade["candles"], build_chart_plan(trade["candles"], signal), signal,
+        trade["candles"],
+        build_chart_plan(trade["candles"], signal, h1_candles=trade["h1"]),
+        signal,
         title=f"{head} · SETUP",
     )
     entry_path = setup_dir / f"{stem}.png"
@@ -206,6 +246,11 @@ def render_trade(trade, symbol, setup_dir, outcome_dir, ordinal):
     }
     path, entry_time, bucket = compress_path(trade["path"], trade["entry_time"])
     plan = build_outcome_plan(row, status, path, entry_time)
+    # build_outcome_plan draws only entry/SL/TP. Without the cloud the result
+    # cannot be read against the structure that produced it.
+    if trade["h1_path"]:
+        side = trade["setup"].indicators.get("side", "sr")
+        plan = [_cloud_band(trade, path, bucket, side)] + plan
     if status == "expired":
         # build_outcome_plan draws a loss zone for anything that is not a win.
         # This trade was closed out flat, so that zone would be a fiction.

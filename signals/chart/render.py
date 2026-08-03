@@ -82,6 +82,23 @@ def _draw(ax, plan, x_of, last_x):
             ax.annotate(label, (x, a["price"]), textcoords="offset points",
                         xytext=(0, 13), ha="center", color=color, fontsize=9,
                         fontweight="bold", zorder=6)
+        elif kind == "band":
+            xs, ups, los = [], [], []
+            for p in a["points"]:
+                xi = x_of.get(p["time"])
+                if xi is None or p["upper"] is None or p["lower"] is None:
+                    continue
+                xs.append(xi)
+                ups.append(p["upper"])
+                los.append(p["lower"])
+            if xs:
+                color = ROLE_FILL.get(a["role"], "#38bdf8")
+                ax.fill_between(xs, los, ups, color=color, alpha=0.16,
+                                zorder=1, linewidth=0)
+                ax.plot(xs, ups, color=color, linewidth=1.1, alpha=0.75, zorder=2)
+                ax.plot(xs, los, color=color, linewidth=1.1, alpha=0.75, zorder=2)
+                ax.text(xs[0] + 0.4, max(ups[0], los[0]), a["label"], color=color,
+                        fontsize=9, fontweight="bold", va="bottom", zorder=6)
         elif kind == "series":
             xs, ys = [], []
             for p in a["points"]:
@@ -111,6 +128,12 @@ def _price_bounds(candles, plan, pad_frac=0.04):
         elif a["kind"] == "zone":
             lo = min(lo, a["price_bottom"], a["price_top"])
             hi = max(hi, a["price_bottom"], a["price_top"])
+        elif a["kind"] == "band":
+            values = [v for p in a["points"]
+                      for v in (p["upper"], p["lower"]) if v is not None]
+            if values:
+                lo = min(lo, min(values))
+                hi = max(hi, max(values))
     pad = (hi - lo) * pad_frac or 1.0
     return lo - pad, hi + pad
 
@@ -173,13 +196,38 @@ def _outcome_title(signal_row, outcome) -> str:
     entry = float(signal_row["entry"])
     stop = float(signal_row["stop_loss"])
     direction = signal_row["direction"]
-    win = outcome in ("tp3_hit", "tp_hit")
-    exit_price = (float(signal_row.get("take_profit_3") or signal_row.get("take_profit"))
-                  if win else stop)
+    full_win = outcome in ("tp3_hit", "tp_hit")
+    partial_win = (
+        outcome in ("tp1_hit", "tp2_hit")
+        or (outcome == "sl_hit" and bool(signal_row.get("tp1_hit_at")))
+    )
+    win = full_win or partial_win
+    if full_win:
+        exit_price = float(signal_row.get("take_profit_3") or signal_row.get("take_profit"))
+        tag = "✓ TP3 HIT"
+    elif outcome == "tp2_hit" or (
+        partial_win and signal_row.get("tp2_hit_at") and outcome != "tp1_hit"
+    ):
+        exit_price = float(
+            signal_row.get("take_profit_2")
+            or signal_row.get("take_profit_1")
+            or signal_row.get("take_profit")
+            or entry
+        )
+        tag = "✓ TP2 WIN"
+    elif partial_win:
+        exit_price = float(
+            signal_row.get("take_profit_1")
+            or signal_row.get("take_profit")
+            or entry
+        )
+        tag = "✓ TP1 WIN"
+    else:
+        exit_price = stop
+        tag = "✗ SL HIT"
     risk = abs(entry - stop) or 1e-9
     r = abs(exit_price - entry) / risk * (1 if win else -1)
     move = (exit_price - entry) / entry * 100 * (1 if direction == "long" else -1)
-    tag = "✓ TP3 HIT" if win else "✗ SL HIT"
     return (f"{signal_row['symbol']} · {signal_row.get('timeframe', '')} · "
             f"{direction.upper()} · {tag} · {r:+.1f}R ({move:+.2f}%)")
 

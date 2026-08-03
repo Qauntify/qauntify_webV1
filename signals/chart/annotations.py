@@ -46,3 +46,14 @@ def marker(time, price, label, role, order=None):
 def series(points, label, role):
     """A line over the candles (EMA, LWMA). points: [{time, value}, ...]."""
     return {"kind": "series", "points": points, "label": label, "role": role}
+
+
+def band(points, label, role):
+    """A filled region between two per-bar series.
+
+    `points` is [{"time": ms, "upper": float|None, "lower": float|None}, ...].
+    Unlike `zone`, which is a fixed rectangle, this follows both boundaries bar
+    by bar — the shape an indicator cloud actually has.
+    """
+    return {"kind": "band", "points": list(points), "label": label,
+            "role": role}

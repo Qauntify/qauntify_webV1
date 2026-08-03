@@ -195,6 +195,7 @@ def list_open_signals(supabase_url: str, service_key: str, session=None):
         response = session.get(
             f"{supabase_url}/rest/v1/signals"
             "?status=in.(open,tp1_hit,tp2_hit)"
+            "&closed_at=is.null"
             # `indicators` carries entry_style, which decides whether the
             # outcome tracker counts the bar the order filled on.
             "&select=id,symbol,timeframe,direction,entry,stop_loss,"
@@ -230,7 +231,8 @@ def open_symbols_for_timeframe(symbols, timeframe: str, supabase_url: str,
     symbols_filter = ",".join(symbols)
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
-        f"?status=in.(open,tp1_hit,tp2_hit)&timeframe=eq.{timeframe}"
+        f"?status=in.(open,tp1_hit,tp2_hit)&closed_at=is.null"
+        f"&timeframe=eq.{timeframe}"
         f"&symbol=in.({symbols_filter})&shadow=is.false&select=symbol",
         headers={
             "apikey": service_key,
@@ -254,12 +256,17 @@ def close_signal(signal_id: str, status: str, closed_at: str,
 def update_signal_outcome(signal_id: str, status: str, at: str,
                           supabase_url: str, service_key: str, *,
                           terminal: bool, session=None) -> None:
-    """PATCH status (+ optional tpN_hit_at / closed_at)."""
+    """PATCH status (+ optional tpN_hit_at / closed_at).
+
+    tp1_hit / tp2_hit can be intermediate (still open) or terminal (TP banked
+    then froze with closed_at). Only stamp the first-hit timestamp when the
+    trade is still advancing — a terminal freeze must not overwrite it.
+    """
     session = session or requests.Session()
     payload: dict = {"status": status}
-    if status == "tp1_hit":
+    if status == "tp1_hit" and not terminal:
         payload["tp1_hit_at"] = at
-    elif status == "tp2_hit":
+    elif status == "tp2_hit" and not terminal:
         payload["tp2_hit_at"] = at
     elif status in ("tp3_hit", "tp_hit"):
         payload["tp3_hit_at"] = at
@@ -421,7 +428,8 @@ def list_closed_signals(supabase_url: str, service_key: str, session=None,
     shadow_filter = "" if include_shadow else "&shadow=is.false"
     response = session.get(
         f"{supabase_url}/rest/v1/signals"
-        "?status=in.(tp_hit,tp3_hit,sl_hit,expired)"
+        "?or=(status.in.(tp_hit,tp3_hit,sl_hit,expired),"
+        "and(status.in.(tp1_hit,tp2_hit),closed_at.not.is.null))"
         f"{shadow_filter}"
         "&select=symbol,timeframe,direction,entry,stop_loss,take_profit,"
         "take_profit_1,take_profit_2,take_profit_3,confidence,indicators,"

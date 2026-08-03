@@ -17,7 +17,7 @@ OUTCOME_LABELS = (
 
 DEFAULT_OUTCOME_R = {
     "sl_before_tp1": -1.0,
-    "tp1_then_sl": 0.0,
+    "tp1_then_sl": 1.0 / 3.0,
     "tp2_then_sl": 1.0,
     "tp3_hit": 3.0,
     "expired": 0.0,

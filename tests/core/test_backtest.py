@@ -129,21 +129,20 @@ def test_scaled_r_full_tp3_is_two_r():
     assert scaled_r("long", 100, 98, TPS, reached=3, stopped=False) == 2.0
 
 
-def test_scaled_r_tp2_then_stopped_loses_the_last_third():
-    """The stop never moves, so the unbooked third loses its full risk:
-    1/3*1R + 1/3*2R - 1/3*1R = +0.667R."""
+def test_scaled_r_tp2_then_stopped_keeps_what_was_banked():
+    """After TP1 the remainder is at BE: 1/3*1R + 1/3*2R = +1.0R."""
     assert scaled_r("long", 100, 98, TPS, reached=2, stopped=True) \
-        == pytest.approx(2.0 / 3.0)
+        == pytest.approx(1.0)
 
 
 def test_scaled_r_full_loss_when_nothing_reached():
     assert scaled_r("long", 100, 98, TPS, reached=0, stopped=True) == -1.0
 
 
-def test_scaled_r_tp1_then_stopped_is_a_net_loss():
-    """Banking TP1 does not make a trade safe: 1/3*1R - 2/3*1R = -0.333R."""
+def test_scaled_r_tp1_then_stopped_keeps_the_booked_third():
+    """Banking TP1 locks the booked third; a later stop does not claw it back."""
     assert scaled_r("long", 100, 98, TPS, reached=1, stopped=True) \
-        == pytest.approx(-1.0 / 3.0)
+        == pytest.approx(1.0 / 3.0)
 
 
 def test_scaled_r_tp1_then_expire_books_first_third():

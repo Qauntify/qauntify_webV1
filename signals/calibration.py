@@ -8,7 +8,7 @@ changes can be checked against real history instead of guessed.
 R comes from signals.r_model — the scale-out model, net of costs — so these
 numbers mean the same thing as the ones on the public track record.
 """
-from signals.r_model import cost_r, gross_r, net_r
+from signals.r_model import cost_r, gross_r, is_win, net_r
 
 
 def _strategy_of(row: dict) -> str:
@@ -36,16 +36,14 @@ def _r_multiple(row: dict) -> float:
 def _bucket_stats(rows: list) -> dict:
     """Win/loss counts and average R for one group of closed signals.
 
-    A win is a trade that finished ABOVE water — under the scale-out model
-    that includes banking TP1 and then reversing, and excludes a trade whose
-    banked targets did not cover its costs. Counting statuses instead would
-    disagree with avg_r, which is how a 60%-win-rate strategy can quietly
-    lose money.
+    A win is any trade that banked TP1 (or better), even if price later hit
+    the original stop. Avg R still uses the scale-out / breakeven-trail model
+    so a high win rate can still show a weak expectancy when costs matter.
     """
-    scored = [(r, _r_multiple(r)) for r in rows]
-    wins = sum(1 for _, r in scored if r > 0)
-    losses = sum(1 for _, r in scored if r < 0)
-    breakeven = sum(1 for _, r in scored if r == 0)
+    scored = [(row, _r_multiple(row)) for row in rows]
+    wins = sum(1 for row, _ in scored if is_win(row))
+    losses = sum(1 for row, _ in scored if not is_win(row) and row["status"] == "sl_hit")
+    breakeven = len(rows) - wins - losses
     expired = sum(1 for row in rows if row["status"] == "expired")
     decided = wins + losses
     return {
