@@ -3,6 +3,7 @@ import pytest
 from signals.models import BotSettings, CandidateSetup, Confirmation, make_signal
 from signals.storage import (
     fetch_bot_settings,
+    list_signals_missing_outcome_chart,
     save_debate,
     save_signal,
     save_xau_scan_run,
@@ -455,3 +456,14 @@ def test_outcome_polling_still_sees_shadow_rows():
     session = FakeGetSession(payload=[])
     list_open_signals("https://abc.supabase.co", "k", session=session)
     assert "shadow" not in _query_of(session)
+
+
+def test_list_signals_missing_outcome_chart_queries_closed_without_chart():
+    session = FakeGetSession(payload=[{"id": "sig-1", "symbol": "XAUUSD"}])
+    rows = list_signals_missing_outcome_chart(
+        "https://abc.supabase.co", "key", limit=20, session=session)
+    assert rows == [{"id": "sig-1", "symbol": "XAUUSD"}]
+    query = _query_of(session)
+    assert "closed_at=not.is.null" in query
+    assert "outcome_chart_url=is.null" in query
+    assert "limit=20" in query

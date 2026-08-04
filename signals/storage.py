@@ -240,6 +240,33 @@ def list_open_signals(supabase_url: str, service_key: str, session=None):
     return rows
 
 
+def list_signals_missing_outcome_chart(supabase_url: str, service_key: str,
+                                       limit: int = 20, session=None):
+    """Closed rows with no outcome_chart_url yet, most recently closed first.
+
+    Backfill target for realtime-closed rows (e.g. via the MT5/Vercel path,
+    which never renders a chart) and for any row whose chart attach failed
+    at close time in the normal cron path.
+    """
+    session = session or requests.Session()
+    response = session.get(
+        f"{supabase_url}/rest/v1/signals"
+        "?closed_at=not.is.null"
+        "&outcome_chart_url=is.null"
+        "&select=id,symbol,timeframe,direction,entry,stop_loss,"
+        "take_profit,take_profit_1,take_profit_2,take_profit_3,"
+        "tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at,closed_at"
+        f"&order=closed_at.desc&limit={limit}",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def open_symbols_for_timeframe(symbols, timeframe: str, supabase_url: str,
                                service_key: str, session=None) -> set:
     """Symbols that already have a non-terminal signal on `timeframe`."""

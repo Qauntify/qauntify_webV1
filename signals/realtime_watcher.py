@@ -1,5 +1,15 @@
-"""Real-time SL/TP outcome tracking — fed by Kraken WS ticks (BTCUSD, ETHUSD,
-GBPUSD) and an MT5 EA pushing XAUUSD ticks over localhost HTTP.
+"""Real-time SL/TP outcome tracking for the Kraken-sourced symbols (BTCUSD,
+ETHUSD, GBPUSD) via a live WebSocket feed.
+
+XAUUSD/MT5 does NOT go through this process — the MT5 EA
+(mt5/QauntifyTickPush.mq5) pushes ticks straight to the production API
+(web/src/app/api/mt5/tick/route.ts) instead, so the VPS running MT5 only
+needs to run the EA itself, not this script too. That path is a TypeScript
+port of the same rules (web/src/lib/outcome-rules.ts /
+web/src/lib/outcome-apply.ts) — chart generation isn't ported there, so a
+separate backfill pass (signals/outcome_tracker.py:backfill_missing_outcome_
+charts, run from the slow cron) fills in outcome_chart_url after the fact
+for XAUUSD rows this process never touches.
 
 A tick is just a degenerate one-point candle, so this reuses
 check_outcome_events / apply_events (signals/outcome_tracker.py) completely
@@ -7,7 +17,7 @@ unchanged from the slow ~10-min cron path (signals/run.py -> track_open_
 signals). The two paths can never diverge on the TP-ladder / breakeven /
 partial-win-reclassification rules because they're the same code — this
 process is purely a faster, tick-driven way to feed it events. The cron path
-stays on as a safety net for when this process (or the VPS) is down.
+stays on as a safety net for when this process (or its host) is down.
 
 Usage: python -m signals.realtime_watcher
 """
@@ -17,7 +27,6 @@ import asyncio
 import json
 import os
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import requests
 
@@ -29,12 +38,12 @@ from signals.storage import list_open_signals
 
 CACHE_REFRESH_SECONDS = 10
 HISTORY_LIMIT = 1000
-TICK_HTTP_PORT = int(os.environ.get("MT5_TICK_PORT", "8787"))
 
 # App symbol -> Kraken WebSocket v2 ticker symbol. REST OHLC uses a different
-# naming convention (signals/market_client.py:kraken_pair, e.g. "XBTUSD") --
-# confirm this against Kraken's current WS v2 docs before relying on it live,
-# it is not exercised by anything network-dependent in this repo's tests.
+# naming convention (signals/market_client.py:kraken_pair, e.g. "XBTUSD").
+# Verified live against wss://ws.kraken.com/v2 on 2026-08-04: all three
+# subscriptions succeed and stream {"channel":"ticker",...,"data":[{"symbol":
+# "BTC/USD","last":...}]} snapshots, matching the parsing below exactly.
 KRAKEN_WS_PAIR_BY_SYMBOL = {
     "BTCUSD": "BTC/USD",
     "ETHUSD": "ETH/USD",
@@ -126,58 +135,6 @@ class RealtimeWatcher:
                 self.cache[symbol] = bucket
 
 
-class _TickHandler(BaseHTTPRequestHandler):
-    """POST /tick {"symbol": "XAUUSD", "price": ..., "time": ...} from the
-    MT5 EA. Bound to 127.0.0.1 only by the server below -- never internet-
-    facing, but still secret-gated for defense in depth."""
-
-    watcher: RealtimeWatcher = None  # set by serve_mt5_tick_receiver
-    secret: str = ""
-
-    def log_message(self, *args):  # quiet the default stderr access log
-        pass
-
-    def do_POST(self):
-        if self.path != "/tick":
-            self.send_response(404)
-            self.end_headers()
-            return
-        if self.headers.get("Authorization") != f"Bearer {self.secret}":
-            self.send_response(401)
-            self.end_headers()
-            return
-        try:
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length) or b"{}")
-            symbol = str(body["symbol"])
-            price = float(body["price"])
-            ts_ms = int(float(body["time"]) * 1000)
-        except (KeyError, ValueError, json.JSONDecodeError):
-            self.send_response(400)
-            self.end_headers()
-            return
-        # WebRequest() in MQL5 is synchronous and blocks the terminal until
-        # this responds -- respond immediately and do the actual outcome
-        # check (Supabase + Telegram on a real hit, can take a second-plus)
-        # in the background so a TP/SL hit never stalls the EA.
-        threading.Thread(target=self.watcher.handle_tick,
-                         args=(symbol, price, ts_ms), daemon=True).start()
-        self.send_response(200)
-        self.end_headers()
-
-
-def serve_mt5_tick_receiver(watcher: RealtimeWatcher, secret: str,
-                            port: int = TICK_HTTP_PORT) -> ThreadingHTTPServer:
-    """Starts the localhost-only MT5 tick receiver in a background thread."""
-    handler = type("_BoundTickHandler", (_TickHandler,),
-                   {"watcher": watcher, "secret": secret})
-    server = ThreadingHTTPServer(("127.0.0.1", port), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    print(f"MT5 tick receiver listening on http://127.0.0.1:{port}/tick")
-    return server
-
-
 async def run_kraken_ws(watcher: RealtimeWatcher) -> None:
     """Subscribes to BTCUSD/ETHUSD/GBPUSD tickers, reconnecting on drop."""
     import websockets  # imported lazily: only this coroutine needs it
@@ -192,6 +149,7 @@ async def run_kraken_ws(watcher: RealtimeWatcher) -> None:
                     "method": "subscribe",
                     "params": {"channel": "ticker", "symbol": pairs},
                 }))
+                print(f"Kraken WS connected, subscribed to {pairs}")
                 backoff = 1
                 async for raw in ws:
                     message = json.loads(raw)
@@ -224,13 +182,8 @@ async def _refresh_cache_loop(watcher: RealtimeWatcher) -> None:
 
 async def _main_async() -> None:
     cfg = load_watcher_config()
-    secret = os.environ.get("MT5_WEBHOOK_SECRET", "").strip()
-    if not secret:
-        raise SystemExit("MT5_WEBHOOK_SECRET must be set")
-
     watcher = RealtimeWatcher(cfg)
     watcher.refresh_cache()
-    serve_mt5_tick_receiver(watcher, secret)
 
     await asyncio.gather(
         run_kraken_ws(watcher),

@@ -31,7 +31,7 @@ from signals.models import (
     make_signal,
     session_scans,
 )
-from signals.outcome_tracker import track_open_signals
+from signals.outcome_tracker import backfill_missing_outcome_charts, track_open_signals
 from signals.session_clock import describe_market_session
 from signals.strategies import detect_setup
 from signals.storage import (
@@ -909,6 +909,13 @@ def main():
             if row.get("timeframe"):
                 entry["timeframe"] = row["timeframe"]
             outcomes.append(entry)
+
+        # Backfills outcome charts for rows closed without one -- notably
+        # every realtime MT5/Vercel close, which never renders a chart.
+        try:
+            backfill_missing_outcome_charts(cfg, session=db_session)
+        except Exception as exc:
+            print(f"chart backfill failed ({type(exc).__name__}), continuing")
         try:
             with_retry(lambda: save_engine_run(
                 {

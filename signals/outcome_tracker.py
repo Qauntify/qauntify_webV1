@@ -10,7 +10,12 @@ from datetime import datetime, timedelta, timezone
 from signals.chart.outcome_pipeline import attach_outcome_chart
 from signals.market_client import fetch_candles
 from signals.models import ALL_SESSIONS, OPEN_POLL_STATUSES, TIMEFRAME_MINUTES
-from signals.storage import list_open_signals, update_signal_outcome, set_outcome_chart_url
+from signals.storage import (
+    list_open_signals,
+    list_signals_missing_outcome_chart,
+    set_outcome_chart_url,
+    update_signal_outcome,
+)
 from signals.telegram_client import send_outcome_alert
 
 # Keyed off ALL_SESSIONS, not TRADING_SESSIONS: this tracker settles every open
@@ -356,3 +361,65 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
         if latest is not None:
             closed.append((row, latest))
     return closed
+
+
+def backfill_missing_outcome_charts(cfg, session=None, limit=20) -> int:
+    """Renders + attaches an outcome chart for rows that closed without one.
+
+    The realtime MT5/Vercel path (web/src/lib/outcome-apply.ts) never
+    renders a chart — it's a TypeScript port of the decision rules only, not
+    the mplfinance rendering pipeline. This closes that gap on the normal
+    ~10-min cron cadence, which is fine since the row is already closed and
+    already alerted; this only enriches the historical record. Also mops up
+    any row whose chart attach failed at close time in the normal path.
+    Returns the number successfully backfilled.
+    """
+    try:
+        rows = list_signals_missing_outcome_chart(
+            cfg.supabase_url, cfg.supabase_service_key, limit=limit,
+            session=session)
+    except Exception as exc:
+        print(f"chart backfill unavailable ({type(exc).__name__}), skipping")
+        return 0
+
+    backfilled = 0
+    for row in rows:
+        symbol = row["symbol"]
+        timeframe = row.get("timeframe") or "1h"
+        created_ms = datetime.fromisoformat(row["created_at"]).timestamp() * 1000
+        try:
+            candles = fetch_candles(symbol, timeframe, HISTORY_LIMIT,
+                                    start_time=int(created_ms), session=session)
+        except Exception as exc:
+            print(f"[{symbol}] chart backfill fetch failed "
+                  f"({type(exc).__name__}), skipping")
+            continue
+
+        closed_at = row.get("closed_at")
+        closed_ms = (datetime.fromisoformat(closed_at).timestamp() * 1000
+                    if closed_at else None)
+        window = [c for c in candles
+                 if closed_ms is None or c.open_time < closed_ms]
+
+        try:
+            chart_url = attach_outcome_chart(
+                row, row.get("status"), window,
+                supabase_url=cfg.supabase_url,
+                service_key=cfg.supabase_service_key,
+                session=session,
+            )
+        except Exception as exc:
+            print(f"[{symbol}] chart backfill render failed "
+                  f"({type(exc).__name__}), skipping")
+            continue
+        if not chart_url:
+            continue
+
+        try:
+            set_outcome_chart_url(row["id"], chart_url, cfg.supabase_url,
+                                  cfg.supabase_service_key, session=session)
+            backfilled += 1
+        except Exception as exc:
+            print(f"[{symbol}] failed to store backfilled outcome_chart_url "
+                  f"({type(exc).__name__}), continuing")
+    return backfilled

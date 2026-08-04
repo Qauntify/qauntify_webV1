@@ -1,4 +1,9 @@
-# Linux (systemd) unit for signals/realtime_watcher.py on the VPS.
+# Linux (systemd) unit for signals/realtime_watcher.py -- the Kraken WS
+# realtime leg for BTCUSD/ETHUSD/GBPUSD only. XAUUSD/MT5 does NOT use this
+# process anymore (see mt5/QauntifyTickPush.mq5 + web/src/app/api/mt5/tick):
+# that VPS only needs to run MT5 + the EA. This can run on any always-on
+# Linux host with outbound access to wss://ws.kraken.com -- it does not need
+# to be the same machine as MT5.
 #
 # Install:
 #   sudo useradd --system --no-create-home qauntify   # if it doesn't exist
@@ -16,7 +21,7 @@
 # parser is not a full shell.
 
 [Unit]
-Description=Qauntify realtime SL/TP watcher (Kraken WS + MT5 tick receiver)
+Description=Qauntify realtime SL/TP watcher (Kraken WS: BTCUSD/ETHUSD/GBPUSD)
 After=network-online.target
 Wants=network-online.target
 
@@ -24,6 +29,7 @@ Wants=network-online.target
 Type=simple
 User=qauntify
 WorkingDirectory=/opt/qauntify
+Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/opt/qauntify/.env
 ExecStart=/opt/qauntify/.venv/bin/python -m signals.realtime_watcher
 Restart=always

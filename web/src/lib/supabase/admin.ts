@@ -7,6 +7,7 @@ import {
   type AiEventFilters,
 } from "@/lib/admin-ai-filters";
 import { parseEngineOutcomes } from "@/lib/admin-scans";
+import type { SignalRow } from "@/lib/outcome-rules";
 
 export type AdminUser = {
   id: string;
@@ -513,4 +514,69 @@ export async function deleteSignal(id: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+const OPEN_SIGNAL_COLUMNS =
+  "id,symbol,timeframe,direction,entry,stop_loss,take_profit,take_profit_1," +
+  "take_profit_2,take_profit_3,tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at";
+
+/** Open/tp1/tp2 rows for one symbol — same filter shape as
+ * signals/storage.py:list_open_signals (shadow rows included on purpose,
+ * for parity: the Python cron path tracks their outcomes too). */
+export async function getOpenSignalsForSymbol(
+  symbol: string,
+): Promise<SignalRow[] | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/signals?symbol=eq.${encodeURIComponent(symbol)}` +
+        `&status=in.(open,tp1_hit,tp2_hit)&closed_at=is.null` +
+        `&select=${OPEN_SIGNAL_COLUMNS}&order=created_at.asc`,
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
+    );
+    if (!response.ok) return null;
+    return (await response.json()) as SignalRow[];
+  } catch {
+    return null;
+  }
+}
+
+/** TS mirror of signals/storage.py:update_signal_outcome's conditional-claim
+ * mode: PATCH only applies if the row is still in `expectedStatus`, so the
+ * slow Python cron and this instant path can't both win the same event. */
+export async function updateSignalOutcomeClaim(
+  id: string,
+  status: string,
+  at: string,
+  opts: { terminal: boolean; expectedStatus: string },
+): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+
+  const payload: Record<string, string> = { status };
+  let terminal = opts.terminal;
+  if (status === "tp1_hit" && !terminal) {
+    payload.tp1_hit_at = at;
+  } else if (status === "tp2_hit" && !terminal) {
+    payload.tp2_hit_at = at;
+  } else if (status === "tp3_hit" || status === "tp_hit") {
+    payload.tp3_hit_at = at;
+    terminal = true;
+  }
+  if (terminal) payload.closed_at = at;
+
+  const response = await fetch(
+    `${cfg.url}/rest/v1/signals?id=eq.${id}&status=eq.${opts.expectedStatus}`,
+    {
+      method: "PATCH",
+      headers: { ...headers(cfg.serviceKey), Prefer: "return=representation" },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`${response.status} Supabase PATCH failed`);
+  }
+  const rows = (await response.json()) as unknown[];
+  return Array.isArray(rows) && rows.length > 0;
 }

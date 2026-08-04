@@ -612,3 +612,80 @@ def test_apply_events_stops_and_skips_alert_when_claim_fails(monkeypatch):
     assert calls["update"][0][1] == "open"       # prior status before 1st claim
     assert calls["update"][1][1] == "tp1_hit"    # prior status before 2nd claim
     assert calls["alerts"] == ["tp1_hit"]        # tp2_hit never alerted — lost the race
+
+
+def _chart_backfill_row(**overrides):
+    row = {"id": "s1", "symbol": "XAUUSD", "timeframe": "5m",
+           "direction": "long", "entry": 100.0, "stop_loss": 98.0,
+           "take_profit": 103.0, "status": "tp_hit",
+           "created_at": "2026-08-04T10:00:00+00:00",
+           "closed_at": "2026-08-04T10:15:00+00:00"}
+    row.update(overrides)
+    return row
+
+
+class _BackfillCfg:
+    supabase_url = "u"
+    supabase_service_key = "k"
+
+
+def test_backfill_missing_outcome_charts_renders_and_stores(monkeypatch):
+    row = _chart_backfill_row()
+    monkeypatch.setattr(outcome_tracker, "list_signals_missing_outcome_chart",
+                        lambda *a, **k: [row])
+    monkeypatch.setattr(outcome_tracker, "fetch_candles",
+                        lambda *a, **k: [Candle(open_time=0, open=100, high=103,
+                                                low=98, close=101, volume=0.0)])
+    monkeypatch.setattr(outcome_tracker, "attach_outcome_chart",
+                        lambda *a, **k: "http://x/s1-outcome.png")
+    stored = {}
+    monkeypatch.setattr(outcome_tracker, "set_outcome_chart_url",
+                        lambda sid, url, *a, **k: stored.update({sid: url}))
+
+    count = outcome_tracker.backfill_missing_outcome_charts(_BackfillCfg())
+
+    assert count == 1
+    assert stored == {"s1": "http://x/s1-outcome.png"}
+
+
+def test_backfill_missing_outcome_charts_skips_when_render_returns_nothing(monkeypatch):
+    row = _chart_backfill_row(status="sl_hit")
+    monkeypatch.setattr(outcome_tracker, "list_signals_missing_outcome_chart",
+                        lambda *a, **k: [row])
+    monkeypatch.setattr(outcome_tracker, "fetch_candles", lambda *a, **k: [])
+    monkeypatch.setattr(outcome_tracker, "attach_outcome_chart", lambda *a, **k: None)
+    calls = []
+    monkeypatch.setattr(outcome_tracker, "set_outcome_chart_url",
+                        lambda *a, **k: calls.append(1))
+
+    count = outcome_tracker.backfill_missing_outcome_charts(_BackfillCfg())
+
+    assert count == 0
+    assert calls == []
+
+
+def test_backfill_missing_outcome_charts_continues_past_a_single_row_failure(monkeypatch):
+    rows = [_chart_backfill_row(id="bad"), _chart_backfill_row(id="good")]
+    monkeypatch.setattr(outcome_tracker, "list_signals_missing_outcome_chart",
+                        lambda *a, **k: rows)
+
+    def fake_fetch(symbol, timeframe, limit, start_time=None, session=None):
+        if start_time is None:
+            raise AssertionError("expected a start_time")
+        return []
+
+    def fake_attach(row, *a, **k):
+        if row["id"] == "bad":
+            raise RuntimeError("render failed")
+        return "http://x/good-outcome.png"
+
+    monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
+    monkeypatch.setattr(outcome_tracker, "attach_outcome_chart", fake_attach)
+    stored = {}
+    monkeypatch.setattr(outcome_tracker, "set_outcome_chart_url",
+                        lambda sid, url, *a, **k: stored.update({sid: url}))
+
+    count = outcome_tracker.backfill_missing_outcome_charts(_BackfillCfg())
+
+    assert count == 1
+    assert stored == {"good": "http://x/good-outcome.png"}
