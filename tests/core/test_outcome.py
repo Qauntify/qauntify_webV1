@@ -675,8 +675,10 @@ def test_backfill_missing_outcome_charts_continues_past_a_single_row_failure(mon
         return []
 
     def fake_attach(row, *a, **k):
+        # attach_outcome_chart fails closed (returns None), never raises --
+        # this is the realistic shape of a single row's render failing.
         if row["id"] == "bad":
-            raise RuntimeError("render failed")
+            return None
         return "http://x/good-outcome.png"
 
     monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)

@@ -213,6 +213,30 @@ def check_outcome(signal_row: dict, candles: list) -> tuple[str, str] | None:
     return events[0] if events else None
 
 
+def _attach_and_store_chart(row: dict, outcome: str, window: list, cfg,
+                            session=None) -> str | None:
+    """Renders an outcome chart and stores its URL. Never raises —
+    attach_outcome_chart already fails closed internally (returns None on
+    any render/upload error), so this only needs to guard the URL PATCH.
+    Returns the chart URL on success, None otherwise.
+    """
+    chart_url = attach_outcome_chart(
+        row, outcome, window,
+        supabase_url=cfg.supabase_url,
+        service_key=cfg.supabase_service_key,
+        session=session,
+    )
+    if not chart_url:
+        return None
+    try:
+        set_outcome_chart_url(row["id"], chart_url, cfg.supabase_url,
+                              cfg.supabase_service_key, session=session)
+    except Exception as exc:
+        print(f"[{row['symbol']}] failed to store outcome_chart_url "
+              f"({type(exc).__name__}), continuing")
+    return chart_url
+
+
 def apply_events(row: dict, events: list[tuple[str, str]], window: list,
                  cfg, session=None) -> tuple[dict, str | None]:
     """Apply each new event to `row` in order: claim it (race-safe against
@@ -264,22 +288,10 @@ def apply_events(row: dict, events: list[tuple[str, str]], window: list,
         if terminal:
             row = {**row, "closed_at": closed_at}
         if terminal and outcome != "expired":
-            chart_url = attach_outcome_chart(
-                row, outcome, window,
-                supabase_url=cfg.supabase_url,
-                service_key=cfg.supabase_service_key,
-                session=session,
-            )
+            chart_url = _attach_and_store_chart(row, outcome, window, cfg,
+                                                session=session)
             if chart_url:
                 row = {**row, "outcome_chart_url": chart_url}
-                try:
-                    set_outcome_chart_url(
-                        row["id"], chart_url, cfg.supabase_url,
-                        cfg.supabase_service_key, session=session,
-                    )
-                except Exception as exc:
-                    print(f"[{symbol}] failed to store outcome_chart_url "
-                          f"({type(exc).__name__}), continuing")
         if (not freeze_only
                 and outcome in ("tp1_hit", "tp2_hit", "tp3_hit", "tp_hit",
                                 "sl_hit")
@@ -401,25 +413,8 @@ def backfill_missing_outcome_charts(cfg, session=None, limit=20) -> int:
         window = [c for c in candles
                  if closed_ms is None or c.open_time < closed_ms]
 
-        try:
-            chart_url = attach_outcome_chart(
-                row, row.get("status"), window,
-                supabase_url=cfg.supabase_url,
-                service_key=cfg.supabase_service_key,
-                session=session,
-            )
-        except Exception as exc:
-            print(f"[{symbol}] chart backfill render failed "
-                  f"({type(exc).__name__}), skipping")
-            continue
-        if not chart_url:
-            continue
-
-        try:
-            set_outcome_chart_url(row["id"], chart_url, cfg.supabase_url,
-                                  cfg.supabase_service_key, session=session)
+        chart_url = _attach_and_store_chart(row, row.get("status"), window,
+                                            cfg, session=session)
+        if chart_url:
             backfilled += 1
-        except Exception as exc:
-            print(f"[{symbol}] failed to store backfilled outcome_chart_url "
-                  f"({type(exc).__name__}), continuing")
     return backfilled

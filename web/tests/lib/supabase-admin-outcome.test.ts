@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getOpenSignalsForSymbol, updateSignalOutcomeClaim } from "@/lib/supabase/admin";
+import {
+  getOpenSignalsForSymbol,
+  invalidateOpenSignalsCache,
+  updateSignalOutcomeClaim,
+} from "@/lib/supabase/admin";
 
 beforeEach(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://abc.supabase.co";
@@ -11,6 +15,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env.NEXT_PUBLIC_SUPABASE_URL;
   delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // getOpenSignalsForSymbol caches per-symbol at module scope -- every test
+  // in this file uses "XAUUSD", so a stale cache would leak between tests.
+  invalidateOpenSignalsCache("XAUUSD");
 });
 
 describe("getOpenSignalsForSymbol", () => {
@@ -34,6 +41,33 @@ describe("getOpenSignalsForSymbol", () => {
   it("returns null when the request fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
     expect(await getOpenSignalsForSymbol("XAUUSD")).toBeNull();
+  });
+
+  it("serves a repeat call for the same symbol from cache, without refetching", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: "sig-1", symbol: "XAUUSD" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getOpenSignalsForSymbol("XAUUSD");
+    await getOpenSignalsForSymbol("XAUUSD");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refetches after invalidateOpenSignalsCache", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: "sig-1", symbol: "XAUUSD" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getOpenSignalsForSymbol("XAUUSD");
+    invalidateOpenSignalsCache("XAUUSD");
+    await getOpenSignalsForSymbol("XAUUSD");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

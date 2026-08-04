@@ -1,23 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { dispatchEngineWorkflow } from "@/lib/github-engine";
+import { authorizedBySecret } from "@/lib/webhook-guard";
 
 export const dynamic = "force-dynamic";
 
-function authorized(request: Request): boolean {
-  const secret = process.env.ENGINE_CRON_SECRET?.trim();
-  if (!secret) return false;
-
-  const header = request.headers.get("authorization");
-  if (header === `Bearer ${secret}`) return true;
-
-  // cron-job.org stores the secret in the URL query string.
-  const querySecret = new URL(request.url).searchParams.get("secret");
-  return querySecret === secret;
-}
-
 export async function GET(request: Request) {
-  if (!authorized(request)) {
+  if (!authorizedBySecret(request, "ENGINE_CRON_SECRET", { allowQuerySecret: true })) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -54,60 +54,49 @@ void OnTick()
   {
    ticksSeen++;
    double price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   if(price <= 0.0)
-     {
-      UpdateStatusComment();
-      return;
-     }
-   if(GetTickCount() - lastSentTick < (uint)MinIntervalMs)
-     {
-      UpdateStatusComment();
-      return;
-     }
-   if(MinPriceMove > 0.0 && MathAbs(price - lastSentPrice) < MinPriceMove)
-     {
-      UpdateStatusComment();
-      return;
-     }
+   bool dueToSend = price > 0.0
+                    && GetTickCount() - lastSentTick >= (uint)MinIntervalMs
+                    && (MinPriceMove <= 0.0 || MathAbs(price - lastSentPrice) >= MinPriceMove);
 
-   string body = StringFormat(
-      "{\"symbol\":\"%s\",\"price\":%.5f,\"time\":%d}",
-      AppSymbol, price, (int)TimeCurrent());
-
-   string headers = "Content-Type: application/json\r\n"
-                    "Authorization: Bearer " + WebhookSecret + "\r\n";
-   char   post[];
-   char   result[];
-   string resultHeaders;
-   StringToCharArray(body, post, 0, StringLen(body));
-
-   // 5s, not 1s: this is now a real internet round-trip (Vercel serverless
-   // cold starts can take a second-plus occasionally), not localhost.
-   int status = WebRequest("POST", ApiUrl, headers, 5000, post, result, resultHeaders);
-   lastStatus = status;
-
-   if(status == -1)
+   if(dueToSend)
      {
-      // 4014 = URL not in the allowlist -- see the header comment above.
-      sendsFailed++;
-      Print("QauntifyTickPush: WebRequest failed, error ", GetLastError(),
-            ". Is ", ApiUrl, " allowed under Tools > Options > Expert Advisors?");
-      UpdateStatusComment();
-      return;
+      string body = StringFormat(
+         "{\"symbol\":\"%s\",\"price\":%.5f,\"time\":%d}",
+         AppSymbol, price, (int)TimeCurrent());
+
+      string headers = "Content-Type: application/json\r\n"
+                       "Authorization: Bearer " + WebhookSecret + "\r\n";
+      char   post[];
+      char   result[];
+      string resultHeaders;
+      StringToCharArray(body, post, 0, StringLen(body));
+
+      // 5s, not 1s: this is now a real internet round-trip (Vercel serverless
+      // cold starts can take a second-plus occasionally), not localhost.
+      lastStatus = WebRequest("POST", ApiUrl, headers, 5000, post, result, resultHeaders);
+
+      if(lastStatus == -1)
+        {
+         // 4014 = URL not in the allowlist -- see the header comment above.
+         sendsFailed++;
+         Print("QauntifyTickPush: WebRequest failed, error ", GetLastError(),
+               ". Is ", ApiUrl, " allowed under Tools > Options > Expert Advisors?");
+        }
+      else if(lastStatus != 200)
+        {
+         // Request reached the API but it rejected it -- 401 = wrong
+         // WebhookSecret, 400 = malformed body. Not a connectivity problem.
+         sendsFailed++;
+         Print("QauntifyTickPush: API returned HTTP ", lastStatus,
+               " -- check WebhookSecret matches MT5_WEBHOOK_SECRET in Vercel's env vars.");
+        }
+      else
+        {
+         sendsOk++;
+         lastSentPrice = price;
+         lastSentTick  = GetTickCount();
+        }
      }
-   if(status != 200)
-     {
-      // Request reached the API but it rejected it -- 401 = wrong
-      // WebhookSecret, 400 = malformed body. Not a connectivity problem.
-      sendsFailed++;
-      Print("QauntifyTickPush: API returned HTTP ", status,
-            " -- check WebhookSecret matches MT5_WEBHOOK_SECRET in Vercel's env vars.");
-      UpdateStatusComment();
-      return;
-     }
-   sendsOk++;
-   lastSentPrice = price;
-   lastSentTick  = GetTickCount();
    UpdateStatusComment();
   }
 //+------------------------------------------------------------------+

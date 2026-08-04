@@ -520,12 +520,27 @@ const OPEN_SIGNAL_COLUMNS =
   "id,symbol,timeframe,direction,entry,stop_loss,take_profit,take_profit_1," +
   "take_profit_2,take_profit_3,tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at";
 
+const OPEN_SIGNALS_CACHE_TTL_MS = 3000;
+const openSignalsCache = new Map<string, { rows: SignalRow[]; expiresAt: number }>();
+
 /** Open/tp1/tp2 rows for one symbol — same filter shape as
  * signals/storage.py:list_open_signals (shadow rows included on purpose,
- * for parity: the Python cron path tracks their outcomes too). */
+ * for parity: the Python cron path tracks their outcomes too).
+ *
+ * Cached per-symbol for a few seconds: the MT5 tick route can call this
+ * several times a second, and this mirrors the in-memory cache
+ * signals/realtime_watcher.py already keeps for the same reason — without
+ * it, every tick would be its own Supabase round-trip. Best-effort only
+ * (each serverless instance has its own cache, and cold starts miss it) —
+ * callers that successfully claim an event must call
+ * invalidateOpenSignalsCache so the next tick sees the fresh status instead
+ * of possibly missing a second level crossed moments later. */
 export async function getOpenSignalsForSymbol(
   symbol: string,
 ): Promise<SignalRow[] | null> {
+  const cached = openSignalsCache.get(symbol);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+
   const cfg = config();
   if (!cfg) return null;
   try {
@@ -536,10 +551,19 @@ export async function getOpenSignalsForSymbol(
       { headers: headers(cfg.serviceKey), ...READ_CACHE },
     );
     if (!response.ok) return null;
-    return (await response.json()) as SignalRow[];
+    const rows = (await response.json()) as SignalRow[];
+    openSignalsCache.set(symbol, { rows, expiresAt: Date.now() + OPEN_SIGNALS_CACHE_TTL_MS });
+    return rows;
   } catch {
     return null;
   }
+}
+
+/** Drops the cached open-signals list for one symbol — call after
+ * successfully claiming an event so the next tick re-fetches fresh instead
+ * of re-evaluating a now-stale status for up to OPEN_SIGNALS_CACHE_TTL_MS. */
+export function invalidateOpenSignalsCache(symbol: string): void {
+  openSignalsCache.delete(symbol);
 }
 
 /** TS mirror of signals/storage.py:update_signal_outcome's conditional-claim

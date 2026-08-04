@@ -3,18 +3,17 @@ import { NextResponse } from "next/server";
 import { applyTickEvents } from "@/lib/outcome-apply";
 import { sendTelegramMessage } from "@/lib/outcome-alert";
 import { checkTickOutcome } from "@/lib/outcome-rules";
-import { getOpenSignalsForSymbol, updateSignalOutcomeClaim } from "@/lib/supabase/admin";
+import {
+  getOpenSignalsForSymbol,
+  invalidateOpenSignalsCache,
+  updateSignalOutcomeClaim,
+} from "@/lib/supabase/admin";
+import { authorizedBySecret } from "@/lib/webhook-guard";
 
 export const dynamic = "force-dynamic";
 
-function authorized(request: Request): boolean {
-  const secret = process.env.MT5_WEBHOOK_SECRET?.trim();
-  if (!secret) return false;
-  return request.headers.get("authorization") === `Bearer ${secret}`;
-}
-
 export async function POST(request: Request) {
-  if (!authorized(request)) {
+  if (!authorizedBySecret(request, "MT5_WEBHOOK_SECRET")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -47,13 +46,18 @@ export async function POST(request: Request) {
       (process.env.TELEGRAM_CHANNEL_ID || process.env.TELEGRAM_CHAT_ID)?.trim() ?? "",
   };
 
-  let closed = 0;
-  for (const row of rows) {
-    const events = checkTickOutcome(row, price, closedAtIso);
-    if (events.length === 0) continue;
-    const { latest } = await applyTickEvents(row, events, deps);
-    if (latest !== null) closed += 1;
-  }
+  // Independent per-row claims -- run concurrently rather than serializing
+  // Supabase/Telegram round-trips for every open signal on this symbol.
+  const results = await Promise.all(
+    rows.map(async (row) => {
+      const events = checkTickOutcome(row, price, closedAtIso);
+      if (events.length === 0) return false;
+      const { latest } = await applyTickEvents(row, events, deps);
+      return latest !== null;
+    }),
+  );
+  const closed = results.filter(Boolean).length;
+  if (closed > 0) invalidateOpenSignalsCache(symbol);
 
   return NextResponse.json({ ok: true, checked: rows.length, closed });
 }
