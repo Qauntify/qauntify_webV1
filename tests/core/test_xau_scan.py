@@ -86,3 +86,47 @@ def test_scan_once_no_signal_sends_no_alert(monkeypatch):
                         lambda *a, **k: alerts.append(1))
     xau_scan.scan_once(_cfg(), BotSettings())
     assert alerts == []
+
+
+def _patch_main_deps(monkeypatch, scan_result):
+    monkeypatch.setattr(xau_scan, "load_config", lambda: _cfg())
+    monkeypatch.setattr(xau_scan, "fetch_bot_settings",
+                        lambda *a, **k: BotSettings())
+    monkeypatch.setattr(xau_scan, "scan_once",
+                        lambda cfg, settings, session=None: scan_result)
+
+
+def test_main_writes_heartbeat_with_signal_found_true(monkeypatch):
+    calls = []
+    _patch_main_deps(monkeypatch, ScanResult(signal=_fake_signal()))
+    monkeypatch.setattr(xau_scan, "save_xau_scan_run",
+                        lambda run, *a, **k: calls.append(run))
+
+    xau_scan.main()
+
+    assert len(calls) == 1
+    assert calls[0]["signal_found"] is True
+    assert "run_id" in calls[0] and "finished_at" in calls[0]
+
+
+def test_main_writes_heartbeat_with_signal_found_false(monkeypatch):
+    calls = []
+    _patch_main_deps(monkeypatch, ScanResult())
+    monkeypatch.setattr(xau_scan, "save_xau_scan_run",
+                        lambda run, *a, **k: calls.append(run))
+
+    xau_scan.main()
+
+    assert len(calls) == 1
+    assert calls[0]["signal_found"] is False
+
+
+def test_main_swallows_heartbeat_failure(monkeypatch):
+    _patch_main_deps(monkeypatch, ScanResult())
+
+    def boom(*a, **k):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(xau_scan, "save_xau_scan_run", boom)
+
+    xau_scan.main()  # must not raise

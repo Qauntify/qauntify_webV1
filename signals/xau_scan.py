@@ -8,6 +8,7 @@ table. One invocation = one scan; the per-minute loop lives in
 
 Usage: python -m signals.xau_scan
 """
+import uuid
 from datetime import datetime, timezone
 
 import requests
@@ -15,7 +16,7 @@ import requests
 from signals.config import load_config
 from signals.llm_client import SeaLionClient
 from signals.run import maybe_run_debate, maybe_send_alert, scan_symbol
-from signals.storage import fetch_bot_settings
+from signals.storage import fetch_bot_settings, save_xau_scan_run
 
 XAU_SYMBOL = "XAUUSD"
 XAU_TIMEFRAME = "1m"
@@ -70,6 +71,20 @@ def main() -> None:
               f"@ {sig.entry} (confidence {sig.confidence}%)")
     else:
         print("[XAUUSD] 1m scan: no confirmed signal this minute.")
+
+    try:
+        save_xau_scan_run(
+            {
+                "id": str(uuid.uuid4()),
+                "run_id": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+                "signal_found": result.signal is not None,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            },
+            cfg.supabase_url,
+            cfg.supabase_service_key,
+        )
+    except Exception as exc:
+        print(f"Failed to store xau_scan heartbeat ({type(exc).__name__}), continuing")
 
 
 if __name__ == "__main__":

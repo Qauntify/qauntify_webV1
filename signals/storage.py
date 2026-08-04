@@ -112,6 +112,24 @@ def save_engine_run(run: dict, supabase_url: str, service_key: str,
     response.raise_for_status()
 
 
+def save_xau_scan_run(run: dict, supabase_url: str, service_key: str,
+                      session=None) -> None:
+    """Insert one xau_scan_runs row; raises on any failure so the caller can retry."""
+    session = session or requests.Session()
+    response = session.post(
+        f"{supabase_url}/rest/v1/xau_scan_runs",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+        json=run,
+        timeout=15,
+    )
+    response.raise_for_status()
+
+
 ENGINE_LOCK_STALE_MINUTES = 12
 
 

@@ -461,6 +461,46 @@ export async function getEngineStatus(): Promise<EngineStatus | null> {
   }
 }
 
+export type XauScanStatus = {
+  runId: string;
+  signalFound: boolean;
+  finishedAt: string;
+  isHealthy: boolean;
+  ageMinutes: number;
+};
+
+type XauScanStatusRow = {
+  run_id: string;
+  signal_found: boolean;
+  finished_at: string;
+  is_healthy: boolean;
+  age_minutes: number;
+};
+
+export async function getXauScanStatus(): Promise<XauScanStatus | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  try {
+    const response = await fetch(`${cfg.url}/rest/v1/xau_scan_status?select=*`, {
+      headers: headers(cfg.serviceKey),
+      ...READ_CACHE,
+    });
+    if (!response.ok) return null;
+    const rows = (await response.json()) as XauScanStatusRow[];
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row) return null;
+    return {
+      runId: String(row.run_id),
+      signalFound: Boolean(row.signal_found),
+      finishedAt: String(row.finished_at),
+      isHealthy: Boolean(row.is_healthy),
+      ageMinutes: Number(row.age_minutes ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteSignal(id: string): Promise<boolean> {
   const cfg = config();
   if (!cfg) return false;

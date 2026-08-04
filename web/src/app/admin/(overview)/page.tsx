@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 
 import { requireAdminPage } from "@/lib/admin-guard";
 import { getStats } from "@/lib/signals";
-import { getEngineStatus, listUsers, serviceRoleToken } from "@/lib/supabase/admin";
+import {
+  getEngineStatus,
+  getXauScanStatus,
+  listUsers,
+  serviceRoleToken,
+} from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
   title: "Admin · Overview — Qauntify",
@@ -14,16 +19,24 @@ export default async function AdminOverview() {
   await requireAdminPage();
 
   const token = serviceRoleToken();
-  const [users, stats, engineStatus] = await Promise.all([
+  const [users, stats, engineStatus, xauScanStatus] = await Promise.all([
     listUsers(),
     getStats(token),
     getEngineStatus(),
+    getXauScanStatus(),
   ]);
 
   const engine = engineStatus
     ? {
         label: engineStatus.isHealthy ? "Healthy" : "Stale",
         detail: `Last run ${engineStatus.ageMinutes} min ago.`,
+      }
+    : { label: "Unknown", detail: "No heartbeat yet." };
+
+  const xauScalper = xauScanStatus
+    ? {
+        label: xauScanStatus.isHealthy ? "Healthy" : "Stale",
+        detail: `Last scan ${xauScanStatus.ageMinutes} min ago.`,
       }
     : { label: "Unknown", detail: "No heartbeat yet." };
 
@@ -44,6 +57,7 @@ export default async function AdminOverview() {
           : "No closed LLM signals yet.",
     },
     { label: "Engine", value: engine.label, sub: engine.detail },
+    { label: "XAU Scalper", value: xauScalper.label, sub: xauScalper.detail },
   ];
 
   return (

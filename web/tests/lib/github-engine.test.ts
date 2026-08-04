@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { dispatchEngineWorkflow } from "@/lib/github-engine";
+import { dispatchEngineWorkflow, dispatchXauScalperRestart } from "@/lib/github-engine";
 
 describe("dispatchEngineWorkflow", () => {
   afterEach(() => {
@@ -27,6 +27,38 @@ describe("dispatchEngineWorkflow", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.github.com/repos/Qauntify/qauntify_webV1/actions/workflows/engine.yml/dispatches",
       expect.objectContaining({ method: "POST" }),
+    );
+  });
+});
+
+describe("dispatchXauScalperRestart", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.GITHUB_DISPATCH_TOKEN;
+    delete process.env.GITHUB_REPO;
+  });
+
+  it("returns error when token is missing", async () => {
+    const result = await dispatchXauScalperRestart();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("GITHUB_DISPATCH_TOKEN");
+    }
+  });
+
+  it("dispatches a run-xau-scalper repository_dispatch event on success", async () => {
+    process.env.GITHUB_DISPATCH_TOKEN = "ghp_test";
+    const fetchMock = vi.fn().mockResolvedValue({ status: 204, text: async () => "" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await dispatchXauScalperRestart();
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.github.com/repos/Qauntify/qauntify_webV1/dispatches",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ event_type: "run-xau-scalper" }),
+      }),
     );
   });
 });

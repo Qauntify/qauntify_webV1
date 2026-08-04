@@ -1,7 +1,12 @@
 import pytest
 
 from signals.models import BotSettings, CandidateSetup, Confirmation, make_signal
-from signals.storage import fetch_bot_settings, save_debate, save_signal
+from signals.storage import (
+    fetch_bot_settings,
+    save_debate,
+    save_signal,
+    save_xau_scan_run,
+)
 
 
 def _signal():
@@ -81,6 +86,34 @@ def test_save_signal_raises_on_http_error():
     session = FakeSession(status=401)
     with pytest.raises(RuntimeError):
         save_signal(_signal(), "https://abc.supabase.co", "bad-key", session=session)
+
+
+def test_save_xau_scan_run_posts_row_to_supabase():
+    session = FakeSession()
+    run = {
+        "id": "run-uuid-1",
+        "run_id": "20260804T120000Z",
+        "signal_found": True,
+        "finished_at": "2026-08-04T12:00:00+00:00",
+    }
+
+    save_xau_scan_run(run, "https://abc.supabase.co", "service-key", session=session)
+
+    assert session.last_url == "https://abc.supabase.co/rest/v1/xau_scan_runs"
+    assert session.last_headers["apikey"] == "service-key"
+    assert session.last_headers["Authorization"] == "Bearer service-key"
+    assert session.last_headers["Prefer"] == "return=minimal"
+    assert session.last_json == run
+
+
+def test_save_xau_scan_run_raises_on_http_error():
+    session = FakeSession(status=500)
+    with pytest.raises(RuntimeError):
+        save_xau_scan_run(
+            {"id": "run-uuid-1", "run_id": "x", "signal_found": False,
+             "finished_at": "2026-08-04T12:00:00+00:00"},
+            "https://abc.supabase.co", "bad-key", session=session,
+        )
 
 
 class FakeGetSession:
