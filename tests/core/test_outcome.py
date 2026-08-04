@@ -103,7 +103,8 @@ class FakeSession:
 
     def patch(self, url, headers=None, json=None, timeout=None):
         self.last_method, self.last_url, self.last_json = "PATCH", url, json
-        return FakeResponse(self._status)
+        self.last_headers = headers
+        return FakeResponse(self._status, self._payload)
 
 
 def test_list_open_signals_queries_open_only():
@@ -183,10 +184,13 @@ def _track(monkeypatch, rows, cfg=None, prefetched=None,
         return fetched_candles if fetched_candles is not None else []
 
     monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
-    monkeypatch.setattr(
-        outcome_tracker, "update_signal_outcome",
-        lambda sig_id, status, closed_at, url, key, session=None, terminal=True:
-        closes.append((sig_id, status)))
+
+    def fake_update(sig_id, status, closed_at, url, key, session=None,
+                    terminal=True, expected_status=None):
+        closes.append((sig_id, status))
+        return True
+
+    monkeypatch.setattr(outcome_tracker, "update_signal_outcome", fake_update)
     monkeypatch.setattr(
         outcome_tracker, "send_outcome_alert",
         lambda row, outcome, token, chat_id: alerts.append((row, outcome)))
@@ -318,10 +322,13 @@ def test_track_fetches_candles_in_the_rows_own_timeframe(monkeypatch):
 
     monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
     closes = []
-    monkeypatch.setattr(
-        outcome_tracker, "update_signal_outcome",
-        lambda sig_id, status, closed_at, url, key, session=None, terminal=True:
-        closes.append((sig_id, status)))
+
+    def fake_update(sig_id, status, closed_at, url, key, session=None,
+                    terminal=True, expected_status=None):
+        closes.append((sig_id, status))
+        return True
+
+    monkeypatch.setattr(outcome_tracker, "update_signal_outcome", fake_update)
 
     track_open_signals(_config())
 
@@ -568,3 +575,40 @@ def test_stop_does_not_trail_before_any_target_is_banked():
     candles = [Candle(open_time=now_ms, open=entry, high=entry + 1,
                       low=entry - 0.01, close=entry, volume=1.0)]
     assert outcome_tracker.check_outcome_events(row, candles) == []
+
+
+def test_apply_events_stops_and_skips_alert_when_claim_fails(monkeypatch):
+    """A second writer (e.g. the slow cron racing the realtime watcher) may
+    already have claimed a later event by the time we get to it. apply_events
+    must not keep advancing the row past that point, and must never alert on
+    an event it did not actually win the claim for."""
+    calls = {"update": [], "alerts": []}
+
+    def fake_update(sig_id, status, closed_at, url, key, session=None,
+                    terminal=True, expected_status=None):
+        calls["update"].append((status, expected_status))
+        return len(calls["update"]) == 1  # first claim wins, second loses the race
+
+    monkeypatch.setattr(outcome_tracker, "update_signal_outcome", fake_update)
+    monkeypatch.setattr(outcome_tracker, "attach_outcome_chart",
+                        lambda *a, **k: None)
+    monkeypatch.setattr(outcome_tracker, "set_outcome_chart_url",
+                        lambda *a, **k: None)
+    monkeypatch.setattr(
+        outcome_tracker, "send_outcome_alert",
+        lambda row, outcome, token, chat_id: calls["alerts"].append(outcome))
+
+    row = _live_row(days_old=0, take_profit_1=105.0, take_profit_2=110.0,
+                    take_profit_3=115.0)
+    events = [("tp1_hit", "2026-08-04T12:00:00+00:00"),
+             ("tp2_hit", "2026-08-04T12:05:00+00:00")]
+
+    final_row, latest = outcome_tracker.apply_events(
+        row, events, [], _config(telegram=True))
+
+    assert latest == "tp1_hit"
+    assert final_row["status"] == "tp1_hit"
+    assert [c[0] for c in calls["update"]] == ["tp1_hit", "tp2_hit"]
+    assert calls["update"][0][1] == "open"       # prior status before 1st claim
+    assert calls["update"][1][1] == "tp1_hit"    # prior status before 2nd claim
+    assert calls["alerts"] == ["tp1_hit"]        # tp2_hit never alerted — lost the race

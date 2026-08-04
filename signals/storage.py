@@ -273,12 +273,20 @@ def close_signal(signal_id: str, status: str, closed_at: str,
 
 def update_signal_outcome(signal_id: str, status: str, at: str,
                           supabase_url: str, service_key: str, *,
-                          terminal: bool, session=None) -> None:
+                          terminal: bool, expected_status: str | None = None,
+                          session=None) -> bool | None:
     """PATCH status (+ optional tpN_hit_at / closed_at).
 
     tp1_hit / tp2_hit can be intermediate (still open) or terminal (TP banked
     then froze with closed_at). Only stamp the first-hit timestamp when the
     trade is still advancing — a terminal freeze must not overwrite it.
+
+    `expected_status` makes the PATCH a conditional claim (mirrors
+    try_acquire_engine_lock's conditional-PATCH pattern): it only applies if
+    the row is still in that status, so two writers racing on the same row
+    (the slow cron and the realtime watcher) can't both "win" and double-fire
+    Telegram. Returns True/False (claimed or not) when given, else None
+    (existing unconditional behavior, unchanged).
     """
     session = session or requests.Session()
     payload: dict = {"status": status}
@@ -292,18 +300,28 @@ def update_signal_outcome(signal_id: str, status: str, at: str,
         terminal = True
     if terminal:
         payload["closed_at"] = at
+
+    url = f"{supabase_url}/rest/v1/signals?id=eq.{signal_id}"
+    prefer = "return=minimal"
+    if expected_status is not None:
+        url += f"&status=eq.{expected_status}"
+        prefer = "return=representation"
+
     response = session.patch(
-        f"{supabase_url}/rest/v1/signals?id=eq.{signal_id}",
+        url,
         headers={
             "apikey": service_key,
             "Authorization": f"Bearer {service_key}",
             "Content-Type": "application/json",
-            "Prefer": "return=minimal",
+            "Prefer": prefer,
         },
         json=payload,
         timeout=15,
     )
     response.raise_for_status()
+    if expected_status is not None:
+        return bool(response.json())
+    return None
 
 
 def set_outcome_chart_url(signal_id: str, url: str, supabase_url: str,

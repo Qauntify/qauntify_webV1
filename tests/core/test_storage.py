@@ -6,6 +6,7 @@ from signals.storage import (
     save_debate,
     save_signal,
     save_xau_scan_run,
+    update_signal_outcome,
 )
 
 
@@ -39,17 +40,22 @@ def test_save_debate_posts_row_to_agent_debates():
 
 
 class FakeResponse:
-    def __init__(self, status=201):
+    def __init__(self, status=201, payload=None):
         self.status_code = status
+        self._payload = payload
 
     def raise_for_status(self):
         if self.status_code >= 400:
             raise RuntimeError(f"HTTP {self.status_code}")
 
+    def json(self):
+        return self._payload
+
 
 class FakeSession:
-    def __init__(self, status=201):
+    def __init__(self, status=201, payload=None):
         self._status = status
+        self._payload = payload
         self.last_url = None
         self.last_headers = None
         self.last_json = None
@@ -59,6 +65,12 @@ class FakeSession:
         self.last_headers = headers
         self.last_json = json
         return FakeResponse(self._status)
+
+    def patch(self, url, headers=None, json=None, timeout=None):
+        self.last_url = url
+        self.last_headers = headers
+        self.last_json = json
+        return FakeResponse(self._status, self._payload)
 
 
 def test_save_signal_posts_row_to_supabase():
@@ -114,6 +126,39 @@ def test_save_xau_scan_run_raises_on_http_error():
              "finished_at": "2026-08-04T12:00:00+00:00"},
             "https://abc.supabase.co", "bad-key", session=session,
         )
+
+
+def test_update_signal_outcome_unconditional_unchanged():
+    session = FakeSession()
+    result = update_signal_outcome(
+        "sig-1", "sl_hit", "2026-08-04T12:00:00+00:00",
+        "https://abc.supabase.co", "key", terminal=True, session=session,
+    )
+    assert result is None
+    assert "status=eq." not in session.last_url
+    assert session.last_headers["Prefer"] == "return=minimal"
+
+
+def test_update_signal_outcome_conditional_claim_succeeds():
+    session = FakeSession(payload=[{"id": "sig-1", "status": "sl_hit"}])
+    result = update_signal_outcome(
+        "sig-1", "sl_hit", "2026-08-04T12:00:00+00:00",
+        "https://abc.supabase.co", "key", terminal=True,
+        expected_status="open", session=session,
+    )
+    assert result is True
+    assert "status=eq.open" in session.last_url
+    assert session.last_headers["Prefer"] == "return=representation"
+
+
+def test_update_signal_outcome_conditional_claim_fails_when_already_moved():
+    session = FakeSession(payload=[])
+    result = update_signal_outcome(
+        "sig-1", "sl_hit", "2026-08-04T12:00:00+00:00",
+        "https://abc.supabase.co", "key", terminal=True,
+        expected_status="open", session=session,
+    )
+    assert result is False
 
 
 class FakeGetSession:

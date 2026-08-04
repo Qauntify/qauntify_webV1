@@ -208,6 +208,88 @@ def check_outcome(signal_row: dict, candles: list) -> tuple[str, str] | None:
     return events[0] if events else None
 
 
+def apply_events(row: dict, events: list[tuple[str, str]], window: list,
+                 cfg, session=None) -> tuple[dict, str | None]:
+    """Apply each new event to `row` in order: claim it (race-safe against
+    any other writer advancing the same row concurrently — the slow cron and
+    the realtime watcher both call this), attach an outcome chart on the
+    terminal event, and alert Telegram. Returns the updated row and the
+    latest status actually applied (None if nothing was claimed).
+
+    Stops applying further events the moment a claim is lost — a row another
+    writer already moved out from under us is not safe to keep advancing
+    locally, and an event that was never actually persisted must never alert.
+    """
+    symbol = row["symbol"]
+    latest = None
+    applied: list[tuple[str, str]] = []
+    for outcome, closed_at in events:
+        freeze_only = False
+        prior_status = row.get("status") or "open"
+        if outcome == "sl_hit":
+            locked = _stop_to_partial_win(_already_hit(row), applied)
+            if locked is not None:
+                # Banked TP1+ then stopped: freeze as a TP1/TP2 win.
+                outcome = locked
+                terminal = True
+                freeze_only = True
+            else:
+                terminal = True
+        else:
+            terminal = outcome in _TERMINAL
+        try:
+            claimed = update_signal_outcome(
+                row["id"], outcome, closed_at,
+                cfg.supabase_url, cfg.supabase_service_key,
+                terminal=terminal, expected_status=prior_status,
+                session=session,
+            )
+        except Exception as exc:
+            print(f"[{symbol}] failed to mark {outcome} "
+                  f"({type(exc).__name__}), will retry next run")
+            break
+        if claimed is False:
+            print(f"[{symbol}] {outcome} already applied by another writer, "
+                  "stopping here")
+            break
+        print(f"[{symbol}] {outcome.upper().replace('_', ' ')} — "
+              f"{row['direction']} from {row['entry']}")
+        latest = outcome
+        row = {**row, "status": outcome}
+        if terminal:
+            row = {**row, "closed_at": closed_at}
+        if terminal and outcome != "expired":
+            chart_url = attach_outcome_chart(
+                row, outcome, window,
+                supabase_url=cfg.supabase_url,
+                service_key=cfg.supabase_service_key,
+                session=session,
+            )
+            if chart_url:
+                row = {**row, "outcome_chart_url": chart_url}
+                try:
+                    set_outcome_chart_url(
+                        row["id"], chart_url, cfg.supabase_url,
+                        cfg.supabase_service_key, session=session,
+                    )
+                except Exception as exc:
+                    print(f"[{symbol}] failed to store outcome_chart_url "
+                          f"({type(exc).__name__}), continuing")
+        if (not freeze_only
+                and outcome in ("tp1_hit", "tp2_hit", "tp3_hit", "tp_hit",
+                                "sl_hit")
+                and cfg.telegram_bot_token and cfg.telegram_channel_id):
+            try:
+                send_outcome_alert(row, outcome, cfg.telegram_bot_token,
+                                   cfg.telegram_channel_id)
+                print(f"[{symbol}] Telegram outcome alert sent ({outcome})")
+            except Exception as exc:
+                print(f"[{symbol}] Telegram outcome alert failed "
+                      f"({type(exc).__name__}: {exc}), continuing")
+        applied.append((outcome, closed_at))
+    return row, latest
+
+
 def track_open_signals(cfg, prefetched=None, session=None) -> list:
     """Advance every open/partially-hit signal; return (row, latest_status) pairs."""
     try:
@@ -270,66 +352,7 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
         if not events:
             continue
 
-        latest = None
-        applied: list[tuple[str, str]] = []
-        for outcome, closed_at in events:
-            freeze_only = False
-            if outcome == "sl_hit":
-                locked = _stop_to_partial_win(_already_hit(row), applied)
-                if locked is not None:
-                    # Banked TP1+ then stopped: freeze as a TP1/TP2 win.
-                    outcome = locked
-                    terminal = True
-                    freeze_only = True
-                else:
-                    terminal = True
-            else:
-                terminal = outcome in _TERMINAL
-            try:
-                update_signal_outcome(
-                    row["id"], outcome, closed_at,
-                    cfg.supabase_url, cfg.supabase_service_key,
-                    terminal=terminal, session=session,
-                )
-            except Exception as exc:
-                print(f"[{symbol}] failed to mark {outcome} "
-                      f"({type(exc).__name__}), will retry next run")
-                break
-            print(f"[{symbol}] {outcome.upper().replace('_', ' ')} — "
-                  f"{row['direction']} from {row['entry']}")
-            latest = outcome
-            row = {**row, "status": outcome}
-            if terminal:
-                row = {**row, "closed_at": closed_at}
-            if terminal and outcome != "expired":
-                chart_url = attach_outcome_chart(
-                    row, outcome, window,
-                    supabase_url=cfg.supabase_url,
-                    service_key=cfg.supabase_service_key,
-                    session=session,
-                )
-                if chart_url:
-                    row = {**row, "outcome_chart_url": chart_url}
-                    try:
-                        set_outcome_chart_url(
-                            row["id"], chart_url, cfg.supabase_url,
-                            cfg.supabase_service_key, session=session,
-                        )
-                    except Exception as exc:
-                        print(f"[{symbol}] failed to store outcome_chart_url "
-                              f"({type(exc).__name__}), continuing")
-            if (not freeze_only
-                    and outcome in ("tp1_hit", "tp2_hit", "tp3_hit", "tp_hit",
-                                    "sl_hit")
-                    and cfg.telegram_bot_token and cfg.telegram_channel_id):
-                try:
-                    send_outcome_alert(row, outcome, cfg.telegram_bot_token,
-                                       cfg.telegram_channel_id)
-                    print(f"[{symbol}] Telegram outcome alert sent ({outcome})")
-                except Exception as exc:
-                    print(f"[{symbol}] Telegram outcome alert failed "
-                          f"({type(exc).__name__}: {exc}), continuing")
-            applied.append((outcome, closed_at))
+        row, latest = apply_events(row, events, window, cfg, session=session)
         if latest is not None:
             closed.append((row, latest))
     return closed
