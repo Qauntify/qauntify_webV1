@@ -1,6 +1,8 @@
 # Linux (systemd) unit for signals/realtime_watcher.py on the VPS.
 #
 # Install:
+#   sudo useradd --system --no-create-home qauntify   # if it doesn't exist
+#   sudo chown -R qauntify:qauntify /opt/qauntify
 #   sudo cp deploy/qauntify-realtime.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now qauntify-realtime
@@ -8,8 +10,10 @@
 # Logs:
 #   journalctl -u qauntify-realtime -f
 #
-# Edit WorkingDirectory/ExecStart's venv path and the .env location to match
-# the actual VPS checkout before installing.
+# Edit User/WorkingDirectory/ExecStart's venv path and the .env location to
+# match the actual VPS checkout before installing. .env should be plain
+# KEY=value lines (no `export`, minimal quoting) -- systemd's EnvironmentFile
+# parser is not a full shell.
 
 [Unit]
 Description=Qauntify realtime SL/TP watcher (Kraken WS + MT5 tick receiver)
@@ -18,6 +22,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+User=qauntify
 WorkingDirectory=/opt/qauntify
 EnvironmentFile=/opt/qauntify/.env
 ExecStart=/opt/qauntify/.venv/bin/python -m signals.realtime_watcher

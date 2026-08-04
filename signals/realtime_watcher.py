@@ -49,6 +49,9 @@ def load_watcher_config() -> Config:
     Deliberately not signals.config.load_config(): that hard-SystemExits
     without a SEA-LION key, which this process never needs.
     """
+    from dotenv import load_dotenv
+    load_dotenv()  # no-op under systemd (EnvironmentFile already set these);
+                   # picks up a local .env for manual/VPS-shell runs.
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     supabase_service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     if not supabase_url or not supabase_service_key:
@@ -153,7 +156,12 @@ class _TickHandler(BaseHTTPRequestHandler):
             self.send_response(400)
             self.end_headers()
             return
-        self.watcher.handle_tick(symbol, price, ts_ms)
+        # WebRequest() in MQL5 is synchronous and blocks the terminal until
+        # this responds -- respond immediately and do the actual outcome
+        # check (Supabase + Telegram on a real hit, can take a second-plus)
+        # in the background so a TP/SL hit never stalls the EA.
+        threading.Thread(target=self.watcher.handle_tick,
+                         args=(symbol, price, ts_ms), daemon=True).start()
         self.send_response(200)
         self.end_headers()
 
