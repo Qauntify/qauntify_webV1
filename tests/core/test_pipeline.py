@@ -100,7 +100,7 @@ def test_with_retry_raises_after_exhausting_attempts():
 def test_scan_symbol_no_setup_stores_nothing(monkeypatch):
     # Flat prices produce no crossover → real detector returns None.
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _flat_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"rationale": "Indicators flat."}')
@@ -117,7 +117,7 @@ def test_scan_symbol_no_setup_stores_nothing(monkeypatch):
 
 def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _flat_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"rationale": "No EMA crossover yet."}')
@@ -134,7 +134,7 @@ def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
 
 def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _flat_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     saved = _capture_saves(monkeypatch)
@@ -161,20 +161,20 @@ def test_scan_symbol_skip_recency_bypasses_guard(monkeypatch):
     # Recency guard would normally skip, but skip_recency=True overrides it.
     monkeypatch.setattr(run_module, "_recently_evaluated", lambda *a, **k: True)
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _flat_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup", lambda *a, **k: SETUP)
     _capture_saves(monkeypatch)
     _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 80, "rationale": "ok"}')
 
-    assert scan_symbol("XAUUSD", _config(), llm, skip_recency=False).signal is None
-    assert scan_symbol("XAUUSD", _config(), llm, skip_recency=True).signal is not None
+    assert scan_symbol("BTCUSDT", _config(), llm, skip_recency=False).signal is None
+    assert scan_symbol("BTCUSDT", _config(), llm, skip_recency=True).signal is not None
 
 
 def test_scan_symbol_log_no_setup_false_writes_no_event(monkeypatch):
     monkeypatch.setattr(run_module, "_recently_evaluated", lambda *a, **k: False)
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _flat_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup", lambda *a, **k: None)
     events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"rationale": "flat"}')
@@ -223,7 +223,7 @@ def test_maybe_run_debate_is_best_effort(monkeypatch):
 
 def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _flat_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     saved = _capture_saves(monkeypatch)
@@ -242,7 +242,7 @@ def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
 
 
 def test_scan_symbol_binance_failure_returns_none(monkeypatch):
-    def broken_candles(symbol, interval, limit, session=None):
+    def broken_candles(symbol, interval, limit, session=None, **kwargs):
         raise RuntimeError("binance down")
 
     monkeypatch.setattr(run_module, "fetch_candles", broken_candles)
@@ -254,7 +254,7 @@ def test_scan_symbol_binance_failure_returns_none(monkeypatch):
 
 def test_scan_symbol_storage_failure_discards_without_raising(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _flat_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     monkeypatch.setattr(run_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
@@ -281,7 +281,7 @@ def test_scan_symbol_drops_forming_candle(monkeypatch):
         return None
 
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None:
+                        lambda symbol, interval, limit, session=None, **kwargs:
                         candles + [forming])
     monkeypatch.setattr(run_module, "detect_setup", capture_detect)
     llm = FakeLLM(reply="{}")
@@ -310,18 +310,18 @@ def _falling_candles(n=40, start=140.0, step=1.0):
 
 def test_fetch_htf_trend_up_when_fast_ema_above_slow(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _rising_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _rising_candles())
     assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) == "up"
 
 
 def test_fetch_htf_trend_down_when_fast_ema_below_slow(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _falling_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _falling_candles())
     assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) == "down"
 
 
 def test_fetch_htf_trend_raises_on_fetch_failure(monkeypatch):
-    def boom(symbol, interval, limit, session=None):
+    def boom(symbol, interval, limit, session=None, **kwargs):
         raise RuntimeError("binance down")
 
     monkeypatch.setattr(run_module, "fetch_candles", boom)
@@ -333,13 +333,13 @@ def test_fetch_htf_trend_raises_on_fetch_failure(monkeypatch):
 
 def test_fetch_htf_trend_none_during_warmup(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _rising_candles(n=5))
+                        lambda symbol, interval, limit, session=None, **kwargs: _rising_candles(n=5))
     assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) is None
 
 
 def test_scan_symbol_computes_and_passes_adx_to_detect_setup(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _flat_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     seen = {}
 
     def capture_detect(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
@@ -359,7 +359,7 @@ def test_scan_symbol_computes_and_passes_adx_to_detect_setup(monkeypatch):
 
 def test_scan_symbol_passes_htf_trend_when_confluence_timeframe_given(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _flat_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     monkeypatch.setattr(run_module, "_fetch_htf_trend",
                         lambda symbol, timeframe, cfg, session=None: "up")
     seen = {}
@@ -379,7 +379,7 @@ def test_scan_symbol_passes_htf_trend_when_confluence_timeframe_given(monkeypatc
 
 def test_scan_symbol_skips_htf_fetch_without_confluence_timeframe(monkeypatch):
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: _flat_candles())
+                        lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
 
     def must_not_fetch(symbol, timeframe, cfg, session=None):
         raise AssertionError("no confluence_timeframe given; HTF trend must not be fetched")
@@ -403,7 +403,7 @@ def test_scan_symbol_skips_htf_fetch_without_confluence_timeframe(monkeypatch):
 def test_scan_symbol_returns_candles_for_reuse(monkeypatch):
     candles = _flat_candles(n=200)
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None: candles)
+                        lambda symbol, interval, limit, session=None, **kwargs: candles)
     _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"rationale": "flat"}')
 
@@ -416,7 +416,7 @@ def test_scan_symbol_returns_candles_for_reuse(monkeypatch):
 def test_scan_symbol_threads_session_through_fetches(monkeypatch):
     sessions_seen = {}
 
-    def capture_candles(symbol, interval, limit, session=None):
+    def capture_candles(symbol, interval, limit, session=None, **kwargs):
         sessions_seen["candles"] = session
         return _flat_candles()
 
@@ -580,7 +580,7 @@ def test_sr_zone_is_never_scanned_again():
 def test_scan_symbol_uses_the_session_timeframe(monkeypatch):
     seen = {}
 
-    def capture_candles(symbol, interval, limit, session=None):
+    def capture_candles(symbol, interval, limit, session=None, **kwargs):
         seen["interval"] = interval
         return _flat_candles()
 
@@ -917,7 +917,7 @@ def test_scan_symbol_runs_when_throttle_window_has_elapsed(monkeypatch):
                         lambda symbol, timeframe, url, key, session=None:
                         stale.isoformat())
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None:
+                        lambda symbol, interval, limit, session=None, **kwargs:
                         _flat_candles())
     _capture_ai_events(monkeypatch)
 
@@ -931,7 +931,7 @@ def test_scan_symbol_runs_when_never_evaluated_before(monkeypatch):
     monkeypatch.setattr(run_module, "latest_ai_event_time",
                         lambda symbol, timeframe, url, key, session=None: None)
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None:
+                        lambda symbol, interval, limit, session=None, **kwargs:
                         _flat_candles())
     _capture_ai_events(monkeypatch)
 
@@ -947,7 +947,7 @@ def test_scan_symbol_skips_when_throttle_lookup_fails(monkeypatch):
 
     monkeypatch.setattr(run_module, "latest_ai_event_time", boom)
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None:
+                        lambda symbol, interval, limit, session=None, **kwargs:
                         _flat_candles())
     _capture_ai_events(monkeypatch)
 
@@ -968,7 +968,7 @@ def test_scan_symbol_scalp_throttle_is_shorter_than_swing(monkeypatch):
                         lambda symbol, timeframe, url, key, session=None:
                         stamp.isoformat())
     monkeypatch.setattr(run_module, "fetch_candles",
-                        lambda symbol, interval, limit, session=None:
+                        lambda symbol, interval, limit, session=None, **kwargs:
                         _flat_candles())
     _capture_ai_events(monkeypatch)
 
@@ -1135,7 +1135,7 @@ def test_load_market_data_fetches_h1_for_cloud_mss(monkeypatch):
 
     fetched = []
 
-    def fake_fetch(symbol, interval, limit, session=None):
+    def fake_fetch(symbol, interval, limit, session=None, **kwargs):
         fetched.append((interval, limit))
         return [Candle(i * 900_000, 100.0, 100.5, 99.5, 100.0, 1.0)
                 for i in range(limit)]

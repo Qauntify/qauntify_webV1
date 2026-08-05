@@ -28,7 +28,8 @@ export async function applyTickEvents(
   let latest: string | null = null;
   const applied: OutcomeEvent[] = [];
 
-  for (let [outcome, closedAt] of events) {
+  for (const [initialOutcome, closedAt] of events) {
+    let outcome = initialOutcome;
     let freezeOnly = false;
     const priorStatus = row.status || "open";
     let terminal: boolean;
