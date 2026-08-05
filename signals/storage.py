@@ -130,6 +130,235 @@ def save_xau_scan_run(run: dict, supabase_url: str, service_key: str,
     response.raise_for_status()
 
 
+# Prefer MT5 broker bid when fresher than this; otherwise fall back to PAXG.
+MT5_TICK_MAX_AGE_SECONDS = 45
+# Open gold signals this far from live are treated as futures-era junk.
+GOLD_OPEN_DRIFT_EXPIRE = 25.0
+MT5_TICK_BUCKET = "signal-charts"
+MT5_TICK_OBJECT_PREFIX = "mt5-last-ticks"
+
+
+def _mt5_tick_object_path(symbol: str) -> str:
+    return f"{MT5_TICK_OBJECT_PREFIX}/{canonical_symbol(symbol)}.json"
+
+
+def _upsert_mt5_tick_table(symbol: str, price: float, tick_time_iso: str,
+                           supabase_url: str, service_key: str,
+                           session) -> bool:
+    now = datetime.now(timezone.utc).isoformat()
+    response = session.post(
+        f"{supabase_url}/rest/v1/mt5_last_ticks",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
+        },
+        json={
+            "symbol": canonical_symbol(symbol),
+            "price": float(price),
+            "tick_time": tick_time_iso,
+            "updated_at": now,
+        },
+        timeout=10,
+    )
+    if response.status_code in (404, 406):
+        return False
+    if response.status_code >= 400:
+        # Table missing from schema cache → fall back to Storage.
+        try:
+            detail = response.json()
+        except Exception:
+            detail = {}
+        if isinstance(detail, dict) and detail.get("code") == "PGRST205":
+            return False
+        response.raise_for_status()
+    return True
+
+
+def _upsert_mt5_tick_storage(symbol: str, price: float, tick_time_iso: str,
+                             supabase_url: str, service_key: str,
+                             session) -> None:
+    import json
+
+    now = datetime.now(timezone.utc).isoformat()
+    path = _mt5_tick_object_path(symbol)
+    payload = json.dumps({
+        "symbol": canonical_symbol(symbol),
+        "price": float(price),
+        "tick_time": tick_time_iso,
+        "updated_at": now,
+    }).encode("utf-8")
+    response = session.post(
+        f"{supabase_url}/storage/v1/object/{MT5_TICK_BUCKET}/{path}",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "x-upsert": "true",
+        },
+        data=payload,
+        timeout=10,
+    )
+    response.raise_for_status()
+
+
+def upsert_mt5_last_tick(symbol: str, price: float, tick_time_iso: str,
+                         supabase_url: str, service_key: str,
+                         session=None) -> None:
+    """Persist latest MT5 bid (table if migrated, else Storage JSON)."""
+    session = session or requests.Session()
+    if _upsert_mt5_tick_table(
+        symbol, price, tick_time_iso, supabase_url, service_key, session,
+    ):
+        return
+    _upsert_mt5_tick_storage(
+        symbol, price, tick_time_iso, supabase_url, service_key, session,
+    )
+
+
+def _fetch_mt5_tick_table(symbol: str, supabase_url: str, service_key: str,
+                          session) -> dict | None:
+    canon = canonical_symbol(symbol)
+    response = session.get(
+        f"{supabase_url}/rest/v1/mt5_last_ticks"
+        f"?symbol=eq.{quote(canon)}"
+        "&select=symbol,price,tick_time,updated_at&limit=1",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        timeout=10,
+    )
+    if response.status_code == 404:
+        return None
+    if response.status_code >= 400:
+        try:
+            detail = response.json()
+        except Exception:
+            detail = {}
+        if isinstance(detail, dict) and detail.get("code") == "PGRST205":
+            return None
+        response.raise_for_status()
+    rows = response.json()
+    if not isinstance(rows, list) or not rows:
+        return None
+    row = rows[0]
+    return {
+        "symbol": row["symbol"],
+        "price": float(row["price"]),
+        "tick_time": row["tick_time"],
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _fetch_mt5_tick_storage(symbol: str, supabase_url: str, service_key: str,
+                            session) -> dict | None:
+    import json
+
+    path = _mt5_tick_object_path(symbol)
+    response = session.get(
+        f"{supabase_url}/storage/v1/object/{MT5_TICK_BUCKET}/{path}",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        timeout=10,
+    )
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    data = response.json() if hasattr(response, "json") else json.loads(response.content)
+    if isinstance(data, (bytes, bytearray, str)):
+        data = json.loads(data)
+    if not isinstance(data, dict) or "price" not in data:
+        return None
+    return {
+        "symbol": data.get("symbol") or canonical_symbol(symbol),
+        "price": float(data["price"]),
+        "tick_time": data.get("tick_time"),
+        "updated_at": data.get("updated_at"),
+    }
+
+
+def fetch_mt5_last_tick(symbol: str, supabase_url: str, service_key: str,
+                        session=None) -> dict | None:
+    """Latest stored MT5 tick for `symbol`, or None if missing / unavailable."""
+    session = session or requests.Session()
+    try:
+        row = _fetch_mt5_tick_table(symbol, supabase_url, service_key, session)
+        if row is not None:
+            return row
+        return _fetch_mt5_tick_storage(symbol, supabase_url, service_key, session)
+    except Exception as exc:
+        print(f"mt5_last_ticks fetch failed ({type(exc).__name__})")
+        return None
+
+
+def mt5_tick_is_fresh(tick: dict | None, *,
+                      max_age_seconds: int = MT5_TICK_MAX_AGE_SECONDS) -> bool:
+    if not tick:
+        return False
+    raw = tick.get("tick_time") or tick.get("updated_at")
+    if not raw:
+        return False
+    try:
+        when = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - when).total_seconds()
+    return 0 <= age <= max_age_seconds
+
+
+def expire_drifted_open_gold_signals(
+    live_price: float,
+    supabase_url: str,
+    service_key: str,
+    *,
+    max_drift: float = GOLD_OPEN_DRIFT_EXPIRE,
+    session=None,
+) -> int:
+    """Expire open XAUUSD rows whose entry is wildly off live (old futures feed).
+
+    Returns how many rows were closed. Failures are swallowed so scans continue.
+    """
+    session = session or requests.Session()
+    try:
+        rows = list_open_signals(supabase_url, service_key, session=session)
+    except Exception as exc:
+        print(f"expire drifted gold: list failed ({type(exc).__name__})")
+        return 0
+    closed = 0
+    now = datetime.now(timezone.utc).isoformat()
+    for row in rows:
+        if canonical_symbol(row.get("symbol") or "") != "XAUUSD":
+            continue
+        if (row.get("status") or "open") != "open":
+            continue
+        try:
+            entry = float(row["entry"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        if abs(entry - live_price) < max_drift:
+            continue
+        try:
+            claimed = update_signal_outcome(
+                row["id"], "expired", now, supabase_url, service_key,
+                terminal=True, expected_status="open", session=session,
+            )
+            if claimed:
+                closed += 1
+                print(
+                    f"[XAUUSD] expired drifted open signal {row['id']} "
+                    f"entry={entry:.2f} live={live_price:.2f}"
+                )
+        except Exception as exc:
+            print(f"expire drifted gold {row.get('id')}: {type(exc).__name__}")
+    return closed
+
+
 ENGINE_LOCK_STALE_MINUTES = 12
 
 

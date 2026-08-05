@@ -163,17 +163,27 @@ def test_update_signal_outcome_conditional_claim_fails_when_already_moved():
 
 
 class FakeGetSession:
-    def __init__(self, payload=None, status=200):
+    def __init__(self, payload=None, status=200, patch_payload=None):
         self._payload = payload
         self._status = status
+        self._patch_payload = patch_payload if patch_payload is not None else [{"id": "x"}]
         self.last_url = None
         self.last_headers = None
+        self.last_json = None
 
     def get(self, url, headers=None, timeout=None):
         self.last_url = url
         self.last_headers = headers
         response = FakeResponse(self._status)
         response.json = lambda: self._payload
+        return response
+
+    def patch(self, url, headers=None, json=None, timeout=None):
+        self.last_url = url
+        self.last_headers = headers
+        self.last_json = json
+        response = FakeResponse(200, self._patch_payload)
+        response.json = lambda: self._patch_payload
         return response
 
 
@@ -467,3 +477,64 @@ def test_list_signals_missing_outcome_chart_queries_closed_without_chart():
     assert "closed_at=not.is.null" in query
     assert "outcome_chart_url=is.null" in query
     assert "limit=20" in query
+
+
+def test_upsert_mt5_last_tick_posts_merge():
+    from signals.storage import upsert_mt5_last_tick
+
+    session = FakeSession()
+    upsert_mt5_last_tick(
+        "XAUUSD", 4120.5, "2026-08-05T03:00:00+00:00",
+        "https://abc.supabase.co", "service-key", session=session,
+    )
+    assert session.last_url.endswith("/mt5_last_ticks")
+    assert "merge-duplicates" in session.last_headers["Prefer"]
+    assert session.last_json["symbol"] == "XAUUSD"
+    assert session.last_json["price"] == 4120.5
+
+
+def test_mt5_tick_is_fresh():
+    from datetime import datetime, timedelta, timezone
+
+    from signals.storage import mt5_tick_is_fresh
+
+    now = datetime.now(timezone.utc)
+    fresh = {"price": 1.0, "tick_time": now.isoformat()}
+    stale = {
+        "price": 1.0,
+        "tick_time": (now - timedelta(seconds=120)).isoformat(),
+    }
+    assert mt5_tick_is_fresh(fresh) is True
+    assert mt5_tick_is_fresh(stale) is False
+    assert mt5_tick_is_fresh(None) is False
+
+
+def test_fetch_mt5_last_tick_parses_row():
+    from signals.storage import fetch_mt5_last_tick
+
+    session = FakeGetSession(payload=[{
+        "symbol": "XAUUSD", "price": 4121.1,
+        "tick_time": "2026-08-05T03:00:00Z", "updated_at": "2026-08-05T03:00:01Z",
+    }])
+    row = fetch_mt5_last_tick(
+        "XAUUSD", "https://abc.supabase.co", "k", session=session,
+    )
+    assert row["price"] == 4121.1
+    assert "mt5_last_ticks" in session.last_url
+
+
+def test_expire_drifted_open_gold_signals():
+    from signals.storage import expire_drifted_open_gold_signals
+
+    session = FakeGetSession(
+        payload=[{
+            "id": "sig-1", "symbol": "XAUUSD", "status": "open",
+            "entry": 4154.0, "timeframe": "1m",
+        }],
+        patch_payload=[{"id": "sig-1"}],
+    )
+    n = expire_drifted_open_gold_signals(
+        4120.0, "https://abc.supabase.co", "k", session=session,
+    )
+    assert n == 1
+    assert session.last_json["status"] == "expired"

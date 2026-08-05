@@ -17,9 +17,9 @@ export function MethodologyNote() {
         tighter stops carry proportionally more of it. Gross is shown next to net so the gap is visible.
       </p>
       <p>
-        <strong className="text-slate/80">Gold prices track spot.</strong> XAUUSD levels come from
-        Kraken PAXGUSD (tokenized physical gold), aligned with typical MT5/CFD spot feeds rather than
-        COMEX futures.
+        <strong className="text-slate/80">Gold prices track your broker.</strong> Signal
+        structure comes from Kraken PAXGUSD candles; before publish, entry is snapped to a
+        fresh MT5 bid from your EA when available (otherwise PAXG last trade).
       </p>
       <p>
         Every closed signal is included — nothing is cherry-picked or removed after the fact. Outcomes are

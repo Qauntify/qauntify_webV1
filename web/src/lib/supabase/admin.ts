@@ -566,6 +566,62 @@ export function invalidateOpenSignalsCache(symbol: string): void {
   openSignalsCache.delete(symbol);
 }
 
+/** Upsert the latest MT5 broker bid so the Python engine can snap gold
+ * entries to the same price the EA uses for SL/TP. Prefers the
+ * `mt5_last_ticks` table; falls back to Storage JSON when the migration
+ * is not applied yet. Soft-fails (returns false) only when both paths fail. */
+export async function upsertMt5LastTick(
+  symbol: string,
+  price: number,
+  tickTimeUnixSec: number,
+): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+  const canon = symbol.trim().toUpperCase();
+  const payload = {
+    symbol: canon,
+    price,
+    tick_time: new Date(tickTimeUnixSec * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  try {
+    const response = await fetch(`${cfg.url}/rest/v1/mt5_last_ticks`, {
+      method: "POST",
+      headers: {
+        ...headers(cfg.serviceKey),
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (response.ok || response.status === 201) return true;
+    // Table missing (PGRST205) → Storage fallback below.
+    const detail = (await response.json().catch(() => null)) as { code?: string } | null;
+    if (response.status !== 404 && detail?.code !== "PGRST205") {
+      return false;
+    }
+  } catch {
+    // fall through to Storage
+  }
+  try {
+    const path = `mt5-last-ticks/${canon}.json`;
+    const response = await fetch(
+      `${cfg.url}/storage/v1/object/signal-charts/${path}`,
+      {
+        method: "POST",
+        headers: {
+          ...headers(cfg.serviceKey),
+          "Content-Type": "application/json",
+          "x-upsert": "true",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+    return response.ok || response.status === 200 || response.status === 201;
+  } catch {
+    return false;
+  }
+}
+
 /** TS mirror of signals/storage.py:update_signal_outcome's conditional-claim
  * mode: PATCH only applies if the row is still in `expectedStatus`, so the
  * slow Python cron and this instant path can't both win the same event. */

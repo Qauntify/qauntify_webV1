@@ -7,6 +7,7 @@ import {
   getOpenSignalsForSymbol,
   invalidateOpenSignalsCache,
   updateSignalOutcomeClaim,
+  upsertMt5LastTick,
 } from "@/lib/supabase/admin";
 import { authorizedBySecret } from "@/lib/webhook-guard";
 
@@ -25,12 +26,16 @@ export async function POST(request: Request) {
     symbol = String(body.symbol);
     price = Number(body.price);
     time = Number(body.time);
-    if (!symbol || !Number.isFinite(price) || !Number.isFinite(time)) {
+    if (!symbol || !Number.isFinite(price) || !Number.isFinite(time) || price <= 0) {
       throw new Error("invalid body");
     }
   } catch {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
+
+  // Always persist the broker bid (even with no open signals) so the
+  // signals engine can snap XAU entries to MT5 before Telegram.
+  await upsertMt5LastTick(symbol, price, time);
 
   const rows = await getOpenSignalsForSymbol(symbol);
   if (!rows || rows.length === 0) {

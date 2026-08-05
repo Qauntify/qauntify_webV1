@@ -43,10 +43,13 @@ from signals.session_clock import describe_market_session
 from signals.strategies import detect_setup
 from signals.storage import (
     fetch_bot_settings,
+    fetch_mt5_last_tick,
     latest_ai_event_time,
     latest_ai_event_times_since,
     latest_signal,
     latest_signals_since,
+    mt5_tick_is_fresh,
+    expire_drifted_open_gold_signals,
     open_symbols_for_timeframe,
     release_engine_lock,
     save_ai_event,
@@ -520,8 +523,9 @@ def _load_market_data(symbol, timeframe, strategy, cfg, *,
 
 
 def _snap_gold_setup_to_live(setup: CandidateSetup, live: float,
-                             timeframe: str) -> tuple[CandidateSetup | None, str]:
-    """Align published gold levels to the live PAXG ticker when drift is small."""
+                             timeframe: str, *,
+                             source: str = "paxg") -> tuple[CandidateSetup | None, str]:
+    """Align published gold levels to a live bid when drift is small."""
     atr = setup.indicators.get("atr")
     if isinstance(atr, (int, float)):
         atr_val: float | None = float(atr)
@@ -531,7 +535,10 @@ def _snap_gold_setup_to_live(setup: CandidateSetup, live: float,
     if not ok:
         return None, msg
     if abs(setup.entry - live) < 0.05:
-        return setup, ""
+        ind = dict(setup.indicators)
+        ind["live_snap_source"] = source
+        ind["live_snap_to"] = live
+        return replace(setup, indicators=ind), ""
     tp_r = setup.indicators.get("tp_r")
     if isinstance(tp_r, (list, tuple)) and len(tp_r) == 3:
         tp1, tp2, tp3 = take_profits_from_risk(
@@ -549,6 +556,7 @@ def _snap_gold_setup_to_live(setup: CandidateSetup, live: float,
     ind = dict(setup.indicators)
     ind["live_snap_from"] = setup.entry
     ind["live_snap_to"] = live
+    ind["live_snap_source"] = source
     return replace(
         setup,
         entry=live,
@@ -557,6 +565,16 @@ def _snap_gold_setup_to_live(setup: CandidateSetup, live: float,
         take_profit_3=tp3,
         indicators=ind,
     ), ""
+
+
+def resolve_gold_live_price(cfg, session=None) -> tuple[float, str]:
+    """Prefer a fresh MT5 broker bid; fall back to Kraken PAXG last trade."""
+    tick = fetch_mt5_last_tick(
+        "XAUUSD", cfg.supabase_url, cfg.supabase_service_key, session=session,
+    )
+    if mt5_tick_is_fresh(tick):
+        return float(tick["price"]), "mt5"
+    return fetch_gold_last_price(session=session), "paxg"
 
 
 def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
@@ -687,9 +705,11 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
 
     if is_gold_symbol(symbol):
         try:
-            live = fetch_gold_last_price(session=session)
+            live, live_source = resolve_gold_live_price(cfg, session=session)
             pre_live_setup = setup
-            setup, _live_note = _snap_gold_setup_to_live(setup, live, timeframe)
+            setup, _live_note = _snap_gold_setup_to_live(
+                setup, live, timeframe, source=live_source,
+            )
             if setup is None:
                 print(f"[{symbol}] live market check failed: {_live_note}")
                 return _reject(
@@ -700,7 +720,9 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
                 )
             if setup.entry != pre_live_setup.entry:
                 print(f"[{symbol}] snapped entry {pre_live_setup.entry:.2f} "
-                      f"-> live PAXG {setup.entry:.2f}")
+                      f"-> live {live_source} {setup.entry:.2f}")
+            else:
+                print(f"[{symbol}] live check ok via {live_source} @ {live:.2f}")
         except Exception as exc:
             print(f"[{symbol}] live gold ticker unavailable "
                   f"({type(exc).__name__}), skipping store")

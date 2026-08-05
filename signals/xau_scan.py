@@ -15,8 +15,17 @@ import requests
 
 from signals.config import load_config
 from signals.llm_client import SeaLionClient
-from signals.run import maybe_run_debate, maybe_send_alert, scan_symbol
-from signals.storage import fetch_bot_settings, save_xau_scan_run
+from signals.run import (
+    maybe_run_debate,
+    maybe_send_alert,
+    resolve_gold_live_price,
+    scan_symbol,
+)
+from signals.storage import (
+    expire_drifted_open_gold_signals,
+    fetch_bot_settings,
+    save_xau_scan_run,
+)
 
 XAU_SYMBOL = "XAUUSD"
 XAU_TIMEFRAME = "1m"
@@ -40,6 +49,17 @@ def _pick_key(keys, minute=None):
 
 def scan_once(cfg, settings, session=None) -> "object":
     """Run one XAUUSD 1m scan; store + alert on a confirmed signal."""
+    session = session or requests.Session()
+    try:
+        live, source = resolve_gold_live_price(cfg, session=session)
+        n = expire_drifted_open_gold_signals(
+            live, cfg.supabase_url, cfg.supabase_service_key, session=session,
+        )
+        if n:
+            print(f"[XAUUSD] expired {n} drifted open signal(s) vs {source} {live:.2f}")
+    except Exception as exc:
+        print(f"[XAUUSD] drift expire skipped ({type(exc).__name__})")
+
     keys = scalper_keys(cfg.sealion_api_keys or (cfg.sealion_api_key,))
     llm = SeaLionClient(
         api_key=_pick_key(keys),

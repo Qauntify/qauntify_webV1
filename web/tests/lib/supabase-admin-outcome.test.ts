@@ -118,3 +118,43 @@ describe("updateSignalOutcomeClaim", () => {
     expect(body).toEqual({ status: "tp1_hit", tp1_hit_at: "2026-08-04T12:00:00Z" });
   });
 });
+
+describe("upsertMt5LastTick", () => {
+  it("upserts symbol/price/tick_time to mt5_last_ticks when table exists", async () => {
+    const { upsertMt5LastTick } = await import("@/lib/supabase/admin");
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await upsertMt5LastTick("XAUUSD", 4120.5, 1722825600);
+
+    expect(ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain("/mt5_last_ticks");
+    expect(init.method).toBe("POST");
+    expect(init.headers.Prefer).toContain("merge-duplicates");
+    const body = JSON.parse(init.body as string);
+    expect(body.symbol).toBe("XAUUSD");
+    expect(body.price).toBe(4120.5);
+    expect(body.tick_time).toBe(new Date(1722825600 * 1000).toISOString());
+  });
+
+  it("falls back to Storage when the table is missing", async () => {
+    const { upsertMt5LastTick } = await import("@/lib/supabase/admin");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: async () => ({ code: "PGRST205" }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await upsertMt5LastTick("XAUUSD", 4120.5, 1722825600);
+
+    expect(ok).toBe(true);
+    expect(fetchMock.mock.calls[1][0]).toContain(
+      "/storage/v1/object/signal-charts/mt5-last-ticks/XAUUSD.json",
+    );
+  });
+});
