@@ -17,10 +17,10 @@ export function MethodologyNote() {
         tighter stops carry proportionally more of it. Gross is shown next to net so the gap is visible.
       </p>
       <p>
-        <strong className="text-slate/80">Gold prices track your broker.</strong> Signal
-        structure comes from Kraken PAXGUSD candles; before publish, entry snaps to a
-        fresh MT5 mid (bid/ask from your EA). Gold signals are refused if the EA tick
-        is stale. 1m scalps only fire in London/New York sessions.
+        <strong className="text-slate/80">Gold prices track your broker.</strong> XAUUSD
+        1m structure uses closed MT5 candles from your EA when the buffer is warm;
+        entry snaps to a fresh MT5 mid. Gold signals are refused if the EA tick is
+        stale. 1m scalps only fire in London/New York sessions.
       </p>
       <p>
         Every closed signal is included — nothing is cherry-picked or removed after the fact. Outcomes are

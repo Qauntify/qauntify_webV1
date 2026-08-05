@@ -165,3 +165,31 @@ describe("upsertMt5LastTick", () => {
     );
   });
 });
+
+describe("mergeMt5Candles", () => {
+  it("merges incoming bars into the Storage ring buffer", async () => {
+    const { mergeMt5Candles } = await import("@/lib/supabase/admin");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candles: [
+            { open_time: 100, open: 1, high: 2, low: 0.5, close: 1.5, volume: 1 },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await mergeMt5Candles("XAUUSD", "1m", [
+      { open_time: 160, open: 1.5, high: 2, low: 1, close: 1.8, volume: 1 },
+    ]);
+
+    expect(ok).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toContain("mt5-candles/XAUUSD-1m.json");
+    const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(body.candles).toHaveLength(2);
+    expect(body.candles[1].open_time).toBe(160);
+  });
+});

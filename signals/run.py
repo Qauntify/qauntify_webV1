@@ -231,7 +231,9 @@ def _fetch_htf_trend(symbol, timeframe, cfg, session=None):
     Raises RuntimeError when market data cannot be fetched so callers that
     require confluence can fail closed."""
     candles = with_retry(lambda: fetch_candles(
-        symbol, timeframe, HTF_TREND_CANDLE_LIMIT, session=session))
+        symbol, timeframe, HTF_TREND_CANDLE_LIMIT, session=session,
+        supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
+    ))
     candles = candles[:-1]  # drop the still-forming candle, same as the main fetch
     closes = [c.close for c in candles]
     fast = ema(closes, 9)
@@ -479,7 +481,11 @@ def _load_market_data(symbol, timeframe, strategy, cfg, *,
     candle_limit = _candle_limit_for(strategy, cfg)
     try:
         candles = with_retry(
-            lambda: fetch_candles(symbol, timeframe, candle_limit, session=session)
+            lambda: fetch_candles(
+                symbol, timeframe, candle_limit, session=session,
+                supabase_url=cfg.supabase_url,
+                service_key=cfg.supabase_service_key,
+            )
         )
     except Exception as exc:
         print(f"[{symbol}] market data unavailable, skipping: {exc}")
@@ -500,8 +506,12 @@ def _load_market_data(symbol, timeframe, strategy, cfg, *,
     if strategy in NEEDS_H1:
         try:
             h1_raw = with_retry(
-                lambda: fetch_candles(symbol, "1h", max(cfg.candle_limit, 80),
-                                      session=session)
+                lambda: fetch_candles(
+                    symbol, "1h", max(cfg.candle_limit, 80),
+                    session=session,
+                    supabase_url=cfg.supabase_url,
+                    service_key=cfg.supabase_service_key,
+                )
             )
             h1_candles = h1_raw[:-1]
         except Exception as exc:

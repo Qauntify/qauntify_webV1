@@ -544,3 +544,39 @@ def test_expire_drifted_open_gold_signals():
     )
     assert n == 1
     assert session.last_json["status"] == "expired"
+
+
+def test_merge_mt5_candle_bars_dedupes_and_caps():
+    from signals.storage import merge_mt5_candle_bars
+
+    existing = [
+        {"open_time": 100, "open": 1, "high": 2, "low": 0.5, "close": 1.5, "volume": 1},
+        {"open_time": 160, "open": 1.5, "high": 2, "low": 1, "close": 1.8, "volume": 1},
+    ]
+    incoming = [
+        {"open_time": 160, "open": 1.5, "high": 3, "low": 1, "close": 2.0, "volume": 2},
+        {"open_time": 220, "open": 2, "high": 2.5, "low": 1.9, "close": 2.2, "volume": 1},
+    ]
+    merged = merge_mt5_candle_bars(existing, incoming, max_bars=2)
+    assert len(merged) == 2
+    assert merged[0]["open_time"] == 160
+    assert merged[0]["high"] == 3
+    assert merged[1]["open_time"] == 220
+
+
+def test_mt5_candles_usable_requires_depth_and_freshness():
+    from datetime import datetime, timezone
+
+    from signals.storage import mt5_candles_usable
+
+    now = int(datetime.now(timezone.utc).timestamp())
+    # Align to minute
+    now = now - (now % 60) - 60
+    rows = [
+        {"open_time": now - 60 * i, "open": 1, "high": 1, "low": 1, "close": 1}
+        for i in range(100, 0, -1)
+    ]
+    assert mt5_candles_usable(rows) is True
+    assert mt5_candles_usable(rows[:10]) is False
+    stale = [{"open_time": now - 3600, "open": 1, "high": 1, "low": 1, "close": 1}] * 100
+    assert mt5_candles_usable(stale) is False

@@ -353,6 +353,111 @@ def fetch_mt5_last_tick(symbol: str, supabase_url: str, service_key: str,
         return None
 
 
+MT5_CANDLE_MAX_BARS = 720
+MT5_CANDLE_MIN_BARS = 80
+# Last closed M1 bar must be newer than now - this (seconds).
+MT5_CANDLE_MAX_STALE_SECONDS = 180
+
+
+def _mt5_candle_object_path(symbol: str, timeframe: str = "1m") -> str:
+    return f"mt5-candles/{canonical_symbol(symbol)}-{timeframe}.json"
+
+
+def merge_mt5_candle_bars(existing: list, incoming: list,
+                          *, max_bars: int = MT5_CANDLE_MAX_BARS) -> list:
+    """Merge OHLC dicts keyed by open_time (unix seconds); return oldest→newest."""
+    by_time: dict[int, dict] = {}
+    for row in existing:
+        try:
+            t = int(row["open_time"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        by_time[t] = row
+    for row in incoming:
+        try:
+            t = int(row["open_time"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        by_time[t] = {
+            "open_time": t,
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+            "volume": float(row.get("volume") or 0),
+        }
+    out = [by_time[t] for t in sorted(by_time)]
+    if max_bars and len(out) > max_bars:
+        out = out[-max_bars:]
+    return out
+
+
+def fetch_mt5_candles(symbol: str, timeframe: str, supabase_url: str,
+                      service_key: str, session=None) -> list:
+    """Closed MT5 OHLC bars from Storage (dicts with open_time in seconds)."""
+    import json
+
+    session = session or requests.Session()
+    path = _mt5_candle_object_path(symbol, timeframe)
+    try:
+        response = session.get(
+            f"{supabase_url}/storage/v1/object/{MT5_TICK_BUCKET}/{path}",
+            headers={
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}",
+            },
+            timeout=15,
+        )
+        if response.status_code == 404:
+            return []
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, (bytes, bytearray, str)):
+            data = json.loads(data)
+        if isinstance(data, list):
+            rows = data
+        elif isinstance(data, dict):
+            rows = data.get("candles") or []
+        else:
+            return []
+        return merge_mt5_candle_bars([], rows)
+    except Exception as exc:
+        print(f"mt5 candles fetch failed ({type(exc).__name__})")
+        return []
+
+
+def mt5_candles_usable(rows: list, *,
+                       min_bars: int = MT5_CANDLE_MIN_BARS,
+                       max_stale_seconds: int = MT5_CANDLE_MAX_STALE_SECONDS
+                       ) -> bool:
+    if len(rows) < min_bars:
+        return False
+    try:
+        last_open = int(rows[-1]["open_time"])
+    except (TypeError, ValueError, KeyError):
+        return False
+    # Closed M1 bar open_time is ~60s behind "now"; allow a little slack.
+    age = datetime.now(timezone.utc).timestamp() - last_open
+    return 0 <= age <= max_stale_seconds + 60
+
+
+def mt5_rows_to_candles(rows: list):
+    """Convert Storage rows (open_time seconds) to engine Candle list (ms)."""
+    from signals.models import Candle
+
+    out = []
+    for row in rows:
+        out.append(Candle(
+            open_time=int(row["open_time"]) * 1000,
+            open=float(row["open"]),
+            high=float(row["high"]),
+            low=float(row["low"]),
+            close=float(row["close"]),
+            volume=float(row.get("volume") or 0),
+        ))
+    return out
+
+
 def mt5_tick_is_fresh(tick: dict | None, *,
                       max_age_seconds: int = MT5_TICK_MAX_AGE_SECONDS) -> bool:
     if not tick:

@@ -3,12 +3,9 @@
 Crypto + FX (BTCUSD, ETHUSD, GBPUSD) come from Kraken public OHLC.
 Legacy PAXG* symbols canonicalize to XAUUSD so older rows still settle.
 
-Gold OHLC is Kraken PAXGUSD (tokenized physical gold), not COMEX futures.
-The app symbol stays XAUUSD for storage and alerts so existing rows and MT5
-EA config stay unchanged; only the price feed changed. PAXG tracks spot bullion
-closely enough for CFD/MT5 XAUUSD execution. Yahoo GC=F was removed because
-futures trade ~40–60 USD above spot and made 1m scalp entries look wrong on
-broker charts.
+Gold OHLC prefers closed MT5 1m bars (pushed by QauntifyTickPush) when the
+EA ring buffer is warm; otherwise Kraken PAXGUSD. App symbol stays XAUUSD.
+Yahoo GC=F futures were removed — they sat ~40–60 USD above broker spot.
 """
 from __future__ import annotations
 
@@ -176,14 +173,51 @@ def gold_entry_live_ok(entry: float, live: float, timeframe: str,
 
 
 def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
-                  session=None):
+                  session=None, *, supabase_url=None, service_key=None):
     """Return candles newest-last, same shape as the old Binance client.
 
     `start_time` is epoch **milliseconds** (engine convention).
+    For XAUUSD 1m, prefers a fresh MT5 closed-bar buffer when
+    `supabase_url` / `service_key` are provided and the EA has backfilled.
     """
     session = session or requests.Session()
     if interval not in INTERVAL_MINUTES:
         raise ValueError(f"unsupported interval: {interval}")
+
+    if (is_gold_symbol(symbol) and interval == "1m"
+            and supabase_url and service_key):
+        from signals.storage import (
+            fetch_mt5_candles,
+            mt5_candles_usable,
+            mt5_rows_to_candles,
+        )
+        rows = fetch_mt5_candles(
+            symbol, "1m", supabase_url, service_key, session=session,
+        )
+        if mt5_candles_usable(rows):
+            candles = mt5_rows_to_candles(rows)
+            if start_time is not None:
+                candles = [c for c in candles if c.open_time >= int(start_time)]
+            if limit is not None and limit > 0 and len(candles) > limit:
+                candles = candles[-limit:]
+            # Callers drop candles[:-1] assuming a still-forming bar exists
+            # (Kraken). MT5 buffer is closed-only — append a synthetic forming
+            # bar so the closed history survives that slice.
+            if candles:
+                last = candles[-1]
+                candles = list(candles) + [
+                    Candle(
+                        open_time=last.open_time + 60_000,
+                        open=last.close,
+                        high=last.close,
+                        low=last.close,
+                        close=last.close,
+                        volume=0.0,
+                    )
+                ]
+            print(f"[{canonical_symbol(symbol)}] using MT5 1m candles "
+                  f"({len(candles) - 1} closed bars)")
+            return candles
 
     if is_gold_symbol(symbol):
         candles = _fetch_kraken_gold_candles(interval, limit, start_time, session)

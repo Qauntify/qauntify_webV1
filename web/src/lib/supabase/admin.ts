@@ -633,6 +633,84 @@ export async function upsertMt5LastTick(
   }
 }
 
+export type Mt5CandleBar = {
+  open_time: number; // unix seconds
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+const MT5_CANDLE_MAX_BARS = 720;
+
+/** Merge closed MT5 bars into a Storage ring buffer used by the Python
+ * gold 1m detector. Soft-fails if Storage is unreachable. */
+export async function mergeMt5Candles(
+  symbol: string,
+  timeframe: string,
+  incoming: Mt5CandleBar[],
+): Promise<boolean> {
+  const cfg = config();
+  if (!cfg || incoming.length === 0) return false;
+  const canon = symbol.trim().toUpperCase();
+  const path = `mt5-candles/${canon}-${timeframe}.json`;
+  let existing: Mt5CandleBar[] = [];
+  try {
+    const get = await fetch(
+      `${cfg.url}/storage/v1/object/signal-charts/${path}`,
+      { headers: headers(cfg.serviceKey) },
+    );
+    if (get.ok) {
+      const data = (await get.json()) as { candles?: Mt5CandleBar[] } | Mt5CandleBar[];
+      existing = Array.isArray(data) ? data : (data.candles ?? []);
+    }
+  } catch {
+    existing = [];
+  }
+
+  const byTime = new Map<number, Mt5CandleBar>();
+  for (const c of existing) {
+    if (c && Number.isFinite(c.open_time)) byTime.set(Number(c.open_time), c);
+  }
+  for (const c of incoming) {
+    byTime.set(Number(c.open_time), {
+      open_time: Number(c.open_time),
+      open: Number(c.open),
+      high: Number(c.high),
+      low: Number(c.low),
+      close: Number(c.close),
+      volume: Number(c.volume ?? 0),
+    });
+  }
+  const merged = [...byTime.values()]
+    .sort((a, b) => a.open_time - b.open_time)
+    .slice(-MT5_CANDLE_MAX_BARS);
+
+  try {
+    const response = await fetch(
+      `${cfg.url}/storage/v1/object/signal-charts/${path}`,
+      {
+        method: "POST",
+        headers: {
+          ...headers(cfg.serviceKey),
+          "Content-Type": "application/json",
+          "x-upsert": "true",
+        },
+        body: JSON.stringify({
+          symbol: canon,
+          timeframe,
+          updated_at: new Date().toISOString(),
+          candles: merged,
+        }),
+      },
+    );
+    return response.ok || response.status === 200 || response.status === 201;
+  } catch {
+    return false;
+  }
+}
+
 /** TS mirror of signals/storage.py:update_signal_outcome's conditional-claim
  * mode: PATCH only applies if the row is still in `expectedStatus`, so the
  * slow Python cron and this instant path can't both win the same event. */
