@@ -11,13 +11,20 @@ type CandleIn = {
   high: number;
   low: number;
   close: number;
-  volume?: number;
+  volume: number;
 };
 
 type Body = {
   symbol: string;
   timeframe?: string;
-  candles?: CandleIn[];
+  candles?: Array<{
+    open_time: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume?: number;
+  }>;
   // single-candle shorthand
   open_time?: number;
   open?: number;
@@ -27,7 +34,14 @@ type Body = {
   volume?: number;
 };
 
-function normalizeCandle(c: CandleIn): CandleIn | null {
+function normalizeCandle(c: {
+  open_time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+}): CandleIn | null {
   const open_time = Number(c.open_time);
   const open = Number(c.open);
   const high = Number(c.high);
