@@ -45,3 +45,12 @@ def describe_market_session(now: datetime | None = None) -> str:
         f"Market session at {stamp}: {' / '.join(active)} overlap "
         f"(active: {', '.join(active)})"
     )
+
+
+# 1m ICT scalp: skip Asia-only chop; allow London, New York, and overlaps.
+SCALP_ALLOWED_SESSIONS = frozenset({"London", "New York"})
+
+
+def scalp_session_active(now: datetime | None = None) -> bool:
+    """True when at least one liquid FX session is open for 1m gold scalps."""
+    return bool(SCALP_ALLOWED_SESSIONS.intersection(sessions_at(now)))

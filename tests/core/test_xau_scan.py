@@ -49,6 +49,11 @@ def test_scan_once_scans_xauusd_1m_ict_fvg_and_alerts(monkeypatch):
         return ScanResult(signal=_fake_signal())
 
     alerts = []
+    monkeypatch.setattr(xau_scan, "scalp_session_active", lambda: True)
+    monkeypatch.setattr(xau_scan, "resolve_gold_live_price",
+                        lambda *a, **k: (4120.0, "mt5"))
+    monkeypatch.setattr(xau_scan, "expire_drifted_open_gold_signals",
+                        lambda *a, **k: 0)
     monkeypatch.setattr(xau_scan, "scan_symbol", fake_scan)
     monkeypatch.setattr(xau_scan, "maybe_send_alert",
                         lambda sig, settings, cfg: alerts.append(sig))
@@ -63,6 +68,7 @@ def test_scan_once_scans_xauusd_1m_ict_fvg_and_alerts(monkeypatch):
     assert kw["confluence_timeframe"] is None
     assert kw["skip_recency"] is True
     assert kw["log_no_setup"] is False
+    assert kw["min_store_confidence"] >= xau_scan.XAU_MIN_STORE_CONFIDENCE
     assert len(alerts) == 1
 
 
@@ -73,12 +79,22 @@ def test_scan_once_uses_a_scalper_key(monkeypatch):
         seen["key"] = llm._api_key
         return ScanResult()
 
+    monkeypatch.setattr(xau_scan, "scalp_session_active", lambda: True)
+    monkeypatch.setattr(xau_scan, "resolve_gold_live_price",
+                        lambda *a, **k: (4120.0, "mt5"))
+    monkeypatch.setattr(xau_scan, "expire_drifted_open_gold_signals",
+                        lambda *a, **k: 0)
     monkeypatch.setattr(xau_scan, "scan_symbol", fake_scan)
     xau_scan.scan_once(_cfg(), BotSettings())
     assert seen["key"] in ("k5", "k6", "k7")  # never the main engine's k1-k4
 
 
 def test_scan_once_no_signal_sends_no_alert(monkeypatch):
+    monkeypatch.setattr(xau_scan, "scalp_session_active", lambda: True)
+    monkeypatch.setattr(xau_scan, "resolve_gold_live_price",
+                        lambda *a, **k: (4120.0, "mt5"))
+    monkeypatch.setattr(xau_scan, "expire_drifted_open_gold_signals",
+                        lambda *a, **k: 0)
     monkeypatch.setattr(xau_scan, "scan_symbol",
                         lambda symbol, cfg, llm, **kwargs: ScanResult())
     alerts = []
@@ -86,6 +102,16 @@ def test_scan_once_no_signal_sends_no_alert(monkeypatch):
                         lambda *a, **k: alerts.append(1))
     xau_scan.scan_once(_cfg(), BotSettings())
     assert alerts == []
+
+
+def test_scan_once_skips_outside_london_ny(monkeypatch):
+    monkeypatch.setattr(xau_scan, "scalp_session_active", lambda: False)
+    called = []
+    monkeypatch.setattr(xau_scan, "scan_symbol",
+                        lambda *a, **k: called.append(1) or ScanResult())
+    result = xau_scan.scan_once(_cfg(), BotSettings())
+    assert result.signal is None
+    assert called == []
 
 
 def _patch_main_deps(monkeypatch, scan_result):

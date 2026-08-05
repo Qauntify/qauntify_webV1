@@ -566,21 +566,33 @@ export function invalidateOpenSignalsCache(symbol: string): void {
   openSignalsCache.delete(symbol);
 }
 
-/** Upsert the latest MT5 broker bid so the Python engine can snap gold
- * entries to the same price the EA uses for SL/TP. Prefers the
- * `mt5_last_ticks` table; falls back to Storage JSON when the migration
- * is not applied yet. Soft-fails (returns false) only when both paths fail. */
+/** Upsert the latest MT5 broker quote so the Python engine can require a
+ * fresh mid and snap gold entries to the broker. Prefers `mt5_last_ticks`;
+ * falls back to Storage JSON when the migration is not applied yet. */
 export async function upsertMt5LastTick(
   symbol: string,
-  price: number,
+  quotes: number | { bid: number; ask: number; mid?: number },
   tickTimeUnixSec: number,
 ): Promise<boolean> {
   const cfg = config();
   if (!cfg) return false;
   const canon = symbol.trim().toUpperCase();
+  let bid: number;
+  let ask: number;
+  let mid: number;
+  if (typeof quotes === "number") {
+    bid = ask = mid = quotes;
+  } else {
+    bid = quotes.bid;
+    ask = quotes.ask;
+    mid = quotes.mid ?? (bid + ask) / 2;
+  }
   const payload = {
     symbol: canon,
-    price,
+    price: mid,
+    bid,
+    ask,
+    mid,
     tick_time: new Date(tickTimeUnixSec * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -594,7 +606,6 @@ export async function upsertMt5LastTick(
       body: JSON.stringify(payload),
     });
     if (response.ok || response.status === 201) return true;
-    // Table missing (PGRST205) → Storage fallback below.
     const detail = (await response.json().catch(() => null)) as { code?: string } | null;
     if (response.status !== 404 && detail?.code !== "PGRST205") {
       return false;

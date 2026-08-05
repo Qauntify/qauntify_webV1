@@ -567,13 +567,24 @@ def _snap_gold_setup_to_live(setup: CandidateSetup, live: float,
     ), ""
 
 
-def resolve_gold_live_price(cfg, session=None) -> tuple[float, str]:
-    """Prefer a fresh MT5 broker bid; fall back to Kraken PAXG last trade."""
+def resolve_gold_live_price(cfg, session=None, *, require_mt5: bool = True
+                            ) -> tuple[float, str]:
+    """Return (mid, source). Gold publish requires a fresh MT5 quote.
+
+    When `require_mt5` is False (e.g. drift-expire housekeeping), falls back
+    to Kraken PAXG if the EA tick is stale.
+    """
     tick = fetch_mt5_last_tick(
         "XAUUSD", cfg.supabase_url, cfg.supabase_service_key, session=session,
     )
     if mt5_tick_is_fresh(tick):
-        return float(tick["price"]), "mt5"
+        mid = float(tick.get("mid") or tick["price"])
+        return mid, "mt5"
+    if require_mt5:
+        raise RuntimeError(
+            "MT5 tick missing or stale — refusing gold publish "
+            "(keep QauntifyTickPush EA running on XAUUSD)"
+        )
     return fetch_gold_last_price(session=session), "paxg"
 
 
@@ -705,7 +716,13 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
 
     if is_gold_symbol(symbol):
         try:
-            live, live_source = resolve_gold_live_price(cfg, session=session)
+            live, live_source = resolve_gold_live_price(
+                cfg, session=session, require_mt5=True,
+            )
+            tick = fetch_mt5_last_tick(
+                "XAUUSD", cfg.supabase_url, cfg.supabase_service_key,
+                session=session,
+            )
             pre_live_setup = setup
             setup, _live_note = _snap_gold_setup_to_live(
                 setup, live, timeframe, source=live_source,
@@ -718,15 +735,26 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
                     indicators=pre_live_setup.indicators,
                     candles=candles, setup=pre_live_setup, session=session,
                 )
+            if tick:
+                ind = dict(setup.indicators)
+                ind["mt5_bid"] = tick.get("bid")
+                ind["mt5_ask"] = tick.get("ask")
+                ind["mt5_mid"] = tick.get("mid") or live
+                setup = replace(setup, indicators=ind)
             if setup.entry != pre_live_setup.entry:
                 print(f"[{symbol}] snapped entry {pre_live_setup.entry:.2f} "
                       f"-> live {live_source} {setup.entry:.2f}")
             else:
                 print(f"[{symbol}] live check ok via {live_source} @ {live:.2f}")
         except Exception as exc:
-            print(f"[{symbol}] live gold ticker unavailable "
-                  f"({type(exc).__name__}), skipping store")
-            return ScanResult(candles=candles)
+            print(f"[{symbol}] live gold gate blocked publish: {exc}")
+            return _reject(
+                symbol, cfg, timeframe=timeframe, report_kind="rejected",
+                event_kind="reject",
+                rationale=str(exc),
+                indicators=setup.indicators, candles=candles, setup=setup,
+                session=session,
+            )
 
     signal = make_signal(setup, confirmation, [], timeframe=timeframe)
     signal = attach_chart(

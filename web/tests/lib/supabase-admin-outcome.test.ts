@@ -120,12 +120,16 @@ describe("updateSignalOutcomeClaim", () => {
 });
 
 describe("upsertMt5LastTick", () => {
-  it("upserts symbol/price/tick_time to mt5_last_ticks when table exists", async () => {
+  it("upserts bid/ask/mid to mt5_last_ticks when table exists", async () => {
     const { upsertMt5LastTick } = await import("@/lib/supabase/admin");
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201 });
     vi.stubGlobal("fetch", fetchMock);
 
-    const ok = await upsertMt5LastTick("XAUUSD", 4120.5, 1722825600);
+    const ok = await upsertMt5LastTick(
+      "XAUUSD",
+      { bid: 4120.0, ask: 4120.4, mid: 4120.2 },
+      1722825600,
+    );
 
     expect(ok).toBe(true);
     const [url, init] = fetchMock.mock.calls[0];
@@ -134,7 +138,10 @@ describe("upsertMt5LastTick", () => {
     expect(init.headers.Prefer).toContain("merge-duplicates");
     const body = JSON.parse(init.body as string);
     expect(body.symbol).toBe("XAUUSD");
-    expect(body.price).toBe(4120.5);
+    expect(body.bid).toBe(4120.0);
+    expect(body.ask).toBe(4120.4);
+    expect(body.mid).toBe(4120.2);
+    expect(body.price).toBe(4120.2);
     expect(body.tick_time).toBe(new Date(1722825600 * 1000).toISOString());
   });
 
@@ -150,7 +157,7 @@ describe("upsertMt5LastTick", () => {
       .mockResolvedValueOnce({ ok: true, status: 200 });
     vi.stubGlobal("fetch", fetchMock);
 
-    const ok = await upsertMt5LastTick("XAUUSD", 4120.5, 1722825600);
+    const ok = await upsertMt5LastTick("XAUUSD", { bid: 4120.5, ask: 4120.7 }, 1722825600);
 
     expect(ok).toBe(true);
     expect(fetchMock.mock.calls[1][0]).toContain(

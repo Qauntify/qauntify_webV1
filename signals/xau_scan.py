@@ -15,12 +15,14 @@ import requests
 
 from signals.config import load_config
 from signals.llm_client import SeaLionClient
+from signals.models import ScanResult
 from signals.run import (
     maybe_run_debate,
     maybe_send_alert,
     resolve_gold_live_price,
     scan_symbol,
 )
+from signals.session_clock import scalp_session_active, sessions_at
 from signals.storage import (
     expire_drifted_open_gold_signals,
     fetch_bot_settings,
@@ -30,6 +32,8 @@ from signals.storage import (
 XAU_SYMBOL = "XAUUSD"
 XAU_TIMEFRAME = "1m"
 XAU_STRATEGY = "ict_fvg"
+# Floor on top of admin min_store_confidence — 1m needs a higher bar.
+XAU_MIN_STORE_CONFIDENCE = 65
 # Reserve keys from this index on (KEY5, KEY6, KEY7) for the scalper.
 SCALPER_KEY_START = 4
 
@@ -50,8 +54,16 @@ def _pick_key(keys, minute=None):
 def scan_once(cfg, settings, session=None) -> "object":
     """Run one XAUUSD 1m scan; store + alert on a confirmed signal."""
     session = session or requests.Session()
+
+    if not scalp_session_active():
+        active = sessions_at() or ("off-hours",)
+        print(f"[XAUUSD] skip 1m scalp outside London/NY (now: {', '.join(active)})")
+        return ScanResult()
+
     try:
-        live, source = resolve_gold_live_price(cfg, session=session)
+        live, source = resolve_gold_live_price(
+            cfg, session=session, require_mt5=False,
+        )
         n = expire_drifted_open_gold_signals(
             live, cfg.supabase_url, cfg.supabase_service_key, session=session,
         )
@@ -67,12 +79,13 @@ def scan_once(cfg, settings, session=None) -> "object":
         base_url=cfg.sealion_base_url,
         session=session,
     )
+    min_conf = max(settings.min_store_confidence, XAU_MIN_STORE_CONFIDENCE)
     result = scan_symbol(
         XAU_SYMBOL, cfg, llm,
         strategy=XAU_STRATEGY, timeframe=XAU_TIMEFRAME,
         confluence_timeframe=None,
         skip_recency=True, log_no_setup=False,
-        min_store_confidence=settings.min_store_confidence,
+        min_store_confidence=min_conf,
         session=session,
     )
     if result.signal is not None:

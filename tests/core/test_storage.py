@@ -484,13 +484,17 @@ def test_upsert_mt5_last_tick_posts_merge():
 
     session = FakeSession()
     upsert_mt5_last_tick(
-        "XAUUSD", 4120.5, "2026-08-05T03:00:00+00:00",
-        "https://abc.supabase.co", "service-key", session=session,
+        "XAUUSD", tick_time_iso="2026-08-05T03:00:00+00:00",
+        supabase_url="https://abc.supabase.co", service_key="service-key",
+        session=session, bid=4120.0, ask=4120.4,
     )
     assert session.last_url.endswith("/mt5_last_ticks")
     assert "merge-duplicates" in session.last_headers["Prefer"]
     assert session.last_json["symbol"] == "XAUUSD"
-    assert session.last_json["price"] == 4120.5
+    assert session.last_json["bid"] == 4120.0
+    assert session.last_json["ask"] == 4120.4
+    assert session.last_json["mid"] == 4120.2
+    assert session.last_json["price"] == 4120.2
 
 
 def test_mt5_tick_is_fresh():
@@ -513,13 +517,15 @@ def test_fetch_mt5_last_tick_parses_row():
     from signals.storage import fetch_mt5_last_tick
 
     session = FakeGetSession(payload=[{
-        "symbol": "XAUUSD", "price": 4121.1,
+        "symbol": "XAUUSD", "price": 4121.1, "bid": 4121.0, "ask": 4121.2,
+        "mid": 4121.1,
         "tick_time": "2026-08-05T03:00:00Z", "updated_at": "2026-08-05T03:00:01Z",
     }])
     row = fetch_mt5_last_tick(
         "XAUUSD", "https://abc.supabase.co", "k", session=session,
     )
-    assert row["price"] == 4121.1
+    assert row["mid"] == 4121.1
+    assert row["bid"] == 4121.0
     assert "mt5_last_ticks" in session.last_url
 
 

@@ -80,6 +80,18 @@ describe("checkTickOutcome", () => {
     expect(checkTickOutcome(r, 106.0, CLOSED_AT)).toEqual([["sl_hit", CLOSED_AT]]);
   });
 
+  it("uses bid for long closes and ask for short closes when both are provided", () => {
+    // Long: bid 94 hits SL 95 even though ask is still 96.
+    expect(
+      checkTickOutcome(row(), { bid: 94.0, ask: 96.0 }, CLOSED_AT),
+    ).toEqual([["sl_hit", CLOSED_AT]]);
+    // Short: ask 106 hits SL 105 even though bid is still 104.
+    const short = row({ direction: "short", stop_loss: 105.0, take_profit: 90.0 });
+    expect(
+      checkTickOutcome(short, { bid: 104.0, ask: 106.0 }, CLOSED_AT),
+    ).toEqual([["sl_hit", CLOSED_AT]]);
+  });
+
   it("returns no events when neither level is reached", () => {
     expect(checkTickOutcome(row(), 105.0, CLOSED_AT)).toEqual([]);
   });

@@ -18,8 +18,9 @@ export function MethodologyNote() {
       </p>
       <p>
         <strong className="text-slate/80">Gold prices track your broker.</strong> Signal
-        structure comes from Kraken PAXGUSD candles; before publish, entry is snapped to a
-        fresh MT5 bid from your EA when available (otherwise PAXG last trade).
+        structure comes from Kraken PAXGUSD candles; before publish, entry snaps to a
+        fresh MT5 mid (bid/ask from your EA). Gold signals are refused if the EA tick
+        is stale. 1m scalps only fire in London/New York sessions.
       </p>
       <p>
         Every closed signal is included — nothing is cherry-picked or removed after the fact. Outcomes are

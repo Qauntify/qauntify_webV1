@@ -38,3 +38,12 @@ def test_describe_single_session():
     text = describe_market_session(now)
     assert "Asia" in text
     assert "03:00 UTC" in text
+
+
+def test_scalp_session_active_blocks_asia_only():
+    from signals.session_clock import scalp_session_active
+
+    asia = datetime(2026, 7, 14, 3, 0, tzinfo=timezone.utc)
+    london = datetime(2026, 7, 14, 10, 0, tzinfo=timezone.utc)
+    assert scalp_session_active(asia) is False
+    assert scalp_session_active(london) is True

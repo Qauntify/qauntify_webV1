@@ -130,7 +130,7 @@ def save_xau_scan_run(run: dict, supabase_url: str, service_key: str,
     response.raise_for_status()
 
 
-# Prefer MT5 broker bid when fresher than this; otherwise fall back to PAXG.
+# Prefer MT5 broker mid when fresher than this; gold publish requires it.
 MT5_TICK_MAX_AGE_SECONDS = 45
 # Open gold signals this far from live are treated as futures-era junk.
 GOLD_OPEN_DRIFT_EXPIRE = 25.0
@@ -142,7 +142,20 @@ def _mt5_tick_object_path(symbol: str) -> str:
     return f"{MT5_TICK_OBJECT_PREFIX}/{canonical_symbol(symbol)}.json"
 
 
-def _upsert_mt5_tick_table(symbol: str, price: float, tick_time_iso: str,
+def _normalize_mt5_quotes(price=None, *, bid=None, ask=None, mid=None) -> dict:
+    """Build bid/ask/mid/price from any partial quote payload."""
+    b = bid if bid is not None else price
+    a = ask if ask is not None else price
+    if b is None or a is None:
+        raise ValueError("MT5 quote needs bid/ask or price")
+    b, a = float(b), float(a)
+    if a < b:
+        b, a = a, b
+    m = float(mid) if mid is not None else (b + a) / 2.0
+    return {"bid": b, "ask": a, "mid": m, "price": m}
+
+
+def _upsert_mt5_tick_table(symbol: str, quotes: dict, tick_time_iso: str,
                            supabase_url: str, service_key: str,
                            session) -> bool:
     now = datetime.now(timezone.utc).isoformat()
@@ -156,7 +169,10 @@ def _upsert_mt5_tick_table(symbol: str, price: float, tick_time_iso: str,
         },
         json={
             "symbol": canonical_symbol(symbol),
-            "price": float(price),
+            "price": quotes["price"],
+            "bid": quotes["bid"],
+            "ask": quotes["ask"],
+            "mid": quotes["mid"],
             "tick_time": tick_time_iso,
             "updated_at": now,
         },
@@ -165,18 +181,38 @@ def _upsert_mt5_tick_table(symbol: str, price: float, tick_time_iso: str,
     if response.status_code in (404, 406):
         return False
     if response.status_code >= 400:
-        # Table missing from schema cache → fall back to Storage.
         try:
             detail = response.json()
         except Exception:
             detail = {}
-        if isinstance(detail, dict) and detail.get("code") == "PGRST205":
+        # Missing table, or extra columns not migrated yet.
+        if isinstance(detail, dict) and detail.get("code") in ("PGRST205", "PGRST204"):
+            # Retry minimal columns if new columns are unknown.
+            if detail.get("code") == "PGRST204":
+                response = session.post(
+                    f"{supabase_url}/rest/v1/mt5_last_ticks",
+                    headers={
+                        "apikey": service_key,
+                        "Authorization": f"Bearer {service_key}",
+                        "Content-Type": "application/json",
+                        "Prefer": "resolution=merge-duplicates,return=minimal",
+                    },
+                    json={
+                        "symbol": canonical_symbol(symbol),
+                        "price": quotes["price"],
+                        "tick_time": tick_time_iso,
+                        "updated_at": now,
+                    },
+                    timeout=10,
+                )
+                if response.status_code < 400 or response.status_code in (200, 201):
+                    return True
             return False
         response.raise_for_status()
     return True
 
 
-def _upsert_mt5_tick_storage(symbol: str, price: float, tick_time_iso: str,
+def _upsert_mt5_tick_storage(symbol: str, quotes: dict, tick_time_iso: str,
                              supabase_url: str, service_key: str,
                              session) -> None:
     import json
@@ -185,7 +221,7 @@ def _upsert_mt5_tick_storage(symbol: str, price: float, tick_time_iso: str,
     path = _mt5_tick_object_path(symbol)
     payload = json.dumps({
         "symbol": canonical_symbol(symbol),
-        "price": float(price),
+        **quotes,
         "tick_time": tick_time_iso,
         "updated_at": now,
     }).encode("utf-8")
@@ -203,18 +239,36 @@ def _upsert_mt5_tick_storage(symbol: str, price: float, tick_time_iso: str,
     response.raise_for_status()
 
 
-def upsert_mt5_last_tick(symbol: str, price: float, tick_time_iso: str,
-                         supabase_url: str, service_key: str,
-                         session=None) -> None:
-    """Persist latest MT5 bid (table if migrated, else Storage JSON)."""
+def upsert_mt5_last_tick(symbol: str, price=None, tick_time_iso: str = "",
+                         supabase_url: str = "", service_key: str = "",
+                         session=None, *, bid=None, ask=None, mid=None) -> None:
+    """Persist latest MT5 quote (table if migrated, else Storage JSON).
+
+    Accepts legacy positional `price` or explicit bid/ask/mid.
+    """
     session = session or requests.Session()
+    quotes = _normalize_mt5_quotes(price, bid=bid, ask=ask, mid=mid)
     if _upsert_mt5_tick_table(
-        symbol, price, tick_time_iso, supabase_url, service_key, session,
+        symbol, quotes, tick_time_iso, supabase_url, service_key, session,
     ):
         return
     _upsert_mt5_tick_storage(
-        symbol, price, tick_time_iso, supabase_url, service_key, session,
+        symbol, quotes, tick_time_iso, supabase_url, service_key, session,
     )
+
+
+def _row_to_mt5_tick(row: dict, symbol: str) -> dict:
+    price = row.get("price")
+    bid = row.get("bid", price)
+    ask = row.get("ask", price)
+    mid = row.get("mid", price)
+    quotes = _normalize_mt5_quotes(price, bid=bid, ask=ask, mid=mid)
+    return {
+        "symbol": row.get("symbol") or canonical_symbol(symbol),
+        **quotes,
+        "tick_time": row.get("tick_time"),
+        "updated_at": row.get("updated_at"),
+    }
 
 
 def _fetch_mt5_tick_table(symbol: str, supabase_url: str, service_key: str,
@@ -223,7 +277,7 @@ def _fetch_mt5_tick_table(symbol: str, supabase_url: str, service_key: str,
     response = session.get(
         f"{supabase_url}/rest/v1/mt5_last_ticks"
         f"?symbol=eq.{quote(canon)}"
-        "&select=symbol,price,tick_time,updated_at&limit=1",
+        "&select=symbol,price,bid,ask,mid,tick_time,updated_at&limit=1",
         headers={
             "apikey": service_key,
             "Authorization": f"Bearer {service_key}",
@@ -237,19 +291,28 @@ def _fetch_mt5_tick_table(symbol: str, supabase_url: str, service_key: str,
             detail = response.json()
         except Exception:
             detail = {}
-        if isinstance(detail, dict) and detail.get("code") == "PGRST205":
-            return None
-        response.raise_for_status()
+        # Older table without bid/ask columns — retry minimal select.
+        if isinstance(detail, dict) and detail.get("code") in ("PGRST205", "PGRST204"):
+            if detail.get("code") == "PGRST205":
+                return None
+            response = session.get(
+                f"{supabase_url}/rest/v1/mt5_last_ticks"
+                f"?symbol=eq.{quote(canon)}"
+                "&select=symbol,price,tick_time,updated_at&limit=1",
+                headers={
+                    "apikey": service_key,
+                    "Authorization": f"Bearer {service_key}",
+                },
+                timeout=10,
+            )
+            if response.status_code >= 400:
+                return None
+        else:
+            response.raise_for_status()
     rows = response.json()
     if not isinstance(rows, list) or not rows:
         return None
-    row = rows[0]
-    return {
-        "symbol": row["symbol"],
-        "price": float(row["price"]),
-        "tick_time": row["tick_time"],
-        "updated_at": row.get("updated_at"),
-    }
+    return _row_to_mt5_tick(rows[0], symbol)
 
 
 def _fetch_mt5_tick_storage(symbol: str, supabase_url: str, service_key: str,
@@ -273,12 +336,7 @@ def _fetch_mt5_tick_storage(symbol: str, supabase_url: str, service_key: str,
         data = json.loads(data)
     if not isinstance(data, dict) or "price" not in data:
         return None
-    return {
-        "symbol": data.get("symbol") or canonical_symbol(symbol),
-        "price": float(data["price"]),
-        "tick_time": data.get("tick_time"),
-        "updated_at": data.get("updated_at"),
-    }
+    return _row_to_mt5_tick(data, symbol)
 
 
 def fetch_mt5_last_tick(symbol: str, supabase_url: str, service_key: str,

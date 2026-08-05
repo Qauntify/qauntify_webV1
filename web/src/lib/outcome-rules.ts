@@ -79,13 +79,27 @@ export function alreadyHit(row: SignalRow): Set<string> {
 
 /** Ordered new events for this tick: [status, closedAtIso][].
  * Stop wins on a tie with any TP. A fast move can cross multiple unhit TPs
- * in one tick — all are returned in order. */
+ * in one tick — all are returned in order.
+ *
+ * `quote` may be a single price (legacy) or `{ bid, ask }`. Closing a long
+ * sells at bid; closing a short buys at ask — so longs are marked on bid,
+ * shorts on ask, when both sides are present. */
+export type TickQuote = number | { bid: number; ask: number };
+
 export function checkTickOutcome(
   row: SignalRow,
-  price: number,
+  quote: TickQuote,
   closedAtIso: string,
 ): OutcomeEvent[] {
   const isLong = row.direction === "long";
+  let price: number;
+  if (typeof quote === "number") {
+    price = quote;
+  } else {
+    price = isLong ? Number(quote.bid) : Number(quote.ask);
+  }
+  if (!Number.isFinite(price)) return [];
+
   const stop = Number(row.stop_loss);
   const entry = Number(row.entry);
   const tps = targets(row);
