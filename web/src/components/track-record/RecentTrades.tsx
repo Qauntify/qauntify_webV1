@@ -6,7 +6,19 @@ export function RecentTrades({ trades }: { trades: ClosedTrade[] }) {
   return (
     <div className="divide-y divide-line/60">
       {trades.map((t) => {
-        const win = t.status === "tp3_hit" || t.status === "tp_hit";
+        const win =
+          t.status === "tp3_hit" ||
+          t.status === "tp_hit" ||
+          t.status === "tp2_hit" ||
+          t.status === "tp1_hit";
+        const label =
+          t.status === "tp3_hit" || t.status === "tp_hit"
+            ? "✓ TP3"
+            : t.status === "tp2_hit"
+              ? "✓ TP2"
+              : t.status === "tp1_hit"
+                ? "✓ TP1"
+                : "✗ SL";
         return (
           <div key={t.id} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 py-2 text-sm">
             {t.outcomeChartUrl ? (
@@ -21,7 +33,7 @@ export function RecentTrades({ trades }: { trades: ClosedTrade[] }) {
               <span className="text-slate/60">{t.timeframe}</span>{" "}
               <span className={t.direction === "long" ? "text-emerald-400" : "text-rose-400"}>{t.direction.toUpperCase()}</span>
             </div>
-            <div className={`text-xs font-bold ${win ? "text-emerald-400" : "text-rose-400"}`}>{win ? "✓ TP3" : "✗ SL"}</div>
+            <div className={`text-xs font-bold ${win ? "text-emerald-400" : "text-rose-400"}`}>{label}</div>
             <div className="text-right text-slate/60">{relativeTime(t.closedAt)}</div>
           </div>
         );
