@@ -28,7 +28,8 @@ describe("track-record.toClosedTrade mapping", () => {
     expect(trade).not.toBeNull();
     if (!trade) return;
     expect(trade.status).toBe("sl_hit");
-    expect(trade.reached).toBe(0);
+    // Even when the final status is sl_hit, tp1_hit_at makes it a partial win.
+    expect(trade.reached).toBe(1);
   });
 
   it("scores tp1_hit as reached=1 when targets exist", () => {

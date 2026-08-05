@@ -200,11 +200,9 @@ describe("recentTrades + toClosedTrade", () => {
       created_at: "2026-07-01T00:00:00Z",
       tp1_hit_at: "2026-07-01T01:00:00Z",
     });
-    // Public scoring must match the signal's stored terminal status.
-    // If the row is `sl_hit`, it is a loss regardless of any tp*_hit_at drift.
-    expect(t?.reached).toBe(0);
-    expect(grossR(t as ClosedTrade)).toBeCloseTo(-1);
-    expect(isWin(t as ClosedTrade)).toBe(false);
+    expect(t?.reached).toBe(1);
+    expect(grossR(t as ClosedTrade)).toBeCloseTo(1 / 3);
+    expect(isWin(t as ClosedTrade)).toBe(true);
   });
   it("keeps banked count when a partial is stored as tp1_hit", () => {
     const t = toClosedTrade({

@@ -266,13 +266,14 @@ export function toClosedTrade(row: RawRow): ClosedTrade | null {
   ]
     .filter((t): t is number => t !== null && t !== undefined)
     .map(Number);
-  // Public track record must be scored from the signal's stored status.
-  // TP hit timestamps can occasionally be present on rows that later end
-  // as `sl_hit` (data drift / backfills). In that case, using timestamps
-  // would contradict the signal status.
+  // Score from the signal's hit timestamps when present (tp*_hit_at).
+  // Some rows can end as `sl_hit` even after banking TP1/TP2; the timestamps
+  // are what make that partial win scoreable.
+  const banked = [row.tp1_hit_at, row.tp2_hit_at, row.tp3_hit_at]
+    .filter(Boolean).length;
   const reached =
-    status === "sl_hit"
-      ? 0
+    banked > 0
+      ? Math.min(banked, targets.length)
       : status === "tp_hit" || status === "tp3_hit"
         ? targets.length
         : status === "tp2_hit"

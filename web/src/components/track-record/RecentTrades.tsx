@@ -6,17 +6,13 @@ export function RecentTrades({ trades }: { trades: ClosedTrade[] }) {
   return (
     <div className="divide-y divide-line/60">
       {trades.map((t) => {
-        const win =
-          t.status === "tp3_hit" ||
-          t.status === "tp_hit" ||
-          t.status === "tp2_hit" ||
-          t.status === "tp1_hit";
+        const win = t.reached >= 1;
         const label =
-          t.status === "tp3_hit" || t.status === "tp_hit"
+          t.reached >= 3
             ? "✓ TP3"
-            : t.status === "tp2_hit"
+            : t.reached >= 2
               ? "✓ TP2"
-              : t.status === "tp1_hit"
+              : t.reached >= 1
                 ? "✓ TP1"
                 : "✗ SL";
         return (
