@@ -1,4 +1,5 @@
 import type { ClosedTrade } from "@/lib/track-record";
+import { tradeR } from "@/lib/track-record";
 import { relativeTime } from "@/lib/relative-time";
 
 export function RecentTrades({ trades }: { trades: ClosedTrade[] }) {
@@ -6,15 +7,14 @@ export function RecentTrades({ trades }: { trades: ClosedTrade[] }) {
   return (
     <div className="divide-y divide-line/60">
       {trades.map((t) => {
-        const win = t.reached >= 1;
-        const label =
-          t.reached >= 3
+        const win = tradeR(t) > 0;
+        const label = win
+          ? t.reached >= 3
             ? "✓ TP3"
             : t.reached >= 2
               ? "✓ TP2"
-              : t.reached >= 1
-                ? "✓ TP1"
-                : "✗ SL";
+              : "✓ TP1"
+          : "✗ SL";
         return (
           <div key={t.id} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 py-2 text-sm">
             {t.outcomeChartUrl ? (
