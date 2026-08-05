@@ -209,3 +209,23 @@ def test_gold_entry_live_ok_rejects_stale():
     ok, msg = gold_entry_live_ok(4154.0, 4115.0, "1m", atr=2.0)
     assert not ok
     assert "stale" in msg.lower() or "refusing" in msg.lower()
+
+
+def test_setup_stop_risk_ok_rejects_tight_stop():
+    from signals.market_client import setup_stop_risk_ok, stop_risk_fraction
+
+    entry = 4100.0
+    stop = entry * (1 - 0.0005)
+    assert stop_risk_fraction(entry, stop) < 0.00097
+    ok, msg = setup_stop_risk_ok(entry, stop)
+    assert not ok
+    assert "tight stop" in msg.lower()
+
+
+def test_setup_stop_risk_ok_accepts_wide_enough_stop():
+    from signals.market_client import setup_stop_risk_ok
+
+    entry = 4100.0
+    stop = entry * (1 - 0.002)
+    ok, msg = setup_stop_risk_ok(entry, stop)
+    assert ok and msg == ""

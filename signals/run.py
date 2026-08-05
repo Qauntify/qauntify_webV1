@@ -17,6 +17,7 @@ from signals.market_client import (
     fetch_candles,
     fetch_gold_last_price,
     gold_entry_live_ok,
+    setup_stop_risk_ok,
     is_gold_symbol,
 )
 from signals.chart.pipeline import attach_chart
@@ -765,6 +766,16 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
                 indicators=setup.indicators, candles=candles, setup=setup,
                 session=session,
             )
+
+    ok, stop_note = setup_stop_risk_ok(setup.entry, setup.stop_loss)
+    if not ok:
+        print(f"[{symbol}] {stop_note}")
+        return _reject(
+            symbol, cfg, timeframe=timeframe, report_kind="rejected",
+            event_kind="reject", rationale=stop_note,
+            indicators=setup.indicators, candles=candles, setup=setup,
+            confidence=confirmation.confidence, session=session,
+        )
 
     signal = make_signal(setup, confirmation, [], timeframe=timeframe)
     signal = attach_chart(

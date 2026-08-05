@@ -172,6 +172,30 @@ def gold_entry_live_ok(entry: float, live: float, timeframe: str,
     )
 
 
+# Minimum |entry - stop| / |entry|. Tight stops pay disproportionate spread
+# cost in R and were ~30% of historical SL rows at the bottom of this band.
+MIN_STOP_RISK_FRACTION = 0.00097
+
+
+def stop_risk_fraction(entry: float, stop_loss: float) -> float:
+    if entry == 0:
+        return 0.0
+    return abs(entry - stop_loss) / abs(entry)
+
+
+def setup_stop_risk_ok(entry: float, stop_loss: float, *,
+                       min_fraction: float = MIN_STOP_RISK_FRACTION
+                       ) -> tuple[bool, str]:
+    frac = stop_risk_fraction(entry, stop_loss)
+    if frac >= min_fraction:
+        return True, ""
+    return (
+        False,
+        f"Stop distance {frac * 100:.3f}% of entry is below "
+        f"{min_fraction * 100:.3f}% minimum — refusing tight stop.",
+    )
+
+
 def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
                   session=None, *, supabase_url=None, service_key=None,
                   require_mt5_1m: bool | None = None):
