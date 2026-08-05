@@ -270,6 +270,34 @@ def test_format_no_signal_alert_for_sr_zone_rejected_shows_zone():
     assert "zone 100.00-100.50" in text
 
 
+def test_format_no_signal_alert_for_cloud_mss_no_setup():
+    report = NoSignalReport(
+        symbol="XAUUSD", timeframe="15m", kind="no_setup",
+        rationale="No cloud rejection + CHoCH.",
+        indicators={
+            "strategy": "cloud_mss", "side": "long",
+            "cloud_low": 4090.0, "cloud_high": 4095.0, "atr": 3.5, "adx": 20.0,
+        },
+    )
+    text = format_no_signal_alert(report)
+    assert "cloud 4090.00-4095.00" in text
+    assert "EMA9" not in text
+
+
+def test_format_no_signal_alert_for_bbma_no_setup():
+    report = NoSignalReport(
+        symbol="ETHUSD", timeframe="1h", kind="no_setup",
+        rationale="No BBMA trigger.",
+        indicators={
+            "strategy": "bbma_reentry", "side": "short",
+            "bb_upper": 3040.0, "bb_lower": 2960.0, "atr": 15.0,
+        },
+    )
+    text = format_no_signal_alert(report)
+    assert "BB 2960.00-3040.00" in text
+    assert "EMA9" not in text
+
+
 def test_send_no_signal_alert_posts_to_bot_api():
     session = FakeSession()
     send_no_signal_alert(_no_signal_report(), "bot-token", "chat-42", session=session)

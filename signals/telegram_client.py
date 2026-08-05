@@ -154,6 +154,30 @@ def _indicator_line(indicators: dict) -> str:
         if "adx" in indicators:
             parts.append(f"ADX {indicators['adx']:.1f}")
         return " | ".join(parts) if parts else "ICT/SMC context"
+    if indicators.get("strategy") == "cloud_mss" or "cloud_low" in indicators:
+        parts = []
+        if "side" in indicators:
+            parts.append(str(indicators["side"]))
+        if "cloud_low" in indicators and "cloud_high" in indicators:
+            parts.append(
+                f"cloud {indicators['cloud_low']:.2f}-{indicators['cloud_high']:.2f}"
+            )
+        if "atr" in indicators:
+            parts.append(f"ATR {indicators['atr']:.2f}")
+        if "adx" in indicators:
+            parts.append(f"ADX {indicators['adx']:.1f}")
+        return " | ".join(parts) if parts else "Cloud/MSS context"
+    if indicators.get("strategy") in ("bbma_extreme", "bbma_reentry") or "bb_upper" in indicators:
+        parts = []
+        if "side" in indicators:
+            parts.append(str(indicators["side"]))
+        if "bb_upper" in indicators and "bb_lower" in indicators:
+            parts.append(
+                f"BB {indicators['bb_lower']:.2f}-{indicators['bb_upper']:.2f}"
+            )
+        if "atr" in indicators:
+            parts.append(f"ATR {indicators['atr']:.2f}")
+        return " | ".join(parts) if parts else "BBMA context"
     return (
         f"EMA9 {indicators.get('ema9', 0):.2f} | "
         f"EMA21 {indicators.get('ema21', 0):.2f} | "

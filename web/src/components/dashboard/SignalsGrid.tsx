@@ -59,6 +59,39 @@ function indicatorRows(signal: Signal): { label: string; value: string }[] {
     if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
     return rows.length > 0 ? rows : [{ label: "Strategy", value: "S/R bounce" }];
   }
+  if (ind.strategy === "cloud_mss" || ind.cloudLow !== undefined) {
+    if (ind.side) rows.push({ label: "Side", value: ind.side });
+    if (ind.ceTrend) rows.push({ label: "CE trend", value: ind.ceTrend });
+    const lo = fmtNum(ind.cloudLow, 2);
+    const hi = fmtNum(ind.cloudHigh, 2);
+    if (lo && hi) rows.push({ label: "Cloud", value: `${lo}–${hi}` });
+    const ma200 = fmtNum(ind.ma200, 2);
+    if (ma200) rows.push({ label: "MA200", value: ma200 });
+    const choch = fmtNum(ind.chochLevel, 2);
+    if (choch) rows.push({ label: "CHoCH", value: choch });
+    const atr = fmtNum(ind.atr, 4);
+    if (atr) rows.push({ label: "ATR", value: atr });
+    const adx = fmtNum(ind.adx, 1);
+    if (adx) rows.push({ label: "ADX", value: adx });
+    if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
+    return rows.length > 0 ? rows : [{ label: "Strategy", value: "Cloud + MSS" }];
+  }
+  if (ind.strategy === "bbma_extreme" || ind.strategy === "bbma_reentry" || ind.bbUpper !== undefined) {
+    if (ind.side) rows.push({ label: "Side", value: ind.side });
+    if (ind.trigger) rows.push({ label: "Trigger", value: ind.trigger });
+    const upper = fmtNum(ind.bbUpper, 2);
+    const lower = fmtNum(ind.bbLower, 2);
+    if (upper && lower) rows.push({ label: "BB band", value: `${lower}–${upper}` });
+    const ma5h = fmtNum(ind.ma5h, 2);
+    const ma5l = fmtNum(ind.ma5l, 2);
+    if (ma5h && ma5l) rows.push({ label: "MA5 band", value: `${ma5l}–${ma5h}` });
+    const atr = fmtNum(ind.atr, 4);
+    if (atr) rows.push({ label: "ATR", value: atr });
+    const adx = fmtNum(ind.adx, 1);
+    if (adx) rows.push({ label: "ADX", value: adx });
+    if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
+    return rows.length > 0 ? rows : [{ label: "Strategy", value: "BBMA" }];
+  }
   const ema9 = fmtNum(ind.ema9, 2);
   const ema21 = fmtNum(ind.ema21, 2);
   const rsi = fmtNum(ind.rsi, 1);

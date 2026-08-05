@@ -29,6 +29,19 @@ export type SignalIndicators = {
   zoneLow?: number;
   zoneHigh?: number;
   touches?: number;
+  ceTrend?: string;
+  cloudLow?: number;
+  cloudHigh?: number;
+  ma200?: number;
+  trigger?: string;
+  bbUpper?: number;
+  bbMid?: number;
+  bbLower?: number;
+  ma5h?: number;
+  ma5l?: number;
+  ma10h?: number;
+  ma10l?: number;
+  ema50?: number;
 };
 
 export type Signal = {
@@ -236,6 +249,19 @@ function parseIndicators(raw: Record<string, unknown>): SignalIndicators {
     zoneLow: num(raw.zone_low),
     zoneHigh: num(raw.zone_high),
     touches: num(raw.touches),
+    ceTrend: str(raw.ce_trend),
+    cloudLow: num(raw.cloud_low),
+    cloudHigh: num(raw.cloud_high),
+    ma200: num(raw.ma200),
+    trigger: str(raw.trigger),
+    bbUpper: num(raw.bb_upper),
+    bbMid: num(raw.bb_mid),
+    bbLower: num(raw.bb_lower),
+    ma5h: num(raw.ma5h),
+    ma5l: num(raw.ma5l),
+    ma10h: num(raw.ma10h),
+    ma10l: num(raw.ma10l),
+    ema50: num(raw.ema50),
   };
 }
 

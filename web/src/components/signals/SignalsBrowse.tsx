@@ -20,7 +20,7 @@ const SESSIONS = [
   {
     id: "scalping",
     title: "Scalping",
-    subtitle: "15m chart — CE + LWMA zone setups",
+    subtitle: "15m chart — cloud rejection + CHoCH setups",
     timeframe: "15m",
     emptyHint: "Scalp setups are checked every ~10 minutes on the 15m chart.",
   },

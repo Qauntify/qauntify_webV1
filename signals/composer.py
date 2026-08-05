@@ -55,6 +55,18 @@ def _no_setup_reason(strategy: str, timeframe: str) -> str:
             f"tested S/R zone with a confirmation candle rejecting the level "
             f"on the {chart})."
         )
+    if strategy == "cloud_mss":
+        return (
+            f"The rules engine found no valid cloud rejection + market "
+            f"structure shift setup (no H1 Chandelier/MA200 cloud rejection "
+            f"with a CHoCH on the {chart})."
+        )
+    if strategy in ("bbma_extreme", "bbma_reentry"):
+        return (
+            f"The rules engine found no valid BBMA setup (no Bollinger "
+            f"Band {'extreme touch' if strategy == 'bbma_extreme' else 're-entry trigger'} "
+            f"confirmed by the MA5/MA10 stack on the {chart})."
+        )
     return (
         f"The rules engine found no valid trade setup (no EMA 9/21 crossover "
         f"with aligned RSI and MACD filters on the last few {timeframe or 'hourly'} "
@@ -151,6 +163,59 @@ def _format_indicators(strategy: str, indicators: dict) -> str:
         if "rsi" in indicators:
             parts.append(f"RSI={indicators['rsi']:.1f}")
         return ", ".join(parts) if parts else "no ICT structure on chart"
+    if active == "cloud_mss":
+        parts = []
+        for key, label in (
+            ("side", "side"),
+            ("ce_trend", "CE trend"),
+            ("cloud_low", "cloud low"),
+            ("cloud_high", "cloud high"),
+            ("ma200", "MA200"),
+            ("choch_level", "CHoCH level"),
+            ("atr", "ATR"),
+            ("adx", "ADX"),
+            ("htf_trend", "HTF trend"),
+        ):
+            if key in indicators:
+                value = indicators[key]
+                if isinstance(value, float):
+                    parts.append(f"{label}={value:.4f}")
+                else:
+                    parts.append(f"{label}={value}")
+        return ", ".join(parts) if parts else "no cloud/MSS reading"
+    if active in ("bbma_extreme", "bbma_reentry"):
+        parts = []
+        for key, label in (
+            ("side", "side"),
+            ("trigger", "trigger"),
+            ("bb_upper", "BB upper"),
+            ("bb_mid", "BB mid"),
+            ("bb_lower", "BB lower"),
+            ("ma5h", "MA5 high"),
+            ("ma5l", "MA5 low"),
+            ("ma10h", "MA10 high"),
+            ("ma10l", "MA10 low"),
+            ("ema50", "EMA50"),
+            ("atr", "ATR"),
+            ("adx", "ADX"),
+            ("htf_trend", "HTF trend"),
+        ):
+            if key in indicators:
+                value = indicators[key]
+                if isinstance(value, float):
+                    parts.append(f"{label}={value:.4f}")
+                else:
+                    parts.append(f"{label}={value}")
+        return ", ".join(parts) if parts else "no BBMA reading"
+    if "ema9" not in indicators:
+        # Defence in depth: an unrecognised strategy must not crash the
+        # confirmation prompt (that fails closed and silently auto-rejects
+        # every candidate — see cloud_mss's 2026-08-05 incident). Fall back
+        # to whatever numeric readings are present instead of assuming the
+        # ema_cross key set.
+        parts = [f"{key}={value}" for key, value in indicators.items()
+                 if key != "strategy"]
+        return ", ".join(parts) if parts else "no indicator reading"
     parts = [
         f"EMA9={indicators['ema9']:.2f}",
         f"EMA21={indicators['ema21']:.2f}",
@@ -190,6 +255,21 @@ def build_messages(setup: CandidateSetup,
         strategy_line = (
             "- Strategy: Support/Resistance bounce (rejection candle at a "
             "tested S/R zone)\n"
+        )
+    elif active == "cloud_mss":
+        strategy_line = (
+            "- Strategy: Cloud rejection + market structure shift (H1 "
+            "Chandelier/MA200 cloud rejection with a CHoCH)\n"
+        )
+    elif active == "bbma_extreme":
+        strategy_line = (
+            "- Strategy: BBMA Extreme (price extends outside the Bollinger "
+            "Band, confirmed against the MA5/MA10 stack)\n"
+        )
+    elif active == "bbma_reentry":
+        strategy_line = (
+            "- Strategy: BBMA Re-entry (CSM/CSAK trigger back inside the "
+            "Bollinger Band toward the MA5/MA10 stack)\n"
         )
     else:
         strategy_line = (

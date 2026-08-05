@@ -90,6 +90,71 @@ def test_build_messages_omits_adx_and_htf_trend_when_absent():
     assert "HTF trend=" not in user_content
 
 
+def test_build_messages_cloud_mss_does_not_crash_on_missing_ema9():
+    """cloud_mss indicators have no ema9/ema21/rsi/macd_hist keys — the
+    generic EMA fallback in _format_indicators must not be reached for it."""
+    setup = CandidateSetup(
+        symbol="XAUUSD", direction="long", entry=4100.0,
+        stop_loss=4080.0, take_profit=4140.0,
+        indicators={
+            "strategy": "cloud_mss", "side": "long", "ce_trend": "up",
+            "cloud_low": 4090.0, "cloud_high": 4095.0, "ma200": 4088.0,
+            "choch_level": 4082.0, "atr": 3.5,
+        },
+    )
+    user_content = build_messages(setup, strategy="cloud_mss")[1]["content"]
+    assert "cloud" in user_content.lower()
+    assert "CHoCH" in user_content
+
+
+def test_build_messages_bbma_extreme_does_not_crash_on_missing_ema9():
+    setup = CandidateSetup(
+        symbol="ETHUSD", direction="short", entry=3000.0,
+        stop_loss=3050.0, take_profit=2900.0,
+        indicators={
+            "strategy": "bbma_extreme", "side": "short",
+            "bb_upper": 3040.0, "bb_mid": 3000.0, "bb_lower": 2960.0,
+            "ma5h": 3010.0, "ma5l": 2990.0, "atr": 15.0,
+        },
+    )
+    user_content = build_messages(setup, strategy="bbma_extreme")[1]["content"]
+    assert "BB" in user_content or "bb" in user_content.lower()
+
+
+def test_build_messages_bbma_reentry_does_not_crash_on_missing_ema9():
+    setup = CandidateSetup(
+        symbol="BTCUSD", direction="long", entry=64000.0,
+        stop_loss=63800.0, take_profit=64400.0,
+        indicators={
+            "strategy": "bbma_reentry", "side": "long", "trigger": "csm",
+            "bb_upper": 64200.0, "bb_mid": 64000.0, "bb_lower": 63800.0,
+            "ma5h": 64050.0, "ma5l": 63950.0, "ma10h": 64100.0,
+            "ma10l": 63900.0, "ema50": 63900.0, "atr": 120.0,
+        },
+    )
+    user_content = build_messages(setup, strategy="bbma_reentry")[1]["content"]
+    assert "csm" in user_content.lower()
+
+
+def test_confirm_setup_cloud_mss_calls_llm_instead_of_fail_closed_rejecting():
+    """Regression test: a broken _format_indicators branch used to make
+    every cloud_mss candidate crash inside build_messages, which confirm_setup
+    silently turned into a fail-closed reject without ever calling the LLM."""
+    setup = CandidateSetup(
+        symbol="XAUUSD", direction="long", entry=4100.0,
+        stop_loss=4080.0, take_profit=4140.0,
+        indicators={
+            "strategy": "cloud_mss", "side": "long", "ce_trend": "up",
+            "cloud_low": 4090.0, "cloud_high": 4095.0, "ma200": 4088.0,
+            "choch_level": 4082.0, "atr": 3.5,
+        },
+    )
+    llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 70, "rationale": "ok"}')
+    result = confirm_setup(setup, llm, strategy="cloud_mss")
+    assert llm.last_messages is not None
+    assert result.verdict == "confirm"
+
+
 def test_parse_confirmation_valid_json():
     text = '{"verdict": "confirm", "confidence": 78, "rationale": "Momentum aligns."}'
     result = parse_confirmation(text)
