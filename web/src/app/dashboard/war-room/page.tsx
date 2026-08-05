@@ -39,13 +39,13 @@ export default async function WarRoomPage({
   return (
     <DashboardShell
       title="AI War Room"
-      subtitle="Three robots debate every confirmed signal — the Manager decides"
+      subtitle="Structure and Momentum robots debate every confirmed signal — the Manager decides"
     >
       <div className="w-full space-y-6">
         <div className="lg:hidden">
           <h1 className="text-xl font-bold">AI War Room</h1>
           <p className="text-sm text-slate">
-            Three robots debate every confirmed signal — the Manager decides.
+            Structure and Momentum robots debate every confirmed signal — the Manager decides.
           </p>
         </div>
 

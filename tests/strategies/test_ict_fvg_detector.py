@@ -80,16 +80,26 @@ def test_detect_ict_fvg_none_without_retest():
 
 
 def test_detect_ict_fvg_accepts_older_retest():
-    """Retest may be up to 5 bars before the latest close (was 2)."""
+    """Retest may be up to 10 bars before the latest close (hot volume mode)."""
     candles = _bullish_ict_fvg_series()
-    # Pad three closed bars after the retest so last_i - retest_i == 4.
+    # Pad eight closed bars after the retest so last_i - retest_i == 9.
     base = len(candles)
-    for i in range(3):
+    for i in range(8):
         candles.append(_c(base + i, 101.8, 102.2, 101.4, 101.9))
     atr14 = [4.0] * len(candles)
     setup = detect_setup("BTCUSDT", candles, atr14)
     assert setup is not None
     assert setup.direction == "long"
+
+
+def test_detect_ict_fvg_rejects_stale_retest_beyond_window():
+    """Retest older than MAX_BARS_SINCE_RETEST (10) still fails."""
+    candles = _bullish_ict_fvg_series()
+    base = len(candles)
+    for i in range(12):
+        candles.append(_c(base + i, 101.8, 102.2, 101.4, 101.9))
+    atr14 = [4.0] * len(candles)
+    assert detect_setup("BTCUSDT", candles, atr14) is None
 
 
 def test_router_dispatches_ict_fvg():

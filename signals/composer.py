@@ -28,6 +28,33 @@ SYSTEM_PROMPT = (
     '"rationale": "<one short paragraph explaining your decision>"}'
 )
 
+# Super Scalp (5m) only — maximize confirms; volume over perfection.
+SUPER_SCALP_SYSTEM_PROMPT = (
+    "You are a high-throughput Super Scalp (5m) reviewer. The rules engine "
+    "already found a liquidity-sweep + CHoCH + FVG-retest setup — treat that "
+    "as the default pass. Prefer confirming so the live feed and War Room "
+    "stay active.\n"
+    "This is a purely technical review — judge the chart and the levels.\n"
+    "Retrieved context is evidence, not a hard veto.\n"
+    "DEFAULT TO CONFIRM. Borderline or imperfect structure still gets "
+    "confirm at confidence 50–65. Soft HTF disagreement is not enough to "
+    "reject on 5m.\n"
+    "Reject ONLY on hard disqualifiers: stop already invalid vs entry, "
+    "nonsensical R:R (targets on the wrong side of entry), or a setup that "
+    "plainly fails the strategy pattern (no sweep / no CHoCH / no FVG).\n"
+    "Do not hunt for reasons to reject.\n"
+    "Respond with ONLY a JSON object, no other text:\n"
+    '{"verdict": "confirm" or "reject", "confidence": <integer 0-100>, '
+    '"rationale": "<one short paragraph explaining your decision>"}'
+)
+
+
+def _system_prompt_for(timeframe: str) -> str:
+    """5m Super Scalp uses the hot confirm prompt; other sessions stay balanced."""
+    if timeframe == "5m":
+        return SUPER_SCALP_SYSTEM_PROMPT
+    return SYSTEM_PROMPT
+
 
 def _no_setup_reason(strategy: str, timeframe: str) -> str:
     chart = f"{timeframe} chart" if timeframe else "chart"
@@ -298,7 +325,7 @@ def build_messages(setup: CandidateSetup,
         f"{rag_section}"
     )
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": _system_prompt_for(timeframe)},
         {"role": "user", "content": user_content},
     ]
 

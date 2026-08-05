@@ -195,7 +195,6 @@ def _debate_signal():
 def test_maybe_run_debate_saves_transcript_with_signal_id(monkeypatch):
     signal = _debate_signal()
     saved = []
-    monkeypatch.setattr(run_module, "_debate_headlines", lambda *a, **k: None)
     monkeypatch.setattr(run_module, "run_debate", lambda setup, llm, **kw: {
         "symbol": setup.symbol, "timeframe": kw["timeframe"],
         "direction": setup.direction, "transcript": [],
@@ -212,7 +211,6 @@ def test_maybe_run_debate_saves_transcript_with_signal_id(monkeypatch):
 
 def test_maybe_run_debate_is_best_effort(monkeypatch):
     signal = _debate_signal()
-    monkeypatch.setattr(run_module, "_debate_headlines", lambda *a, **k: None)
 
     def boom(*a, **k):
         raise RuntimeError("agent down")

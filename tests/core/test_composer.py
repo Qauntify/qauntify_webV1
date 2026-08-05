@@ -63,6 +63,23 @@ def test_system_prompt_leans_confirm_on_borderline_setups():
     assert "reject only" in system
 
 
+def test_super_scalp_5m_uses_hot_confirm_prompt():
+    messages = build_messages(SETUP, timeframe="5m")
+    system = messages[0]["content"].lower()
+    assert "super scalp" in system
+    assert "default to confirm" in system
+    assert "50–65" in system or "50-65" in system
+    assert "lean confirm" not in system  # balanced prompt phrasing
+
+
+def test_non_5m_keeps_balanced_confirm_prompt():
+    for tf in ("15m", "1h"):
+        messages = build_messages(SETUP, timeframe=tf)
+        system = messages[0]["content"].lower()
+        assert "lean confirm" in system
+        assert "default to confirm" not in system
+
+
 def test_build_messages_includes_session_context():
     messages = build_messages(
         SETUP,

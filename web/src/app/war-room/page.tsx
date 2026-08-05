@@ -9,7 +9,7 @@ import { getDebates } from "@/lib/debates";
 export const metadata: Metadata = {
   title: "AI War Room — Qauntify",
   description:
-    "Three robots debate every confirmed signal — the Manager decides.",
+    "Structure and Momentum robots debate every confirmed signal — the Manager decides.",
 };
 
 // Debates land as the engine confirms signals — read fresh-ish.

@@ -9,9 +9,9 @@ const ROW = {
   timeframe: "1h",
   direction: "long",
   transcript: [
-    { agent: "Technical", avatar: "T", message: "Trend is up." },
-    { agent: "Fundamental", avatar: "F", message: "Flows support." },
-    { agent: "Manager", avatar: "M", message: "Take the long." },
+    { agent: "Structure Analyst", avatar: "S", message: "Sweep + CHoCH clean." },
+    { agent: "Momentum Analyst", avatar: "M", message: "RSI supportive." },
+    { agent: "Manager", avatar: "Mgr", message: "Take the long." },
   ],
   manager_verdict: "agree",
   manager_confidence: 78,

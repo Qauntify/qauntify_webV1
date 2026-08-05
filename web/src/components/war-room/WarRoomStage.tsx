@@ -7,16 +7,16 @@ import type { Debate } from "@/lib/debates";
 /** Trading-floor party kit — teal / gold / navy, no neon purple. */
 const AGENTS = [
   {
-    id: "tech",
-    title: "Technical",
-    className: "Chart Runner",
+    id: "structure",
+    title: "Structure",
+    className: "Level Runner",
     color: "#0d9488",
     seat: "wr-seat-0",
   },
   {
-    id: "fund",
-    title: "Fundamental",
-    className: "Macro Scout",
+    id: "momentum",
+    title: "Momentum",
+    className: "Momentum Scout",
     color: "#ca8a04",
     seat: "wr-seat-1",
   },

@@ -89,7 +89,7 @@ export function SignalWarRoomSection({ signalId }: { signalId: string }) {
       ) : (
         <p className="text-sm leading-relaxed text-slate">
           No war-room debate was recorded for this signal. Newer confirmed
-          setups include the Technical, Fundamental, and Manager exchange here.
+          setups include the Structure, Momentum, and Manager exchange here.
         </p>
       )}
     </div>

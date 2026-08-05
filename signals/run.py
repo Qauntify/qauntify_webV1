@@ -825,19 +825,10 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     return ScanResult(signal=signal, candles=candles)
 
 
-def _debate_headlines(symbol, session=None):
-    """Best-effort RSS headlines for the War Room's Fundamental agent (uses the
-    otherwise-dormant news client; showcase only)."""
-    try:
-        from signals.news_client import fetch_headlines
-        return fetch_headlines(symbol, session=session)
-    except Exception:
-        return None
-
-
 def maybe_run_debate(signal, cfg, session=None):
     """Best-effort AI War Room debate about a stored signal — a showcase that
-    never affects the signal. Runs the 3 agents and saves the transcript."""
+    never affects the signal. Runs the 3 technical agents and saves the
+    transcript."""
     if not cfg.supabase_url or not cfg.supabase_service_key:
         return
     try:
@@ -852,11 +843,7 @@ def maybe_run_debate(signal, cfg, session=None):
             signal.take_profit, signal.indicators,
             take_profit_2=signal.take_profit_2, take_profit_3=signal.take_profit_3,
         )
-        debate = run_debate(
-            setup, llm, timeframe=signal.timeframe,
-            headlines=_debate_headlines(signal.symbol, session),
-            calendar_block=None,
-        )
+        debate = run_debate(setup, llm, timeframe=signal.timeframe)
         debate["signal_id"] = signal.id
         save_debate(debate, cfg.supabase_url, cfg.supabase_service_key,
                     session=session)
@@ -864,7 +851,6 @@ def maybe_run_debate(signal, cfg, session=None):
               f"{debate['manager_confidence']}%")
     except Exception as exc:
         print(f"[{signal.symbol}] war-room debate skipped ({type(exc).__name__})")
-
 
 def maybe_send_alert(signal, settings, cfg):
     """Telegram alert for a stored signal; never raises — a failed or

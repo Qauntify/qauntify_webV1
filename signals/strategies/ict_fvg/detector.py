@@ -16,21 +16,22 @@ from signals.strategies.ict_smc.detector import (
     PIVOT_LEFT,
     PIVOT_RIGHT,
     STRUCTURE_LOOKBACK,
-    SWEEP_LOOKBACK,
     _choch_bar_index,
     _recent_pivot_level,
     pivot_highs,
     pivot_lows,
 )
 
-# Super-scalp overrides — looser than swing ict_smc so 5m setups can print.
-MAX_BARS_SINCE_CHOCH = 6
-MIN_SWEEP_ATR_FRACTION = 0.08
+# Super-scalp overrides — hot volume mode: wider windows than swing ict_smc
+# so 5m setups print more often (quality secondary).
+MAX_BARS_SINCE_CHOCH = 12
+MIN_SWEEP_ATR_FRACTION = 0.04
 ATR_STOP_BUFFER = 0.25
-MAX_STOP_ATR = 2.5
+MAX_STOP_ATR = 3.5
 MIN_CANDLES = 25
-# FVG retest must still be relatively fresh vs the latest closed bar.
-MAX_BARS_SINCE_RETEST = 5
+SWEEP_LOOKBACK = 18
+# FVG retest may sit further behind the latest closed bar.
+MAX_BARS_SINCE_RETEST = 10
 
 
 def find_bullish_fvg(candles, start: int, end: int) -> tuple[int, float, float] | None:
