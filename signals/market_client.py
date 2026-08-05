@@ -3,24 +3,12 @@
 Crypto + FX (BTCUSD, ETHUSD, GBPUSD) come from Kraken public OHLC.
 Legacy PAXG* symbols canonicalize to XAUUSD so older rows still settle.
 
-GOLD IS FUTURES, NOT SPOT. The symbol is labelled XAUUSD, but the prices come
-from Yahoo Finance's front-month COMEX gold future (GC=F) because Kraken has no
-XAUUSD pair. The future trades at a basis to spot — typically a few dollars,
-driven by carry — and that basis steps discontinuously at contract roll, when
-the front month changes underneath the same ticker.
-
-What that means in practice:
-  * Levels published for "XAUUSD" are futures levels. Someone executing them on
-    a spot gold CFD will not see the same prices.
-  * On the 1h swing session the basis is small against the stop distance and is
-    mostly noise. On the 1m scalper, whose targets are 0.5R of a very tight
-    stop, it is not.
-  * A roll can shift the series by more than a scalp's entire risk. Nothing
-    here detects or adjusts for a roll.
-
-Fixing this properly means either sourcing genuine spot XAU or renaming the
-symbol; both are larger changes than a data-source swap, since `symbol` is a
-stored key on every signal row.
+Gold OHLC is Kraken PAXGUSD (tokenized physical gold), not COMEX futures.
+The app symbol stays XAUUSD for storage and alerts so existing rows and MT5
+EA config stay unchanged; only the price feed changed. PAXG tracks spot bullion
+closely enough for CFD/MT5 XAUUSD execution. Yahoo GC=F was removed because
+futures trade ~40–60 USD above spot and made 1m scalp entries look wrong on
+broker charts.
 """
 from __future__ import annotations
 
@@ -29,13 +17,16 @@ import requests
 from signals.models import Candle
 
 OHLC_URL = "https://api.kraken.com/0/public/OHLC"
-YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F"
+TICKER_URL = "https://api.kraken.com/0/public/Ticker"
+# Kraken pair for all XAUUSD/PAXG* candle fetches (spot gold proxy).
+KRAKEN_GOLD_PAIR = "PAXGUSD"
 
 # App symbol → Kraken pair name accepted by /public/OHLC.
 KRAKEN_PAIR_BY_SYMBOL = {
     "BTCUSD": "XBTUSD",
     "ETHUSD": "ETHUSD",
     "GBPUSD": "GBPUSD",
+    "PAXGUSD": "PAXGUSD",
     # Legacy Binance USDT symbols (outcome tracking / old rows).
     "BTCUSDT": "XBTUSD",
     "ETHUSDT": "ETHUSD",
@@ -53,18 +44,6 @@ INTERVAL_MINUTES = {
     "4h": 240,
     "1d": 1440,
 }
-
-# Yahoo chart interval + range for each engine timeframe.
-YAHOO_INTERVAL = {
-    "1m": ("1m", "1d"),
-    "5m": ("5m", "5d"),
-    "15m": ("15m", "1mo"),
-    "30m": ("30m", "1mo"),
-    "1h": ("60m", "3mo"),
-    "4h": ("1h", "6mo"),
-    "1d": ("1d", "2y"),
-}
-
 
 def canonical_symbol(symbol: str) -> str:
     """Normalize to a USD quote symbol (BTCUSDT → BTCUSD, PAXG* → XAUUSD)."""
@@ -130,94 +109,70 @@ def _fetch_kraken_candles(symbol, interval, limit, start_time, session):
     ]
 
 
-def _resample(candles, minutes):
-    """Fold candles into `minutes`-wide buckets aligned to the UTC epoch.
-
-    Yahoo publishes no 4h gold series, so a 4h request is served from its
-    hourly one and aggregated here. Buckets are keyed on floor(open_time /
-    width) rather than on the first bar of the response, so the same wall-clock
-    bar always lands in the same bucket regardless of when the fetch ran.
-
-    A partial trailing bucket is kept — callers drop the still-forming bar
-    themselves (backtest.py does this with `[:-1]`), and silently discarding it
-    here would hide a bar they expect to see.
-    """
-    width = minutes * 60_000
-    out: list[Candle] = []
-    for candle in candles:
-        bucket = candle.open_time - (candle.open_time % width)
-        if out and out[-1].open_time == bucket:
-            prev = out[-1]
-            out[-1] = Candle(
-                open_time=bucket,
-                open=prev.open,
-                high=max(prev.high, candle.high),
-                low=min(prev.low, candle.low),
-                close=candle.close,
-                volume=prev.volume + candle.volume,
-            )
-        else:
-            out.append(Candle(
-                open_time=bucket,
-                open=candle.open,
-                high=candle.high,
-                low=candle.low,
-                close=candle.close,
-                volume=candle.volume,
-            ))
-    return out
 
 
-def _fetch_yahoo_gold_candles(interval, limit, start_time, session):
-    yahoo_interval, yahoo_range = YAHOO_INTERVAL.get(interval, ("60m", "3mo"))
+def _fetch_kraken_gold_candles(interval, limit, start_time, session):
+    """Spot-gold OHLC via PAXGUSD; 4h uses Kraken's native 240m bucket."""
+    return _fetch_kraken_candles(
+        KRAKEN_GOLD_PAIR, interval, limit, start_time, session,
+    )
+
+
+def _parse_kraken_last_price(payload: dict, pair_hint: str) -> float:
+    errors = payload.get("error") or []
+    if errors:
+        raise RuntimeError(f"Kraken ticker error: {errors}")
+    result = payload.get("result") or {}
+    hint = pair_hint.upper()
+    for key, data in result.items():
+        if not isinstance(data, dict):
+            continue
+        if key.upper() == hint or hint in key.upper():
+            last = (data.get("c") or [None])[0]
+            if last is not None:
+                return float(last)
+    for data in result.values():
+        if isinstance(data, dict):
+            last = (data.get("c") or [None])[0]
+            if last is not None:
+                return float(last)
+    raise RuntimeError("Kraken ticker returned no last price")
+
+
+def fetch_kraken_last_price(pair: str, session=None) -> float:
+    """Last trade price for a Kraken pair (live ticker, not OHLC close)."""
+    session = session or requests.Session()
     response = session.get(
-        YAHOO_CHART_URL,
-        params={"interval": yahoo_interval, "range": yahoo_range},
-        headers={"User-Agent": "Mozilla/5.0"},
-        timeout=10,
+        TICKER_URL, params={"pair": pair}, timeout=10,
     )
     response.raise_for_status()
-    payload = response.json()
-    results = (payload.get("chart") or {}).get("result") or []
-    if not results:
-        error = (payload.get("chart") or {}).get("error")
-        raise RuntimeError(f"Yahoo gold chart error: {error}")
+    return _parse_kraken_last_price(response.json(), pair)
 
-    result = results[0]
-    timestamps = result.get("timestamp") or []
-    quote = ((result.get("indicators") or {}).get("quote") or [{}])[0]
-    opens = quote.get("open") or []
-    highs = quote.get("high") or []
-    lows = quote.get("low") or []
-    closes = quote.get("close") or []
-    volumes = quote.get("volume") or []
 
-    candles: list[Candle] = []
-    for i, ts in enumerate(timestamps):
-        o, h, l, c = (
-            opens[i] if i < len(opens) else None,
-            highs[i] if i < len(highs) else None,
-            lows[i] if i < len(lows) else None,
-            closes[i] if i < len(closes) else None,
-        )
-        if o is None or h is None or l is None or c is None:
-            continue
-        vol = volumes[i] if i < len(volumes) and volumes[i] is not None else 0.0
-        candles.append(
-            Candle(
-                open_time=int(ts) * 1000,
-                open=float(o),
-                high=float(h),
-                low=float(l),
-                close=float(c),
-                volume=float(vol),
-            )
-        )
-    # YAHOO_INTERVAL maps "4h" to Yahoo's hourly series because no 4h gold
-    # series exists. Without this fold a 4h request returns 1h bars.
-    if interval == "4h":
-        candles = _resample(candles, INTERVAL_MINUTES["4h"])
-    return candles
+def fetch_gold_last_price(session=None) -> float:
+    return fetch_kraken_last_price(KRAKEN_GOLD_PAIR, session=session)
+
+
+def max_gold_entry_drift(timeframe: str, atr: float | None) -> float:
+    """Max allowed |entry - live| before a gold signal is treated as stale."""
+    base = {"1m": 2.5, "5m": 4.0, "15m": 6.0}.get(timeframe, 8.0)
+    if atr is not None and atr > 0:
+        scale = {"1m": 0.25, "5m": 0.3, "15m": 0.35}.get(timeframe, 0.4)
+        base = max(base, min(12.0, scale * atr))
+    return base
+
+
+def gold_entry_live_ok(entry: float, live: float, timeframe: str,
+                       atr: float | None) -> tuple[bool, str]:
+    drift = abs(entry - live)
+    cap = max_gold_entry_drift(timeframe, atr)
+    if drift <= cap:
+        return True, ""
+    return (
+        False,
+        f"Entry {entry:.2f} is {drift:.2f} from live PAXG {live:.2f} "
+        f"(max {cap:.2f} for {timeframe}) — refusing stale levels.",
+    )
 
 
 def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
@@ -231,7 +186,7 @@ def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
         raise ValueError(f"unsupported interval: {interval}")
 
     if is_gold_symbol(symbol):
-        candles = _fetch_yahoo_gold_candles(interval, limit, start_time, session)
+        candles = _fetch_kraken_gold_candles(interval, limit, start_time, session)
     else:
         candles = _fetch_kraken_candles(
             symbol, interval, limit, start_time, session,

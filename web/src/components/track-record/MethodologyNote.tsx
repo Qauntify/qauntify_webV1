@@ -17,9 +17,9 @@ export function MethodologyNote() {
         tighter stops carry proportionally more of it. Gross is shown next to net so the gap is visible.
       </p>
       <p>
-        <strong className="text-slate/80">Gold prices are futures.</strong> XAUUSD levels are derived from
-        the front-month COMEX gold future (GC=F), not spot gold. The two differ by a small basis that also
-        steps at contract roll, so prices will not match a spot gold feed exactly.
+        <strong className="text-slate/80">Gold prices track spot.</strong> XAUUSD levels come from
+        Kraken PAXGUSD (tokenized physical gold), aligned with typical MT5/CFD spot feeds rather than
+        COMEX futures.
       </p>
       <p>
         Every closed signal is included — nothing is cherry-picked or removed after the fact. Outcomes are

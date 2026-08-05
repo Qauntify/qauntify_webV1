@@ -7,12 +7,18 @@ import random
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import NamedTuple
 
 import requests
 
-from signals.market_client import fetch_candles
+from signals.market_client import (
+    fetch_candles,
+    fetch_gold_last_price,
+    gold_entry_live_ok,
+    is_gold_symbol,
+)
 from signals.chart.pipeline import attach_chart
 from signals.composer import confirm_setup, no_setup_rationale
 from signals.rag import retrieve_context
@@ -30,6 +36,7 @@ from signals.models import (
     ScanResult,
     make_signal,
     session_scans,
+    take_profits_from_risk,
 )
 from signals.outcome_tracker import backfill_missing_outcome_charts, track_open_signals
 from signals.session_clock import describe_market_session
@@ -512,6 +519,46 @@ def _load_market_data(symbol, timeframe, strategy, cfg, *,
                       htf_trend=htf_trend, h1_candles=h1_candles), candles
 
 
+def _snap_gold_setup_to_live(setup: CandidateSetup, live: float,
+                             timeframe: str) -> tuple[CandidateSetup | None, str]:
+    """Align published gold levels to the live PAXG ticker when drift is small."""
+    atr = setup.indicators.get("atr")
+    if isinstance(atr, (int, float)):
+        atr_val: float | None = float(atr)
+    else:
+        atr_val = None
+    ok, msg = gold_entry_live_ok(setup.entry, live, timeframe, atr_val)
+    if not ok:
+        return None, msg
+    if abs(setup.entry - live) < 0.05:
+        return setup, ""
+    tp_r = setup.indicators.get("tp_r")
+    if isinstance(tp_r, (list, tuple)) and len(tp_r) == 3:
+        tp1, tp2, tp3 = take_profits_from_risk(
+            live, setup.stop_loss, setup.direction,
+            r1=float(tp_r[0]), r2=float(tp_r[1]), r3=float(tp_r[2]),
+        )
+    else:
+        tp1, tp2, tp3 = take_profits_from_risk(
+            live, setup.stop_loss, setup.direction,
+        )
+    if setup.direction == "long" and live <= setup.stop_loss:
+        return None, "Live price at or below stop — not publishing"
+    if setup.direction == "short" and live >= setup.stop_loss:
+        return None, "Live price at or above stop — not publishing"
+    ind = dict(setup.indicators)
+    ind["live_snap_from"] = setup.entry
+    ind["live_snap_to"] = live
+    return replace(
+        setup,
+        entry=live,
+        take_profit=tp1,
+        take_profit_2=tp2,
+        take_profit_3=tp3,
+        indicators=ind,
+    ), ""
+
+
 def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
                 timeframe=None,
                 session=None,
@@ -637,6 +684,27 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             indicators=setup.indicators, candles=candles, setup=setup,
             confidence=confirmation.confidence, session=session,
         )
+
+    if is_gold_symbol(symbol):
+        try:
+            live = fetch_gold_last_price(session=session)
+            pre_live_setup = setup
+            setup, _live_note = _snap_gold_setup_to_live(setup, live, timeframe)
+            if setup is None:
+                print(f"[{symbol}] live market check failed: {_live_note}")
+                return _reject(
+                    symbol, cfg, timeframe=timeframe, report_kind="rejected",
+                    event_kind="reject", rationale=_live_note,
+                    indicators=pre_live_setup.indicators,
+                    candles=candles, setup=pre_live_setup, session=session,
+                )
+            if setup.entry != pre_live_setup.entry:
+                print(f"[{symbol}] snapped entry {pre_live_setup.entry:.2f} "
+                      f"-> live PAXG {setup.entry:.2f}")
+        except Exception as exc:
+            print(f"[{symbol}] live gold ticker unavailable "
+                  f"({type(exc).__name__}), skipping store")
+            return ScanResult(candles=candles)
 
     signal = make_signal(setup, confirmation, [], timeframe=timeframe)
     signal = attach_chart(

@@ -1,6 +1,6 @@
 /** Public market helpers for the web app (no API key).
 
-Crypto/FX → Kraken. Gold (XAUUSD) → Yahoo Finance GC=F (COMEX gold).
+Crypto/FX → Kraken. Gold (XAUUSD) → Kraken PAXGUSD (spot gold proxy).
 */
 
 export const DEFAULT_MARKET_SYMBOLS = [
@@ -22,6 +22,7 @@ const KRAKEN_PAIR_BY_SYMBOL: Record<string, string> = {
   BTCUSD: "XBTUSD",
   ETHUSD: "ETHUSD",
   GBPUSD: "GBPUSD",
+  PAXGUSD: "PAXGUSD",
   BTCUSDT: "XBTUSD",
   ETHUSDT: "ETHUSD",
   GBPUSDT: "GBPUSD",
@@ -29,11 +30,7 @@ const KRAKEN_PAIR_BY_SYMBOL: Record<string, string> = {
 
 const GOLD_SYMBOLS = new Set(["XAUUSD", "XAUUSDT", "PAXGUSD", "PAXGUSDT"]);
 
-const YAHOO_INTERVAL: Record<MarketInterval, { interval: string; range: string }> = {
-  "5m": { interval: "5m", range: "5d" },
-  "15m": { interval: "15m", range: "1mo" },
-  "1h": { interval: "60m", range: "3mo" },
-};
+const KRAKEN_GOLD_PAIR = "PAXGUSD";
 
 export type MarketCandle = {
   time: number; // unix seconds
@@ -150,26 +147,11 @@ export function parseYahooChartPayload(payload: unknown): MarketCandle[] {
   return candles;
 }
 
-async function fetchYahooGoldCandles(
+async function fetchKrakenGoldCandles(
   interval: MarketInterval,
   limit: number,
 ): Promise<MarketCandle[]> {
-  const { interval: yahooInterval, range } = YAHOO_INTERVAL[interval];
-  const url = new URL("https://query1.finance.yahoo.com/v8/finance/chart/GC=F");
-  url.searchParams.set("interval", yahooInterval);
-  url.searchParams.set("range", range);
-
-  const response = await fetch(url.toString(), {
-    cache: "no-store",
-    headers: { "User-Agent": "Mozilla/5.0" },
-  });
-  if (!response.ok) {
-    throw new Error(`Yahoo gold HTTP ${response.status}`);
-  }
-  const candles = parseYahooChartPayload(await response.json());
-  const closed = candles.length > 1 ? candles.slice(0, -1) : candles;
-  if (closed.length > limit) return closed.slice(-limit);
-  return closed;
+  return fetchKrakenOnlyCandles(KRAKEN_GOLD_PAIR, interval, limit);
 }
 
 async function fetchKrakenOnlyCandles(
@@ -211,7 +193,7 @@ export async function fetchMarketCandles(
 ): Promise<MarketCandle[]> {
   const canon = canonicalMarketSymbol(symbol);
   if (isGoldSymbol(canon)) {
-    return fetchYahooGoldCandles(interval, limit);
+    return fetchKrakenGoldCandles(interval, limit);
   }
   return fetchKrakenOnlyCandles(canon, interval, limit);
 }

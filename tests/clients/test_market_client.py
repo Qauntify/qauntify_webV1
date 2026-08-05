@@ -45,29 +45,6 @@ OHLC_PAYLOAD = {
     },
 }
 
-YAHOO_GOLD_PAYLOAD = {
-    "chart": {
-        "result": [
-            {
-                "timestamp": [1720000000, 1720003600],
-                "indicators": {
-                    "quote": [
-                        {
-                            "open": [2300.0, 2305.0],
-                            "high": [2310.0, 2312.0],
-                            "low": [2295.0, 2301.0],
-                            "close": [2308.0, 2309.0],
-                            "volume": [1000, 1100],
-                        }
-                    ]
-                },
-            }
-        ],
-        "error": None,
-    }
-}
-
-
 def test_canonical_symbol_renames_usdt_and_paxg_to_xau():
     assert canonical_symbol("btcusdt") == "BTCUSD"
     assert canonical_symbol("ETHUSD") == "ETHUSD"
@@ -135,29 +112,29 @@ def test_fetch_candles_filters_by_start_time():
     assert candles[0].open_time == 1720003600 * 1000
 
 
-def test_fetch_xauusd_uses_yahoo_gold():
-    session = FakeSession(YAHOO_GOLD_PAYLOAD)
+def test_fetch_xauusd_uses_kraken_paxg():
+    session = FakeSession(OHLC_PAYLOAD)
     candles = fetch_candles("XAUUSD", interval="1h", session=session)
-    assert "GC=F" in session.last_url
-    assert session.last_params["interval"] == "60m"
+    assert session.last_url == "https://api.kraken.com/0/public/OHLC"
+    assert session.last_params["pair"] == "PAXGUSD"
+    assert session.last_params["interval"] == 60
     assert len(candles) == 2
-    assert candles[-1].close == 2309.0
+    assert candles[-1].close == 102.5
 
 
-def test_fetch_legacy_paxg_routes_to_yahoo_gold():
-    session = FakeSession(YAHOO_GOLD_PAYLOAD)
+def test_fetch_legacy_paxg_routes_to_kraken_paxg():
+    session = FakeSession(OHLC_PAYLOAD)
     candles = fetch_candles("PAXGUSD", interval="5m", session=session)
-    assert "GC=F" in session.last_url
-    assert session.last_params["interval"] == "5m"
-    assert candles[0].open == 2300.0
+    assert session.last_params["pair"] == "PAXGUSD"
+    assert session.last_params["interval"] == 5
+    assert candles[0].open == 100.0
 
 
-def test_fetch_xauusd_1m_uses_real_1m_interval():
-    """1m gold must resolve to a real 1m request, not the 60m fallback."""
-    session = FakeSession(YAHOO_GOLD_PAYLOAD)
+def test_fetch_xauusd_1m_uses_kraken_1m_interval():
+    session = FakeSession(OHLC_PAYLOAD)
     fetch_candles("XAUUSD", interval="1m", session=session)
-    assert session.last_params["interval"] == "1m"
-    assert session.last_params["range"] == "1d"
+    assert session.last_params["pair"] == "PAXGUSD"
+    assert session.last_params["interval"] == 1
 
 
 def test_fetch_candles_raises_on_http_error():
@@ -172,66 +149,40 @@ def test_fetch_candles_raises_on_kraken_error_payload():
         fetch_candles("BTCUSD", session=session)
 
 
-# Eight hourly gold bars spanning exactly two 4h buckets. 1720008000 is a
-# multiple of 14400, so the bucket boundaries are unambiguous.
-HOURLY_GOLD_PAYLOAD = {
-    "chart": {
-        "result": [
-            {
-                "timestamp": [1720008000 + 3600 * i for i in range(8)],
-                "indicators": {
-                    "quote": [
-                        {
-                            "open": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0],
-                            "high": [15.0, 16.0, 17.0, 18.0, 20.0, 21.0, 22.0, 23.0],
-                            "low": [9.0, 8.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0],
-                            "close": [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0],
-                            "volume": [1, 2, 3, 4, 5, 6, 7, 8],
-                        }
-                    ]
-                },
-            }
-        ],
-        "error": None,
-    }
-}
+def test_gold_4h_uses_kraken_native_240m_bucket():
+    session = FakeSession(OHLC_PAYLOAD)
+    fetch_candles("XAUUSD", "4h", 100, session=session)
+    assert session.last_params["pair"] == "PAXGUSD"
+    assert session.last_params["interval"] == 240
 
 
-def test_gold_4h_folds_the_hourly_source_into_true_4h_bars():
-    """Yahoo has no 4h gold series, so a 4h request is served hourly and must
-    be aggregated — otherwise a '4h' backtest silently runs on 1h data."""
-    session = FakeSession(HOURLY_GOLD_PAYLOAD)
-    candles = fetch_candles("XAUUSD", "4h", 100, session=session)
-
-    assert len(candles) == 2
-    assert candles[1].open_time - candles[0].open_time == 4 * 3600 * 1000
-
-    first = candles[0]
-    assert first.open_time == 1720008000 * 1000
-    assert first.open == 10.0     # first open of the bucket
-    assert first.high == 18.0     # max high
-    assert first.low == 8.0       # min low
-    assert first.close == 14.0    # last close
-    assert first.volume == 10.0   # summed
-
-    second = candles[1]
-    assert second.open == 14.0
-    assert second.high == 23.0
-    assert second.low == 13.0
-    assert second.close == 18.0
-    assert second.volume == 26.0
-
-
-def test_gold_1h_is_not_resampled():
-    session = FakeSession(HOURLY_GOLD_PAYLOAD)
+def test_gold_1h_uses_kraken_hourly():
+    session = FakeSession(OHLC_PAYLOAD)
     candles = fetch_candles("XAUUSD", "1h", 100, session=session)
-    assert len(candles) == 8
+    assert session.last_params["interval"] == 60
+    assert len(candles) == 2
 
 
-def test_gold_4h_buckets_are_epoch_aligned_not_fetch_aligned():
-    """Boundaries must not depend on where the fetch happened to start, or the
-    same bar lands in different buckets on consecutive runs."""
-    session = FakeSession(HOURLY_GOLD_PAYLOAD)
-    candles = fetch_candles("XAUUSD", "4h", 100, session=session)
-    for candle in candles:
-        assert (candle.open_time // 1000) % (4 * 3600) == 0
+def test_parse_kraken_last_price():
+    from signals.market_client import _parse_kraken_last_price
+
+    price = _parse_kraken_last_price(
+        {"error": [], "result": {"PAXGUSD": {"c": ["4115.45", "0.1"]}}},
+        "PAXGUSD",
+    )
+    assert price == 4115.45
+
+
+def test_gold_entry_live_ok_within_cap():
+    from signals.market_client import gold_entry_live_ok
+
+    ok, msg = gold_entry_live_ok(4115.0, 4116.0, "1m", atr=2.0)
+    assert ok and msg == ""
+
+
+def test_gold_entry_live_ok_rejects_stale():
+    from signals.market_client import gold_entry_live_ok
+
+    ok, msg = gold_entry_live_ok(4154.0, 4115.0, "1m", atr=2.0)
+    assert not ok
+    assert "stale" in msg.lower() or "refusing" in msg.lower()

@@ -32,7 +32,8 @@ from signals.chart.plan import build_chart_plan, cloud_series
 from signals.chart.render import render_chart, render_outcome_chart
 from signals.history import binance_symbol, load_history
 from signals.indicators import atr
-from signals.market_client import _resample, fetch_candles
+from signals.candle_resample import resample_candles
+from signals.market_client import fetch_candles
 from signals.models import Confirmation, make_signal
 from signals.r_model import cost_r, scaled_r
 from signals.strategies.cloud_mss import detect_setup
@@ -65,13 +66,13 @@ def compress_path(candles, entry_time):
         if minutes == 15:
             out = candles
         else:
-            out = _resample(candles, minutes)
+            out = resample_candles(candles, minutes)
         if len(out) <= MAX_OUTCOME_BARS:
             width = minutes * 60_000
             return out, entry_time - (entry_time % width), minutes
     minutes = BUCKET_MINUTES[-1]
     width = minutes * 60_000
-    return (_resample(candles, minutes),
+    return (resample_candles(candles, minutes),
             entry_time - (entry_time % width), minutes)
 
 

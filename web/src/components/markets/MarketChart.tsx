@@ -152,7 +152,7 @@ export function MarketChart({ symbol, interval }: MarketChartProps) {
           <p className="text-xs text-rose-700">{error}</p>
         ) : (
           <p className="text-xs text-slate">
-            {candleCount} candles · {symbol === "XAUUSD" ? "Yahoo GC=F" : "Kraken"}
+            {candleCount} candles · Kraken{symbol === "XAUUSD" ? " PAXG" : ""}
           </p>
         )}
       </div>
