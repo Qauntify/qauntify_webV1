@@ -266,12 +266,13 @@ export function toClosedTrade(row: RawRow): ClosedTrade | null {
   ]
     .filter((t): t is number => t !== null && t !== undefined)
     .map(Number);
-  // Prefer hit timestamps. Status alone must not invent a full ladder fill —
-  // a reclassified TP1-then-SL win may be stored as tp1_hit with only tp1_hit_at.
-  const banked = [row.tp1_hit_at, row.tp2_hit_at, row.tp3_hit_at].filter(Boolean).length;
+  // Public track record must be scored from the signal's stored status.
+  // TP hit timestamps can occasionally be present on rows that later end
+  // as `sl_hit` (data drift / backfills). In that case, using timestamps
+  // would contradict the signal status.
   const reached =
-    banked > 0
-      ? Math.min(banked, targets.length)
+    status === "sl_hit"
+      ? 0
       : status === "tp_hit" || status === "tp3_hit"
         ? targets.length
         : status === "tp2_hit"
