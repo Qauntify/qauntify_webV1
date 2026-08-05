@@ -7,12 +7,6 @@ export function StatTiles({ summary }: { summary: Summary }) {
   // is legible rather than hidden.
   const tiles = [
     {
-      label: "Win rate",
-      value: `${summary.winRate}%`,
-      sub: `${summary.wins}W / ${summary.losses}L of ${summary.total} closed`,
-      cls: "text-emerald-400",
-    },
-    {
       label: "Net R",
       value: signed(summary.netR),
       sub: `${signed(summary.grossR)} before costs`,
@@ -25,6 +19,7 @@ export function StatTiles({ summary }: { summary: Summary }) {
       cls: tone(summary.avgR),
     },
     { label: "Best streak", value: `${summary.bestStreak}`, sub: "wins in a row", cls: "text-ink" },
+    { label: "Closed trades", value: `${summary.total}`, sub: `${summary.wins}W / ${summary.losses}L`, cls: "text-ink" },
   ];
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
