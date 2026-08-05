@@ -580,3 +580,19 @@ def test_mt5_candles_usable_requires_depth_and_freshness():
     assert mt5_candles_usable(rows[:10]) is False
     stale = [{"open_time": now - 3600, "open": 1, "high": 1, "low": 1, "close": 1}] * 100
     assert mt5_candles_usable(stale) is False
+
+
+def test_purge_mt5_candle_outliers_drops_far_closes():
+    from signals.storage import purge_mt5_candle_outliers
+
+    # Gradual live move 4138→4139, then a discontinuous junk cluster at 4120.
+    rows = [
+        {"open_time": 1, "open": 4120, "high": 4121, "low": 4119, "close": 4120.0, "volume": 1},
+        {"open_time": 2, "open": 4120, "high": 4121, "low": 4119, "close": 4120.5, "volume": 1},
+        {"open_time": 3, "open": 4138, "high": 4139, "low": 4137, "close": 4138.5, "volume": 1},
+        {"open_time": 4, "open": 4139, "high": 4140, "low": 4138, "close": 4139.2, "volume": 1},
+    ]
+    kept = purge_mt5_candle_outliers(rows, 4139.2, max_drift=15.0)
+    assert len(kept) == 2
+    assert kept[0]["close"] == 4138.5
+    assert kept[1]["close"] == 4139.2

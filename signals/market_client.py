@@ -167,25 +167,32 @@ def gold_entry_live_ok(entry: float, live: float, timeframe: str,
         return True, ""
     return (
         False,
-        f"Entry {entry:.2f} is {drift:.2f} from live PAXG {live:.2f} "
+        f"Entry {entry:.2f} is {drift:.2f} from live broker {live:.2f} "
         f"(max {cap:.2f} for {timeframe}) — refusing stale levels.",
     )
 
 
 def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
-                  session=None, *, supabase_url=None, service_key=None):
+                  session=None, *, supabase_url=None, service_key=None,
+                  require_mt5_1m: bool | None = None):
     """Return candles newest-last, same shape as the old Binance client.
 
     `start_time` is epoch **milliseconds** (engine convention).
-    For XAUUSD 1m, prefers a fresh MT5 closed-bar buffer when
-    `supabase_url` / `service_key` are provided and the EA has backfilled.
+    For XAUUSD 1m with Supabase credentials, uses the MT5 closed-bar buffer
+    only. When that buffer is cold, raises (default) so detection never
+    mixes PAXG structure with broker entries. Pass
+    `require_mt5_1m=False` to allow a Kraken PAXG fallback (legacy / offline).
     """
     session = session or requests.Session()
     if interval not in INTERVAL_MINUTES:
         raise ValueError(f"unsupported interval: {interval}")
 
-    if (is_gold_symbol(symbol) and interval == "1m"
-            and supabase_url and service_key):
+    gold_1m = is_gold_symbol(symbol) and interval == "1m"
+    must_mt5 = require_mt5_1m if require_mt5_1m is not None else (
+        gold_1m and bool(supabase_url and service_key)
+    )
+
+    if gold_1m and supabase_url and service_key:
         from signals.storage import (
             fetch_mt5_candles,
             mt5_candles_usable,
@@ -218,6 +225,12 @@ def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
             print(f"[{canonical_symbol(symbol)}] using MT5 1m candles "
                   f"({len(candles) - 1} closed bars)")
             return candles
+        if must_mt5:
+            raise RuntimeError(
+                f"MT5 1m candles unavailable for {canonical_symbol(symbol)} "
+                f"(have {len(rows)} bars; need EA backfill) — "
+                f"refusing PAXG structure"
+            )
 
     if is_gold_symbol(symbol):
         candles = _fetch_kraken_gold_candles(interval, limit, start_time, session)

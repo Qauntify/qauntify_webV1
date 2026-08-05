@@ -137,6 +137,29 @@ def test_fetch_xauusd_1m_uses_kraken_1m_interval():
     assert session.last_params["interval"] == 1
 
 
+def test_fetch_xauusd_1m_refuses_paxg_when_mt5_cold(monkeypatch):
+    session = FakeSession(OHLC_PAYLOAD)
+
+    def _empty(*_a, **_k):
+        return []
+
+    monkeypatch.setattr(
+        "signals.storage.fetch_mt5_candles", _empty,
+    )
+    with pytest.raises(RuntimeError, match="refusing PAXG"):
+        fetch_candles(
+            "XAUUSD",
+            interval="1m",
+            session=session,
+            supabase_url="https://example.supabase.co",
+            service_key="service-key",
+        )
+    # Without Supabase creds, Kraken PAXG still works (offline / legacy).
+    candles = fetch_candles("XAUUSD", interval="1m", session=session)
+    assert session.last_params["pair"] == "PAXGUSD"
+    assert len(candles) == 2
+
+
 def test_fetch_candles_raises_on_http_error():
     session = FakeSession({}, status=500)
     with pytest.raises(RuntimeError):

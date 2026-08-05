@@ -354,7 +354,8 @@ def fetch_mt5_last_tick(symbol: str, supabase_url: str, service_key: str,
 
 
 MT5_CANDLE_MAX_BARS = 720
-MT5_CANDLE_MIN_BARS = 80
+# Match ict structure window so a partial EA backfill can go live sooner.
+MT5_CANDLE_MIN_BARS = 60
 # Last closed M1 bar must be newer than now - this (seconds).
 MT5_CANDLE_MAX_STALE_SECONDS = 180
 
@@ -420,7 +421,11 @@ def fetch_mt5_candles(symbol: str, timeframe: str, supabase_url: str,
             rows = data.get("candles") or []
         else:
             return []
-        return merge_mt5_candle_bars([], rows)
+        rows = merge_mt5_candle_bars([], rows)
+        # Drop discontinuous junk clusters (old test seed), keep live chain.
+        if rows:
+            rows = purge_mt5_candle_outliers(rows, float(rows[-1]["close"]))
+        return rows
     except Exception as exc:
         print(f"mt5 candles fetch failed ({type(exc).__name__})")
         return []
@@ -456,6 +461,62 @@ def mt5_rows_to_candles(rows: list):
             volume=float(row.get("volume") or 0),
         ))
     return out
+
+
+def purge_mt5_candle_outliers(rows: list, ref_price: float | None = None,
+                              *, max_drift: float = 15.0) -> list:
+    """Drop discontinuous junk clusters (e.g. old ~4120 test seed).
+
+    Walks newest→oldest. Keeps a bar when its close is within `max_drift` of
+    the previous kept close (chained), so gradual live moves survive while a
+    sudden jump to an old seed cluster is cut off.
+    """
+    if not rows:
+        return []
+    ordered = merge_mt5_candle_bars([], rows)
+    kept_rev: list = []
+    try:
+        ref = float(ref_price) if ref_price is not None else float(ordered[-1]["close"])
+    except (TypeError, ValueError, KeyError):
+        return ordered
+    for row in reversed(ordered):
+        try:
+            close = float(row["close"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        if abs(close - ref) <= max_drift:
+            kept_rev.append(row)
+            ref = close
+    kept_rev.reverse()
+    return kept_rev
+
+
+def write_mt5_candles(symbol: str, timeframe: str, rows: list,
+                      supabase_url: str, service_key: str,
+                      session=None) -> None:
+    """Overwrite the MT5 candle Storage object with `rows`."""
+    import json
+
+    session = session or requests.Session()
+    path = _mt5_candle_object_path(symbol, timeframe)
+    payload = json.dumps({
+        "symbol": canonical_symbol(symbol),
+        "timeframe": timeframe,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "candles": merge_mt5_candle_bars([], rows),
+    }).encode("utf-8")
+    response = session.post(
+        f"{supabase_url}/storage/v1/object/{MT5_TICK_BUCKET}/{path}",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Content-Type": "application/json",
+            "x-upsert": "true",
+        },
+        data=payload,
+        timeout=20,
+    )
+    response.raise_for_status()
 
 
 def mt5_tick_is_fresh(tick: dict | None, *,

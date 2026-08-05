@@ -18,9 +18,9 @@ export function MethodologyNote() {
       </p>
       <p>
         <strong className="text-slate/80">Gold prices track your broker.</strong> XAUUSD
-        1m structure uses closed MT5 candles from your EA when the buffer is warm;
-        entry snaps to a fresh MT5 mid. Gold signals are refused if the EA tick is
-        stale. 1m scalps only fire in London/New York sessions.
+        1m structure requires closed MT5 candles from your EA (no PAXG mix);
+        entry snaps to a fresh MT5 mid. Gold signals are refused if candles or
+        ticks are stale. 1m scalps only fire in London/New York sessions.
       </p>
       <p>
         Every closed signal is included — nothing is cherry-picked or removed after the fact. Outcomes are
