@@ -46,6 +46,19 @@ def test_load_config_comma_list(monkeypatch):
     assert cfg.sealion_api_key == "sk-a"
 
 
+def test_load_config_reads_telegram_alerts_chat_id(monkeypatch):
+    _set_all_keys(monkeypatch)
+    monkeypatch.setenv("TELEGRAM_ALERTS_CHAT_ID", "  -100999  ")
+    cfg = load_config()
+    assert cfg.telegram_alerts_chat_id == "-100999"
+
+
+def test_load_config_telegram_alerts_chat_id_defaults_empty(monkeypatch):
+    _set_all_keys(monkeypatch)
+    cfg = load_config()
+    assert cfg.telegram_alerts_chat_id == ""
+
+
 @pytest.mark.parametrize("missing", [
     "SEALION_API_KEY",
     "SUPABASE_URL",

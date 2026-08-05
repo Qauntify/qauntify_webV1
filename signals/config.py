@@ -43,6 +43,10 @@ class Config:
     # Optional: alerts are skipped when either is empty.
     telegram_bot_token: str = ""
     telegram_channel_id: str = ""
+    # Separate ops chat for session-healthcheck alerts — deliberately not the
+    # public signals channel, so "a session went silent" doesn't show up
+    # next to trade calls. Healthcheck alerts are skipped when unset.
+    telegram_alerts_chat_id: str = ""
     symbols: tuple = ("BTCUSD", "ETHUSD", "XAUUSD", "GBPUSD")
     timeframe: str = "1h"
     candle_limit: int = 201  # one extra: the last fetched candle is still forming and gets dropped
@@ -77,4 +81,5 @@ def load_config() -> Config:
             os.environ.get("TELEGRAM_CHANNEL_ID", "").strip()
             or os.environ.get("TELEGRAM_CHAT_ID", "").strip()
         ),
+        telegram_alerts_chat_id=os.environ.get("TELEGRAM_ALERTS_CHAT_ID", "").strip(),
     )

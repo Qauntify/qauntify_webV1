@@ -1,0 +1,34 @@
+name: Session healthcheck
+
+# Catches a session going silent (zero ai_events) the way 15m cloud_mss did
+# for 5 days straight before anyone noticed. Runs less often than the engine
+# itself — the default 3h lookback in signals/healthcheck.py needs room to
+# actually observe a gap, not just catch the engine between runs.
+on:
+  schedule:
+    - cron: "20 */3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Check session health
+        run: python -m scripts.session_healthcheck
+        env:
+          SEALION_API_KEY1: ${{ secrets.SEALION_API_KEY1 }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          # Deliberately separate from TELEGRAM_CHANNEL_ID (the public signals
+          # channel) — set this to a private chat/channel id so ops alerts
+          # never show up next to trade calls. Alerts are skipped (logged to
+          # the run output only) until this secret is set.
+          TELEGRAM_ALERTS_CHAT_ID: ${{ secrets.TELEGRAM_ALERTS_CHAT_ID }}
