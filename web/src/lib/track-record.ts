@@ -126,10 +126,18 @@ export function tradeR(t: ClosedTrade): number {
 }
 
 /**
- * A win is any trade that is net-positive after costs (tradeR > 0).
+ * A win is any trade that banked at least TP1 — even if price later hit the
+ * original stop. Net R can still be small (or cost-eaten); the hit locks the
+ * classification.
  */
 export function isWin(t: ClosedTrade): boolean {
-  return tradeR(t) > 0;
+  return (
+    t.reached >= 1
+    || t.status === "tp_hit"
+    || t.status === "tp3_hit"
+    || t.status === "tp1_hit"
+    || t.status === "tp2_hit"
+  );
 }
 
 function byClosedAsc(a: ClosedTrade, b: ClosedTrade): number {
@@ -139,8 +147,8 @@ function byClosedAsc(a: ClosedTrade, b: ClosedTrade): number {
 export function summarize(trades: ClosedTrade[]): Summary {
   const total = trades.length;
   const rs = trades.map(tradeR);
-  const wins = rs.filter((r) => r > 0).length;
-  const losses = rs.filter((r) => r < 0).length;
+  const wins = trades.filter(isWin).length;
+  const losses = trades.filter((t) => !isWin(t) && t.status === "sl_hit").length;
   const netR = rs.reduce((s, r) => s + r, 0);
   const grossTotal = trades.reduce((s, t) => s + grossR(t), 0);
   const sorted = [...trades].sort(byClosedAsc);

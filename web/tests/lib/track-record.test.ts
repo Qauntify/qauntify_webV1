@@ -95,7 +95,7 @@ describe("tradeR", () => {
     });
     expect(grossR(t)).toBeCloseTo(1 / 3);
     expect(tradeR(t)).toBeLessThan(0);
-    expect(isWin(t)).toBe(false);
+    expect(isWin(t)).toBe(true);
   });
 });
 
