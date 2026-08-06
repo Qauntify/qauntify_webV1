@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { SignalsBrowse } from "@/components/signals/SignalsBrowse";
-import { SignalsBrowseFilter } from "@/components/signals/SignalsBrowseFilter";
 import { Notice } from "@/components/shared/Notice";
 import { parseSignalsBrowseTab } from "@/lib/signals-browse-tabs";
 import { createClient } from "@/lib/supabase/server";
@@ -31,17 +30,9 @@ export default async function Dashboard({
   return (
     <DashboardShell
       title="Signals"
-      subtitle="AI-confirmed setups — refreshed every engine run"
-      actions={
-        <SignalsBrowseFilter
-          tab={currentTab}
-          basePath="/dashboard"
-          showLabel={false}
-          compact
-        />
-      }
+      subtitle="Lane desk — AI sessions, BBMA live, War Room"
     >
-      <div className="w-full space-y-6">
+      <div className="w-full space-y-5">
         {admin === "denied" ? (
           <Notice tone="error">
             Admin access is not enabled for {user.email}. Ask the
@@ -49,19 +40,11 @@ export default async function Dashboard({
           </Notice>
         ) : null}
 
-        <div className="flex flex-wrap items-center justify-between gap-4 lg:hidden">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold">Signals</h1>
-            <p className="text-sm text-slate">
-              AI-confirmed setups — refreshed every engine run
-            </p>
-          </div>
-          <SignalsBrowseFilter
-            tab={currentTab}
-            basePath="/dashboard"
-            showLabel={false}
-            compact
-          />
+        <div className="lg:hidden">
+          <h1 className="text-xl font-bold tracking-tight">Signals</h1>
+          <p className="mt-1 text-sm text-slate">
+            Pick a lane, then trade the levels.
+          </p>
         </div>
 
         <SignalsBrowse
@@ -69,6 +52,7 @@ export default async function Dashboard({
           page={page}
           accessToken={accessToken}
           basePath="/dashboard"
+          desk
           hideFilter
         />
       </div>
