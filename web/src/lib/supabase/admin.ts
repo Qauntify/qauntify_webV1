@@ -711,6 +711,68 @@ export async function mergeMt5Candles(
   }
 }
 
+/** True when a non-shadow open/tp1/tp2 signal already exists for symbol+tf.
+ * Mirrors signals/storage.py:open_symbols_for_timeframe for one pair. */
+export async function hasOpenLiveSignal(
+  symbol: string,
+  timeframe: string,
+): Promise<boolean | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/signals?symbol=eq.${encodeURIComponent(symbol)}` +
+        `&timeframe=eq.${encodeURIComponent(timeframe)}` +
+        `&status=in.(open,tp1_hit,tp2_hit)&closed_at=is.null` +
+        `&shadow=is.false&select=id&limit=1`,
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
+    );
+    if (!response.ok) return null;
+    const rows = (await response.json()) as unknown[];
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    return null;
+  }
+}
+
+export type LiveSignalInsert = {
+  id: string;
+  symbol: string;
+  timeframe: string;
+  direction: string;
+  entry: number;
+  stop_loss: number;
+  take_profit: number;
+  take_profit_1: number;
+  take_profit_2: number;
+  take_profit_3: number;
+  confidence: number;
+  rationale: string;
+  indicators: Record<string, unknown>;
+  news_headlines: unknown[];
+  created_at: string;
+  shadow: boolean;
+  experiment: string | null;
+};
+
+/** Insert a live (delivered) signal row — MT5 EA publish path. */
+export async function insertLiveSignal(
+  row: LiveSignalInsert,
+): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+  try {
+    const response = await fetch(`${cfg.url}/rest/v1/signals`, {
+      method: "POST",
+      headers: { ...headers(cfg.serviceKey), Prefer: "return=minimal" },
+      body: JSON.stringify(row),
+    });
+    return response.ok || response.status === 201;
+  } catch {
+    return false;
+  }
+}
+
 /** TS mirror of signals/storage.py:update_signal_outcome's conditional-claim
  * mode: PATCH only applies if the row is still in `expectedStatus`, so the
  * slow Python cron and this instant path can't both win the same event. */

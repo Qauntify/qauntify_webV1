@@ -71,6 +71,49 @@ export function formatOutcomeAlert(row: SignalRow, outcome: string): string {
   return lines.join("\n");
 }
 
+/** Ported from signals/telegram_client.py:format_alert — live signal publish. */
+export function formatSignalAlert(opts: {
+  symbol: string;
+  timeframe: string;
+  direction: string;
+  entry: number;
+  stopLoss: number;
+  takeProfit: number;
+  takeProfit2: number;
+  takeProfit3: number;
+  confidence: number;
+  rationale: string;
+}): string {
+  const direction = opts.direction.toUpperCase();
+  const dot = directionDot(opts.direction);
+  const risk = Math.abs(opts.entry - opts.stopLoss);
+  const reward = Math.abs(opts.takeProfit3 - opts.entry);
+  const rr = risk > 0 ? (reward / risk).toFixed(2) : "—";
+  const filled = Math.max(0, Math.min(10, Math.round(opts.confidence / 10)));
+  const bar = "█".repeat(filled) + "░".repeat(10 - filled);
+  return [
+    `${dot} <b>${esc(direction)} SIGNAL</b>`,
+    DIVIDER,
+    `💹 <b>${esc(opts.symbol)}</b>  ·  <code>${esc(opts.timeframe)}</code>`,
+    "",
+    `🎯 <b>Confidence</b>  ${opts.confidence}%`,
+    bar,
+    "",
+    `📊 <b>Trade Setup</b>`,
+    `📍 Entry   ${price(opts.entry)}`,
+    `🛑 Stop    ${price(opts.stopLoss)}`,
+    `🎯 TP1     ${price(opts.takeProfit)}`,
+    `🎯 TP2     ${price(opts.takeProfit2)}`,
+    `🎯 TP3     ${price(opts.takeProfit3)}`,
+    `↩️ Once TP1 hits, <b>move your stop to entry</b>`,
+    "",
+    `⚖️ <b>Risk : Reward</b>  1 : ${rr}`,
+    "",
+    `🧠 <b>Analysis</b>`,
+    `<i>${esc(opts.rationale)}</i>`,
+  ].join("\n");
+}
+
 export async function sendTelegramMessage(
   text: string,
   botToken: string,
