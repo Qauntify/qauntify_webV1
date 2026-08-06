@@ -81,6 +81,22 @@ describe("getSignals", () => {
     );
   });
 
+  it("excludes MT5 BBMA rows from the swing 1h session", async () => {
+    const fetchFn = mockFetch([]);
+    await getSignals(10, undefined, "1h");
+    const [url] = fetchFn.mock.calls[0];
+    expect(url).toContain("timeframe=eq.1h");
+    expect(url).toContain("indicators->>source.neq.mt5_ea");
+  });
+
+  it("loads the BBMA live lane", async () => {
+    const fetchFn = mockFetch([]);
+    await getSignals(10, undefined, undefined, "bbma");
+    const [url] = fetchFn.mock.calls[0];
+    expect(url).toContain("timeframe.eq.bbma");
+    expect(url).toContain("indicators->>source.eq.mt5_ea");
+  });
+
   it("omits the timeframe filter when no session is requested", async () => {
     const fetchFn = mockFetch([]);
     await getSignals(10);

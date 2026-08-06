@@ -124,7 +124,9 @@ DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 # "floor" is the War Room / Trading Floor stream — candles are 15m, but the
 # stored timeframe stays distinct so it never collides with scalp uniqueness
 # or appears in Super Scalp / Scalp / Swing tabs.
-TIMEFRAME_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "1h": 60, "floor": 15}
+TIMEFRAME_MINUTES = {
+    "1m": 1, "5m": 5, "15m": 15, "1h": 60, "floor": 15, "bbma": 60,
+}
 
 # Terminal full wins (legacy tp_hit + multi-TP final).
 WIN_STATUSES = frozenset({"tp_hit", "tp3_hit"})
@@ -199,6 +201,12 @@ AUXILIARY_SESSIONS = (
     TradingSession(
         name="war_room", timeframe="floor", max_open_days=2,
         strategy="cloud_mss",
+    ),
+    # Taught BBMA live lane from QauntifyBBMA.mq5 (no AI gate). Distinct
+    # timeframe so it never shares the Swing (1h) tab or open-signal lock.
+    TradingSession(
+        name="bbma", timeframe="bbma", max_open_days=14,
+        strategy="bbma_reentry",
     ),
 )
 

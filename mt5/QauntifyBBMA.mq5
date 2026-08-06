@@ -13,7 +13,7 @@
 //+------------------------------------------------------------------+
 #property strict
 #property copyright "Qauntify"
-#property version   "1.03"
+#property version   "1.04"
 
 input string AppSymbol       = "XAUUSD";
 input string SignalApiUrl    = "https://web-seven-pi-76.vercel.app/api/mt5/signal";
@@ -507,7 +507,7 @@ bool Publish(const string direction, const double entry, const double stop,
    string biasStr = bias > 0 ? "up" : (bias < 0 ? "down" : "null");
    string trigJson = trigger == "" ? "null" : ("\"" + trigger + "\"");
    string body = StringFormat(
-      "{\"symbol\":\"%s\",\"timeframe\":\"1h\",\"direction\":\"%s\","
+      "{\"symbol\":\"%s\",\"timeframe\":\"bbma\",\"direction\":\"%s\","
       "\"entry\":%.5f,\"stop_loss\":%.5f,\"take_profit\":%.5f,"
       "\"take_profit_2\":%.5f,\"take_profit_3\":%.5f,\"confidence\":%d,"
       "\"rationale\":\"Taught BBMA %s (H4 bias %s, MT5 EA live)\","

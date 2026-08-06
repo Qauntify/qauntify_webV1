@@ -1,5 +1,5 @@
 import type { Signal } from "@/lib/signals";
-import { formatPrice, formatRelativeTime } from "@/lib/format";
+import { formatPrice, formatRelativeTime, formatTimeframe } from "@/lib/format";
 
 function DirectionBadge({ direction }: { direction: Signal["direction"] }) {
   const isLong = direction === "long";
@@ -117,7 +117,7 @@ export function TradeTicket({
           <DirectionBadge direction={signal.direction} />
           <span className="font-mono text-sm font-bold">{signal.symbol}</span>
           <span className="rounded bg-line px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase text-slate">
-            {signal.timeframe}
+            {formatTimeframe(signal.timeframe)}
           </span>
           <StatusBadge status={signal.status} closedAt={signal.closedAt} />
         </div>

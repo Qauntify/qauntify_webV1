@@ -132,6 +132,24 @@ const EXCLUDE_SHADOW = "&shadow=is.false";
 // War Room Floor signals use timeframe=floor — keep them out of strategy tabs.
 const EXCLUDE_WAR_ROOM = "&timeframe=neq.floor";
 const WAR_ROOM_ONLY = "&timeframe=eq.floor";
+// Taught BBMA live lane (EA). New rows use timeframe=bbma; early publishes
+// were 1h + indicators.source=mt5_ea — include both so the tab is complete.
+const BBMA_LANE =
+  "&or=(timeframe.eq.bbma,and(timeframe.eq.1h,indicators->>source.eq.mt5_ea))";
+// Swing 1h must not list EA BBMA rows that still carry timeframe=1h.
+const EXCLUDE_BBMA_FROM_1H =
+  "&or=(indicators->>source.is.null,indicators->>source.neq.mt5_ea)";
+
+export type SignalLane = "default" | "bbma";
+
+function sessionQuery(timeframe?: string, lane: SignalLane = "default"): string {
+  if (lane === "bbma") return BBMA_LANE;
+  if (timeframe === "1h") {
+    return `&timeframe=eq.1h${EXCLUDE_BBMA_FROM_1H}`;
+  }
+  if (timeframe) return `&timeframe=eq.${timeframe}`;
+  return "";
+}
 
 async function fetchRows(
   query: string,
@@ -301,10 +319,11 @@ export async function getSignals(
   limit = 50,
   accessToken?: string,
   timeframe?: string,
+  lane: SignalLane = "default",
 ): Promise<Signal[]> {
-  const timeframeFilter = timeframe ? `&timeframe=eq.${timeframe}` : "";
+  const filter = sessionQuery(timeframe, lane);
   const rows = await fetchRows(
-    `select=*${timeframeFilter}&order=created_at.desc&limit=${limit}`,
+    `select=*${filter}&order=created_at.desc&limit=${limit}`,
     accessToken,
   );
   if (!rows) return [];
@@ -315,6 +334,35 @@ const ZERO_STATS: Stats = {
   total: 0, avgConfidence: 0, longs: 0, shorts: 0,
   tpHits: 0, partialWins: 0, slHits: 0, winRate: null,
 };
+
+function statsFromSignals(signals: Signal[]): Stats {
+  const total = signals.length;
+  if (total === 0) return ZERO_STATS;
+  const longs = signals.filter((s) => s.direction === "long").length;
+  const shorts = total - longs;
+  const avgConfidence =
+    signals.reduce((sum, s) => sum + s.confidence, 0) / total;
+  const tpHits = signals.filter(
+    (s) => s.status === "tp_hit" || s.status === "tp3_hit",
+  ).length;
+  const partialWins = signals.filter(
+    (s) =>
+      (s.status === "tp1_hit" || s.status === "tp2_hit") && s.closedAt != null,
+  ).length;
+  const slHits = signals.filter((s) => s.status === "sl_hit").length;
+  const wins = tpHits + partialWins;
+  const closed = wins + slHits;
+  return {
+    total,
+    avgConfidence,
+    longs,
+    shorts,
+    tpHits,
+    partialWins,
+    slHits,
+    winRate: closed > 0 ? Math.round((wins / closed) * 100) : null,
+  };
+}
 
 type StatsRpcRow = {
   total: number;
@@ -329,7 +377,12 @@ type StatsRpcRow = {
 export async function getStats(
   accessToken?: string,
   timeframe?: string,
+  lane: SignalLane = "default",
 ): Promise<Stats> {
+  if (lane === "bbma") {
+    // RPC is timeframe-only; BBMA lane mixes bbma + legacy 1h mt5_ea rows.
+    return statsFromSignals(await getSignals(500, accessToken, undefined, "bbma"));
+  }
   // Aggregated server-side by supabase/schema.sql's get_signal_stats() —
   // counting/averaging in Postgres instead of pulling every matching row
   // into Node. Degrades to zero stats (not a crash) if the RPC 404s, e.g.
@@ -370,10 +423,11 @@ export async function getSignalsPaginated(
   accessToken?: string,
   timeframe?: string,
   pageSize = SIGNALS_PAGE_SIZE,
+  lane: SignalLane = "default",
 ): Promise<SignalsPage> {
   const safePage = Number.isInteger(page) && page > 0 ? page : 1;
-  const timeframeFilter = timeframe ? `&timeframe=eq.${timeframe}` : "";
-  const query = `select=*${timeframeFilter}&order=created_at.desc`;
+  const filter = sessionQuery(timeframe, lane);
+  const query = `select=*${filter}&order=created_at.desc`;
 
   const result = await fetchRowsPaginated(query, safePage, pageSize, accessToken);
   if (!result) {

@@ -7,6 +7,7 @@ import {
   getSignals,
   getStats,
   getWarRoomSignalsPaginated,
+  type SignalLane,
 } from "@/lib/signals";
 
 const SESSIONS = [
@@ -15,6 +16,7 @@ const SESSIONS = [
     title: "Super scalping",
     subtitle: "5m ICT — sweep, CHoCH, FVG retest (tight SL/TP)",
     timeframe: "5m",
+    lane: "default" as SignalLane,
     emptyHint: "Super-scalp setups fire on each 5m close (cron backup ~10m).",
   },
   {
@@ -22,14 +24,24 @@ const SESSIONS = [
     title: "Scalping",
     subtitle: "15m chart — cloud rejection + CHoCH setups",
     timeframe: "15m",
+    lane: "default" as SignalLane,
     emptyHint: "Scalp setups fire on each 15m close (cron backup ~10m).",
   },
   {
     id: "swing",
     title: "Swing",
-    subtitle: "1h chart — slower, higher-conviction setups",
+    subtitle: "1h chart — AI-confirmed higher-conviction setups",
     timeframe: "1h",
+    lane: "default" as SignalLane,
     emptyHint: "Swing setups fire on each 1h close (cron backup ~10m).",
+  },
+  {
+    id: "bbma",
+    title: "BBMA",
+    subtitle: "XAU H1 taught BBMA — live MT5 EA, no AI gate",
+    timeframe: "bbma",
+    lane: "bbma" as SignalLane,
+    emptyHint: "Pins on the EA chart; new setups publish here on each H1 close.",
   },
 ] as const;
 
@@ -38,13 +50,15 @@ export type SignalsBrowseTab =
   | "war-room"
   | "super-scalping"
   | "scalping"
-  | "swing";
+  | "swing"
+  | "bbma";
 
 export function parseSignalsBrowseTab(tab: string | undefined): SignalsBrowseTab {
   if (tab === "war-room") return "war-room";
   if (tab === "swing") return "swing";
   if (tab === "scalping") return "scalping";
   if (tab === "super-scalping") return "super-scalping";
+  if (tab === "bbma") return "bbma";
   return "all";
 }
 
@@ -52,18 +66,20 @@ async function SessionSection({
   title,
   subtitle,
   timeframe,
+  lane,
   emptyHint,
   accessToken,
 }: {
   title: string;
   subtitle: string;
   timeframe: string;
+  lane: SignalLane;
   emptyHint: string;
   accessToken: string | undefined;
 }) {
   const [signals, stats] = await Promise.all([
-    getSignals(30, accessToken, timeframe),
-    getStats(accessToken, timeframe),
+    getSignals(30, accessToken, timeframe === "bbma" ? undefined : timeframe, lane),
+    getStats(accessToken, timeframe === "bbma" ? "bbma" : timeframe, lane),
   ]);
 
   return (
@@ -125,6 +141,7 @@ export async function SignalsBrowse({
             ["super-scalping", "Super scalp (5m)"],
             ["scalping", "Scalping (15m)"],
             ["swing", "Swing (1h)"],
+            ["bbma", "BBMA"],
           ] as const
         ).map(([id, label]) => (
           <Link
@@ -170,10 +187,11 @@ export async function SignalsBrowse({
       ) : tab === "all" ? (
         SESSIONS.map((s) => (
           <SessionSection
-            key={s.timeframe}
+            key={s.id}
             title={s.title}
             subtitle={s.subtitle}
             timeframe={s.timeframe}
+            lane={s.lane}
             emptyHint={s.emptyHint}
             accessToken={accessToken}
           />
@@ -184,6 +202,7 @@ export async function SignalsBrowse({
           title={SESSIONS.find((s) => s.id === tab)!.title}
           subtitle={SESSIONS.find((s) => s.id === tab)!.subtitle}
           timeframe={SESSIONS.find((s) => s.id === tab)!.timeframe}
+          lane={SESSIONS.find((s) => s.id === tab)!.lane}
           emptyHint={SESSIONS.find((s) => s.id === tab)!.emptyHint}
         />
       )}

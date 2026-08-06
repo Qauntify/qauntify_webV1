@@ -25,7 +25,8 @@ type SignalsTab =
   | "war-room"
   | "super-scalping"
   | "scalping"
-  | "swing";
+  | "swing"
+  | "bbma";
 
 function parseTab(tab: string | undefined): SignalsTab {
   if (tab === "llm") return "llm";
@@ -33,6 +34,7 @@ function parseTab(tab: string | undefined): SignalsTab {
   if (tab === "swing") return "swing";
   if (tab === "scalping") return "scalping";
   if (tab === "super-scalping") return "super-scalping";
+  if (tab === "bbma") return "bbma";
   return "all";
 }
 
@@ -45,6 +47,7 @@ export default async function AdminSignals({
   const { tab, page: pageParam } = await searchParams;
 
   const currentTab = parseTab(tab);
+  const isBbmaTab = currentTab === "bbma";
   const timeframe =
     currentTab === "swing"
       ? "1h"
@@ -52,7 +55,9 @@ export default async function AdminSignals({
         ? "15m"
         : currentTab === "super-scalping"
           ? "5m"
-          : undefined;
+          : currentTab === "bbma"
+            ? "bbma"
+            : undefined;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const isLlmTab = currentTab === "llm";
   const isWarRoomTab = currentTab === "war-room";
@@ -61,8 +66,18 @@ export default async function AdminSignals({
   const [pageData, stats] = await Promise.all([
     isWarRoomTab
       ? getWarRoomSignalsPaginated(page, token)
-      : getSignalsPaginated(page, token, timeframe),
-    getStats(token, timeframe),
+      : getSignalsPaginated(
+          page,
+          token,
+          isBbmaTab ? undefined : timeframe,
+          undefined,
+          isBbmaTab ? "bbma" : "default",
+        ),
+    getStats(
+      token,
+      isBbmaTab ? "bbma" : timeframe,
+      isBbmaTab ? "bbma" : "default",
+    ),
   ]);
   const { signals, total, totalPages, pageSize } = pageData;
   const exportableCount = stats.tpHits + stats.partialWins + stats.slHits;
@@ -71,7 +86,9 @@ export default async function AdminSignals({
     currentTab !== "all" ? { tab: currentTab } : {};
 
   const exportTab =
-    currentTab === "llm" || currentTab === "war-room" ? "all" : currentTab;
+    currentTab === "llm" || currentTab === "war-room" || currentTab === "bbma"
+      ? "all"
+      : currentTab;
 
   const title = isWarRoomTab
     ? "War Room Signals"
@@ -130,6 +147,12 @@ export default async function AdminSignals({
           className={`nav-item ${currentTab === "swing" ? "nav-item-active" : ""}`}
         >
           Swing (1h)
+        </Link>
+        <Link
+          href="/admin/signals?tab=bbma"
+          className={`nav-item ${currentTab === "bbma" ? "nav-item-active" : ""}`}
+        >
+          BBMA
         </Link>
       </nav>
 

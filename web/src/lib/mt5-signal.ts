@@ -1,7 +1,8 @@
 /** Validate + normalize payloads from the MT5 BBMA EA → /api/mt5/signal. */
 
 export const MT5_LIVE_SYMBOLS = new Set(["XAUUSD"]);
-export const MT5_LIVE_TIMEFRAMES = new Set(["1h"]);
+/** Lane id for the signals page tab — not a candle interval. */
+export const MT5_LIVE_TIMEFRAMES = new Set(["bbma"]);
 export const MT5_LIVE_STRATEGIES = new Set(["bbma_reentry", "bbma_extreme"]);
 
 export type Mt5SignalBody = {

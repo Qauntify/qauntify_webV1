@@ -5,7 +5,7 @@ import { formatSignalAlert } from "@/lib/outcome-alert";
 
 const valid = {
   symbol: "XAUUSD",
-  timeframe: "1h",
+  timeframe: "bbma",
   direction: "long" as const,
   entry: 2650,
   stop_loss: 2640,

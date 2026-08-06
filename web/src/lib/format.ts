@@ -7,6 +7,13 @@ export function formatPrice(value: number): string {
   });
 }
 
+/** Display label for stored timeframe / lane ids. */
+export function formatTimeframe(timeframe: string): string {
+  if (timeframe === "bbma") return "BBMA";
+  if (timeframe === "floor") return "Floor";
+  return timeframe;
+}
+
 // "07 Jul 2026, 12:30" style absolute timestamp; "never" for null.
 export function formatDateTime(iso: string | null): string {
   if (!iso) return "never";

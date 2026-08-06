@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { Signal } from "@/lib/signals";
-import { formatDateTime, formatPrice, formatRelativeTime } from "@/lib/format";
+import { formatDateTime, formatPrice, formatRelativeTime, formatTimeframe } from "@/lib/format";
 import { SignalWarRoomSection } from "@/components/dashboard/SignalWarRoomSection";
 
 function riskReward(signal: Signal): string {
@@ -233,7 +233,7 @@ export function SignalCard({
           </div>
           <div className="mt-2 flex items-center gap-2">
             <span className="rounded-md bg-accent/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-accent border border-accent/20">
-              {signal.timeframe}
+              {formatTimeframe(signal.timeframe)}
             </span>
             <StatusPill status={signal.status} closedAt={signal.closedAt} />
           </div>
@@ -360,7 +360,7 @@ function SignalDetailModal({
               </h2>
               <DirectionPill direction={signal.direction} />
               <span className="rounded bg-accent-soft px-2 py-0.5 font-mono text-[10px] font-medium uppercase text-accent">
-                {signal.timeframe}
+                {formatTimeframe(signal.timeframe)}
               </span>
               <StatusPill status={signal.status} closedAt={signal.closedAt} />
             </div>
