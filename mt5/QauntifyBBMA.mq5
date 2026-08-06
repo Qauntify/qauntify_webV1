@@ -13,11 +13,12 @@
 //+------------------------------------------------------------------+
 #property strict
 #property copyright "Qauntify"
-#property version   "1.00"
+#property version   "1.01"
 
 input string AppSymbol       = "XAUUSD";
 input string SignalApiUrl    = "https://web-seven-pi-76.vercel.app/api/mt5/signal";
 input string WebhookSecret   = "906f61d7dbd1aa2c72cc19a7a0382ce61434f8bd5d6d6c65466912d9808097e4";
+input bool   ShowBbmaStack   = true;  // draw BB + MA5/10 H/L + EMA50 on chart
 input int    Confidence      = 75;
 input int    MinBars         = 60;
 input double StopAtrBuffer   = 0.5;
@@ -32,6 +33,7 @@ long     signalsFail = 0;
 long     signalsSkip = 0;
 int      lastHttp = 0;
 string   lastStatus = "idle";
+string   plottedNames[];   // short names we added (removed on deinit)
 
 //--- indicator handles (H1) -----------------------------------------------
 int hBb1 = INVALID_HANDLE;
@@ -44,6 +46,31 @@ int hAtr1 = INVALID_HANDLE;
 //--- H4 bias --------------------------------------------------------------
 int hBb4 = INVALID_HANDLE;
 int hEma504 = INVALID_HANDLE;
+
+void PlotAdd(const int handle)
+  {
+   if(!ShowBbmaStack || handle == INVALID_HANDLE) return;
+   if(!ChartIndicatorAdd(0, 0, handle))
+     {
+      Print("QauntifyBBMA: ChartIndicatorAdd failed ", GetLastError());
+      return;
+     }
+   int n = ChartIndicatorsTotal(0, 0);
+   if(n <= 0) return;
+   int sz = ArraySize(plottedNames);
+   ArrayResize(plottedNames, sz + 1);
+   plottedNames[sz] = ChartIndicatorName(0, 0, n - 1);
+  }
+
+void PlotClear()
+  {
+   for(int i = 0; i < ArraySize(plottedNames); i++)
+     {
+      if(StringLen(plottedNames[i]) > 0)
+         ChartIndicatorDelete(0, 0, plottedNames[i]);
+     }
+   ArrayResize(plottedNames, 0);
+  }
 
 string AuthHeaders()
   {
@@ -407,12 +434,22 @@ int OnInit()
       Print("QauntifyBBMA: indicator init failed");
       return INIT_FAILED;
      }
+
+   // Visible BBMA stack (same handles used for signal math). Best on H1 chart.
+   PlotAdd(hBb1);      // BB 20/2
+   PlotAdd(hMa5h1);    // LWMA 5 High
+   PlotAdd(hMa5l1);    // LWMA 5 Low
+   PlotAdd(hMa10h1);   // LWMA 10 High
+   PlotAdd(hMa10l1);   // LWMA 10 Low
+   PlotAdd(hEma501);   // EMA 50
+
    UpdateComment();
    return INIT_SUCCEEDED;
   }
 
 void OnDeinit(const int reason)
   {
+   PlotClear();
    IndicatorRelease(hBb1);
    IndicatorRelease(hMa5h1);
    IndicatorRelease(hMa5l1);
