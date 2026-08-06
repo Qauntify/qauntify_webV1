@@ -1,14 +1,19 @@
-import Link from "next/link";
-
 import { SignalsGrid } from "@/components/dashboard/SignalsGrid";
 import { StatsBar } from "@/components/dashboard/StatsBar";
 import { Pagination } from "@/components/shared/Pagination";
+import {
+  SignalsBrowseFilter,
+  type SignalsBrowseTab,
+} from "@/components/signals/SignalsBrowseFilter";
 import {
   getSignals,
   getStats,
   getWarRoomSignalsPaginated,
   type SignalLane,
 } from "@/lib/signals";
+
+export type { SignalsBrowseTab };
+export { parseSignalsBrowseTab } from "@/components/signals/SignalsBrowseFilter";
 
 const SESSIONS = [
   {
@@ -44,23 +49,6 @@ const SESSIONS = [
     emptyHint: "Pins on the EA chart; new setups publish here on each H1 close.",
   },
 ] as const;
-
-export type SignalsBrowseTab =
-  | "all"
-  | "war-room"
-  | "super-scalping"
-  | "scalping"
-  | "swing"
-  | "bbma";
-
-export function parseSignalsBrowseTab(tab: string | undefined): SignalsBrowseTab {
-  if (tab === "war-room") return "war-room";
-  if (tab === "swing") return "swing";
-  if (tab === "scalping") return "scalping";
-  if (tab === "super-scalping") return "super-scalping";
-  if (tab === "bbma") return "bbma";
-  return "all";
-}
 
 async function SessionSection({
   title,
@@ -128,35 +116,9 @@ export async function SignalsBrowse({
     ? await getWarRoomSignalsPaginated(page, accessToken)
     : null;
 
-  const tabHref = (t: string) =>
-    t === "all" ? basePath : `${basePath}?tab=${t}`;
-
   return (
     <div className="w-full space-y-6">
-      <nav className="relative flex gap-2 overflow-x-auto border-b border-line pb-4">
-        {(
-          [
-            ["all", "All"],
-            ["war-room", "War Room"],
-            ["super-scalping", "Super scalp (5m)"],
-            ["scalping", "Scalping (15m)"],
-            ["swing", "Swing (1h)"],
-            ["bbma", "BBMA"],
-          ] as const
-        ).map(([id, label]) => (
-          <Link
-            key={id}
-            href={tabHref(id)}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              tab === id
-                ? "bg-ink text-paper"
-                : "border border-line bg-card text-slate hover:border-ink/20 hover:text-ink"
-            }`}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
+      <SignalsBrowseFilter tab={tab} basePath={basePath} />
 
       {isWarRoomTab && warRoomPage ? (
         <section>

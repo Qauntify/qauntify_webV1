@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { DeleteSignalButton } from "@/components/admin/DeleteSignalButton";
 import { ExportSignalsMenu } from "@/components/admin/ExportSignalsMenu";
 import { SignalCard } from "@/components/dashboard/SignalsGrid";
 import { Pagination } from "@/components/shared/Pagination";
+import {
+  ADMIN_SIGNAL_FILTER_OPTIONS,
+  SignalsBrowseFilter,
+} from "@/components/signals/SignalsBrowseFilter";
 import { requireAdminPage } from "@/lib/admin-guard";
 import {
   getSignalsPaginated,
@@ -111,50 +114,14 @@ export default async function AdminSignals({
         <ExportSignalsMenu tab={exportTab} disabled={exportableCount === 0} />
       </div>
 
-      <nav className="mb-6 flex gap-2 overflow-x-auto border-b border-line pb-4">
-        <Link
-          href="/admin/signals"
-          className={`nav-item ${currentTab === "all" ? "nav-item-active" : ""}`}
-        >
-          All
-        </Link>
-        <Link
-          href="/admin/signals?tab=llm"
-          className={`nav-item ${isLlmTab ? "nav-item-active" : ""}`}
-        >
-          LLM
-        </Link>
-        <Link
-          href="/admin/signals?tab=war-room"
-          className={`nav-item ${isWarRoomTab ? "nav-item-active" : ""}`}
-        >
-          War Room
-        </Link>
-        <Link
-          href="/admin/signals?tab=super-scalping"
-          className={`nav-item ${currentTab === "super-scalping" ? "nav-item-active" : ""}`}
-        >
-          Super scalp (5m)
-        </Link>
-        <Link
-          href="/admin/signals?tab=scalping"
-          className={`nav-item ${currentTab === "scalping" ? "nav-item-active" : ""}`}
-        >
-          Scalping (15m)
-        </Link>
-        <Link
-          href="/admin/signals?tab=swing"
-          className={`nav-item ${currentTab === "swing" ? "nav-item-active" : ""}`}
-        >
-          Swing (1h)
-        </Link>
-        <Link
-          href="/admin/signals?tab=bbma"
-          className={`nav-item ${currentTab === "bbma" ? "nav-item-active" : ""}`}
-        >
-          BBMA
-        </Link>
-      </nav>
+      <div className="mb-6">
+        <SignalsBrowseFilter
+          tab={currentTab}
+          basePath="/admin/signals"
+          options={ADMIN_SIGNAL_FILTER_OPTIONS}
+          label="Filter"
+        />
+      </div>
 
       {isLlmTab || isWarRoomTab ? (
         <div className="mb-5 rounded-lg border border-accent/20 bg-accent-soft/40 px-4 py-3">
