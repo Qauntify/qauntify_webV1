@@ -4,10 +4,12 @@ name: Session healthcheck
 # for 5 days straight before anyone noticed. Runs less often than the engine
 # itself — the default 3h lookback in signals/healthcheck.py needs room to
 # actually observe a gap, not just catch the engine between runs.
+#
+# Scheduled by cron-job.org → /api/cron/trigger-healthcheck (no GitHub cron).
 on:
-  schedule:
-    - cron: "20 */3 * * *"
   workflow_dispatch: {}
+  repository_dispatch:
+    types: [run-session-healthcheck]
 
 jobs:
   check:

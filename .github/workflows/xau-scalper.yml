@@ -2,16 +2,14 @@ name: XAUUSD 1m scalper
 
 # Scans XAUUSD on 1m every ~60s using ict_fvg, confirmed with the spare
 # SEA-LION keys (KEY5-7). Only KEY5-7 are passed in, so the scalper never
-# touches the main engine's KEY1-4. One job runs a ~58-minute loop; a
-# best-effort hourly schedule restarts it (gold is closed weekends, so gaps
-# then don't matter). Free — the repo is public.
+# touches the main engine's KEY1-4. One job runs a ~58-minute loop.
+# Scheduled by cron-job.org → /api/cron/trigger-xau-scalper (hourly restart;
+# gold is closed weekends, so gaps then don't matter). Free — public repo.
 
 on:
   workflow_dispatch: {}
   repository_dispatch:
     types: [run-xau-scalper]
-  schedule:
-    - cron: "2 * * * *"
 
 concurrency:
   group: xau-scalper

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { dispatchEngineWorkflow, dispatchXauScalperRestart } from "@/lib/github-engine";
+import {
+  dispatchEngineWorkflow,
+  dispatchHealthcheckWorkflow,
+  dispatchWarRoomWorkflow,
+  dispatchXauScalperRestart,
+} from "@/lib/github-engine";
 
 describe("dispatchEngineWorkflow", () => {
   afterEach(() => {
@@ -59,6 +64,44 @@ describe("dispatchXauScalperRestart", () => {
         method: "POST",
         body: JSON.stringify({ event_type: "run-xau-scalper" }),
       }),
+    );
+  });
+});
+
+describe("dispatchWarRoomWorkflow", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.GITHUB_DISPATCH_TOKEN;
+  });
+
+  it("dispatches run-war-room", async () => {
+    process.env.GITHUB_DISPATCH_TOKEN = "ghp_test";
+    const fetchMock = vi.fn().mockResolvedValue({ status: 204, text: async () => "" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await dispatchWarRoomWorkflow();
+    expect(result.ok).toBe(true);
+    expect(fetchMock.mock.calls[0][1].body).toBe(
+      JSON.stringify({ event_type: "run-war-room" }),
+    );
+  });
+});
+
+describe("dispatchHealthcheckWorkflow", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.GITHUB_DISPATCH_TOKEN;
+  });
+
+  it("dispatches run-session-healthcheck", async () => {
+    process.env.GITHUB_DISPATCH_TOKEN = "ghp_test";
+    const fetchMock = vi.fn().mockResolvedValue({ status: 204, text: async () => "" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await dispatchHealthcheckWorkflow();
+    expect(result.ok).toBe(true);
+    expect(fetchMock.mock.calls[0][1].body).toBe(
+      JSON.stringify({ event_type: "run-session-healthcheck" }),
     );
   });
 });

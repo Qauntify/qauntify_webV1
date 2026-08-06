@@ -1,6 +1,12 @@
 const DEFAULT_REPO = "Qauntify/qauntify_webV1";
-const WORKFLOW_FILE = "engine.yml";
-const XAU_SCALPER_EVENT_TYPE = "run-xau-scalper";
+const ENGINE_WORKFLOW_FILE = "engine.yml";
+
+export const REPO_EVENTS = {
+  engine: "run-engine",
+  xauScalper: "run-xau-scalper",
+  warRoom: "run-war-room",
+  healthcheck: "run-session-healthcheck",
+} as const;
 
 export type DispatchResult =
   | { ok: true }
@@ -41,13 +47,14 @@ async function dispatchResult(response: Response): Promise<DispatchResult> {
   };
 }
 
+/** workflow_dispatch on engine.yml (cron-job.org primary path). */
 export async function dispatchEngineWorkflow(): Promise<DispatchResult> {
   const target = resolveGithubTarget();
   if ("error" in target) return target.error;
   const { token, owner, name } = target;
 
   const response = await fetch(
-    `https://api.github.com/repos/${owner}/${name}/actions/workflows/${WORKFLOW_FILE}/dispatches`,
+    `https://api.github.com/repos/${owner}/${name}/actions/workflows/${ENGINE_WORKFLOW_FILE}/dispatches`,
     {
       method: "POST",
       headers: {
@@ -64,9 +71,7 @@ export async function dispatchEngineWorkflow(): Promise<DispatchResult> {
   return dispatchResult(response);
 }
 
-/** Restarts the XAU scalper via the repository_dispatch event xau-scalper.yml
- * already listens for — used by the watchdog when its heartbeat goes stale. */
-export async function dispatchXauScalperRestart(): Promise<DispatchResult> {
+async function dispatchRepositoryEvent(eventType: string): Promise<DispatchResult> {
   const target = resolveGithubTarget();
   if ("error" in target) return target.error;
   const { token, owner, name } = target;
@@ -81,10 +86,23 @@ export async function dispatchXauScalperRestart(): Promise<DispatchResult> {
         "X-GitHub-Api-Version": "2022-11-28",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ event_type: XAU_SCALPER_EVENT_TYPE }),
+      body: JSON.stringify({ event_type: eventType }),
       cache: "no-store",
     },
   );
 
   return dispatchResult(response);
+}
+
+/** Restarts the XAU scalper — used by cron-job.org and the heartbeat watchdog. */
+export async function dispatchXauScalperRestart(): Promise<DispatchResult> {
+  return dispatchRepositoryEvent(REPO_EVENTS.xauScalper);
+}
+
+export async function dispatchWarRoomWorkflow(): Promise<DispatchResult> {
+  return dispatchRepositoryEvent(REPO_EVENTS.warRoom);
+}
+
+export async function dispatchHealthcheckWorkflow(): Promise<DispatchResult> {
+  return dispatchRepositoryEvent(REPO_EVENTS.healthcheck);
 }

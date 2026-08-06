@@ -3,10 +3,10 @@ name: War Room Floor
 # Independent Trading Floor pipeline — BTC/ETH/XAU on 15m candidates, gated by
 # Structure / Momentum / Manager on FLOOR_LLM_* keys only. Never uses
 # SEALION_API_KEY1–4 and never writes into Super Scalp / Scalp / Swing tabs.
+#
+# Scheduled by cron-job.org → /api/cron/trigger-war-room (no GitHub cron).
 
 on:
-  schedule:
-    - cron: "7,17,27,37,47,57 * * * *"
   workflow_dispatch: {}
   repository_dispatch:
     types: [run-war-room]

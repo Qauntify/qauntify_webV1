@@ -1,11 +1,7 @@
 name: Signals engine
 
 on:
-  schedule:
-    # Backup schedule only — GitHub cron is best-effort and often drifts hours.
-    # Primary trigger: external cron hits /api/cron/trigger-engine every 10 min.
-    # Odd minutes avoid peak queue times at :00 and :30 UTC.
-    - cron: "3,13,23,33,43,53 * * * *"
+  # Scheduled by cron-job.org → /api/cron/trigger-engine (no GitHub cron).
   workflow_dispatch: {}
   repository_dispatch:
     types: [run-engine]

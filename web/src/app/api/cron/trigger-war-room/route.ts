@@ -1,10 +1,10 @@
-import { dispatchEngineWorkflow } from "@/lib/github-engine";
+import { dispatchWarRoomWorkflow } from "@/lib/github-engine";
 import { handleCronDispatch } from "@/lib/cron-dispatch";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  return handleCronDispatch(request, dispatchEngineWorkflow, "signals-engine");
+  return handleCronDispatch(request, dispatchWarRoomWorkflow, "war-room-floor");
 }
 
 export async function POST(request: Request) {
