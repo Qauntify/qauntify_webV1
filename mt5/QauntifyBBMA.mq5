@@ -17,7 +17,7 @@
 
 input string AppSymbol       = "XAUUSD";
 input string SignalApiUrl    = "https://web-seven-pi-76.vercel.app/api/mt5/signal";
-input string WebhookSecret   = "";  // paste same Bearer secret as TickPush
+input string WebhookSecret   = "906f61d7dbd1aa2c72cc19a7a0382ce61434f8bd5d6d6c65466912d9808097e4";
 input int    Confidence      = 75;
 input int    MinBars         = 60;
 input double StopAtrBuffer   = 0.5;
