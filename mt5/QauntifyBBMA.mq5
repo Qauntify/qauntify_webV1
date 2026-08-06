@@ -13,12 +13,13 @@
 //+------------------------------------------------------------------+
 #property strict
 #property copyright "Qauntify"
-#property version   "1.01"
+#property version   "1.02"
 
 input string AppSymbol       = "XAUUSD";
 input string SignalApiUrl    = "https://web-seven-pi-76.vercel.app/api/mt5/signal";
 input string WebhookSecret   = "906f61d7dbd1aa2c72cc19a7a0382ce61434f8bd5d6d6c65466912d9808097e4";
 input bool   ShowBbmaStack   = true;  // draw BB + MA5/10 H/L + EMA50 on chart
+input bool   ShowSignalPins  = true;  // BUY/SELL arrows + entry/SL/TP lines
 input int    Confidence      = 75;
 input int    MinBars         = 60;
 input double StopAtrBuffer   = 0.5;
@@ -70,6 +71,81 @@ void PlotClear()
          ChartIndicatorDelete(0, 0, plottedNames[i]);
      }
    ArrayResize(plottedNames, 0);
+  }
+
+void PinsClear()
+  {
+   int total = ObjectsTotal(0, 0, -1);
+   for(int i = total - 1; i >= 0; i--)
+     {
+      string name = ObjectName(0, i, 0, -1);
+      if(StringFind(name, "QB_") == 0)
+         ObjectDelete(0, name);
+     }
+  }
+
+void LevelLine(const string name, const datetime t0, const datetime t1,
+               const double price, const color clr, const int style, const int width)
+  {
+   ObjectDelete(0, name);
+   if(!ObjectCreate(0, name, OBJ_TREND, 0, t0, price, t1, price)) return;
+   ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
+   ObjectSetInteger(0, name, OBJPROP_STYLE, style);
+   ObjectSetInteger(0, name, OBJPROP_WIDTH, width);
+   ObjectSetInteger(0, name, OBJPROP_RAY_RIGHT, false);
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, name, OBJPROP_BACK, false);
+  }
+
+void PinSignal(const string direction, const double entry, const double stop,
+               const double tp1, const string strategy)
+  {
+   if(!ShowSignalPins) return;
+
+   datetime t = iTime(_Symbol, PERIOD_H1, 1);
+   if(t == 0) return;
+   double low = iLow(_Symbol, PERIOD_H1, 1);
+   double high = iHigh(_Symbol, PERIOD_H1, 1);
+   bool isBuy = (direction == "long");
+   color markClr = isBuy ? clrLime : clrRed;
+   datetime tEnd = t + (datetime)(PeriodSeconds(PERIOD_H1) * 8);
+   string id = "QB_" + IntegerToString((long)t) + (isBuy ? "_B" : "_S");
+
+   // Arrow on the signal candle
+   string arrow = id + "_arr";
+   ObjectDelete(0, arrow);
+   ENUM_OBJECT arrowType = isBuy ? OBJ_ARROW_BUY : OBJ_ARROW_SELL;
+   double arrowPrice = isBuy ? low : high;
+   if(ObjectCreate(0, arrow, arrowType, 0, t, arrowPrice))
+     {
+      ObjectSetInteger(0, arrow, OBJPROP_COLOR, markClr);
+      ObjectSetInteger(0, arrow, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, arrow, OBJPROP_SELECTABLE, false);
+     }
+
+   // BUY / SELL tag
+   string tag = id + "_tag";
+   ObjectDelete(0, tag);
+   double tagPrice = isBuy ? (low - (high - low) * 0.15 - 0.5)
+                           : (high + (high - low) * 0.15 + 0.5);
+   if(ObjectCreate(0, tag, OBJ_TEXT, 0, t, tagPrice))
+     {
+      string label = (isBuy ? "BUY " : "SELL ") + strategy;
+      ObjectSetString(0, tag, OBJPROP_TEXT, label);
+      ObjectSetInteger(0, tag, OBJPROP_COLOR, markClr);
+      ObjectSetInteger(0, tag, OBJPROP_FONTSIZE, 9);
+      ObjectSetString(0, tag, OBJPROP_FONT, "Arial Bold");
+      ObjectSetInteger(0, tag, OBJPROP_ANCHOR,
+                       isBuy ? ANCHOR_UPPER : ANCHOR_LOWER);
+      ObjectSetInteger(0, tag, OBJPROP_SELECTABLE, false);
+     }
+
+   // Entry / SL / TP1 pins
+   LevelLine(id + "_en", t, tEnd, entry, clrDodgerBlue, STYLE_SOLID, 2);
+   LevelLine(id + "_sl", t, tEnd, stop, clrOrangeRed, STYLE_DASH, 1);
+   LevelLine(id + "_tp", t, tEnd, tp1, clrMediumSeaGreen, STYLE_DASH, 1);
+
+   ChartRedraw(0);
   }
 
 string AuthHeaders()
@@ -450,6 +526,7 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    PlotClear();
+   PinsClear();
    IndicatorRelease(hBb1);
    IndicatorRelease(hMa5h1);
    IndicatorRelease(hMa5l1);
@@ -482,7 +559,10 @@ void OnTick()
                             strategy, side);
 
    if(found)
+     {
+      PinSignal(direction, entry, stop, tp1, strategy);
       Publish(direction, entry, stop, tp1, tp2, tp3, strategy, trigger, side, bias);
+     }
    else
       lastStatus = StringFormat("no setup (H4 %s)",
          bias > 0 ? "up" : (bias < 0 ? "down" : "flat"));
