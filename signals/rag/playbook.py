@@ -10,23 +10,26 @@ PLAYBOOK_CHUNKS = (
         "strategy": "ict_fvg",
         "title": "5m ICT FVG confirm gate",
         "body": (
-            "Super-scalp ict_fvg: confirm only when liquidity sweep, CHoCH, "
-            "and Fair Value Gap retest all printed recently. Prefer 15m HTF "
-            "agreement. Tight targets (0.5R/1R/1.5R) — reject if stop is wide "
-            "vs ATR or the retest is stale. No session killzone requirement; "
-            "structure quality matters more than clock. When borderline but "
-            "technically valid, lean confirm with moderate confidence."
+            "Super-scalp ict_fvg: confirm when any valid path printed — "
+            "(1) liquidity sweep + CHoCH + FVG retest, (2) sweep + CHoCH "
+            "without FVG, or (3) sweep reclaim alone. Prefer 15m HTF "
+            "agreement but soft disagreement is not a hard veto. Tight "
+            "targets (0.5R/1R/1.5R) — reject if stop is invalid vs entry or "
+            "targets sit on the wrong side. No session killzone requirement; "
+            "structure quality matters more than clock. Missing FVG alone is "
+            "not a reject when CHoCH or reclaim is present. When borderline "
+            "but technically valid, lean confirm with moderate confidence."
         ),
     },
     {
         "strategy": "ict_fvg",
         "title": "5m ICT FVG reject cues",
         "body": (
-            "Reject ict_fvg when news/calendar clearly fights the direction, "
-            "when HTF 15m trend opposes, when FVG was already filled through, "
-            "or when entry sits mid-range with no clear displacement. Do not "
-            "stretch confidence on noisy Asia-only ranges if London/NY are "
-            "about to reprice the level."
+            "Reject ict_fvg when stop is already invalid vs entry, when "
+            "targets are on the wrong side of entry, when there is no "
+            "sweep and no CHoCH and no reclaim at all, or when the structure "
+            "label is stale/nonsensical. Do not reject solely for missing "
+            "FVG or soft 15m HTF disagreement on 5m."
         ),
     },
     {

@@ -15,21 +15,21 @@ const SESSIONS = [
     title: "Super scalping",
     subtitle: "5m ICT — sweep, CHoCH, FVG retest (tight SL/TP)",
     timeframe: "5m",
-    emptyHint: "Super-scalp setups are checked every ~10 minutes on the 5m chart.",
+    emptyHint: "Super-scalp setups fire on each 5m close (cron backup ~10m).",
   },
   {
     id: "scalping",
     title: "Scalping",
     subtitle: "15m chart — cloud rejection + CHoCH setups",
     timeframe: "15m",
-    emptyHint: "Scalp setups are checked every ~10 minutes on the 15m chart.",
+    emptyHint: "Scalp setups fire on each 15m close (cron backup ~10m).",
   },
   {
     id: "swing",
     title: "Swing",
     subtitle: "1h chart — slower, higher-conviction setups",
     timeframe: "1h",
-    emptyHint: "Swing setups are checked every ~10 minutes on the 1h chart.",
+    emptyHint: "Swing setups fire on each 1h close (cron backup ~10m).",
   },
 ] as const;
 
@@ -143,16 +143,6 @@ export async function SignalsBrowse({
 
       {isWarRoomTab && warRoomPage ? (
         <section>
-          <div className="mb-5 rounded-lg border border-accent/20 bg-accent-soft/40 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-              War Room
-            </p>
-            <p className="mt-1 text-sm text-slate">
-              Trading Floor only — Structure / Momentum / Manager decide these
-              trades. Separate from Super Scalp / Scalp / Swing.
-            </p>
-          </div>
-
           {warRoomPage.signals.length > 0 ? (
             <>
               <SignalsGrid

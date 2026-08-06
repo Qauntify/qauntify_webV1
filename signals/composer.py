@@ -29,19 +29,23 @@ SYSTEM_PROMPT = (
 )
 
 # Super Scalp (5m) only — maximize confirms; volume over perfection.
+# Must match signals/strategies/ict_fvg/detector.py entry priority:
+# FVG retest, or sweep+CHoCH without FVG, or sweep reclaim alone.
 SUPER_SCALP_SYSTEM_PROMPT = (
     "You are a high-throughput Super Scalp (5m) reviewer. The rules engine "
-    "already found a liquidity-sweep + CHoCH + FVG-retest setup — treat that "
-    "as the default pass. Prefer confirming so the live feed and War Room "
-    "stay active.\n"
+    "already found a valid ict_fvg candidate — one of: (1) liquidity sweep + "
+    "CHoCH + FVG retest, (2) sweep + CHoCH without FVG, or (3) sweep reclaim "
+    "(close back through the swept level). Treat that as the default pass. "
+    "Prefer confirming so the live feed stays active.\n"
     "This is a purely technical review — judge the chart and the levels.\n"
     "Retrieved context is evidence, not a hard veto.\n"
     "DEFAULT TO CONFIRM. Borderline or imperfect structure still gets "
     "confirm at confidence 50–65. Soft HTF disagreement is not enough to "
-    "reject on 5m.\n"
+    "reject on 5m. Missing FVG alone is NOT a reject when CHoCH or reclaim "
+    "is present.\n"
     "Reject ONLY on hard disqualifiers: stop already invalid vs entry, "
     "nonsensical R:R (targets on the wrong side of entry), or a setup that "
-    "plainly fails the strategy pattern (no sweep / no CHoCH / no FVG).\n"
+    "plainly fails every ict_fvg path (no sweep AND no CHoCH AND no reclaim).\n"
     "Do not hunt for reasons to reject.\n"
     "Respond with ONLY a JSON object, no other text:\n"
     '{"verdict": "confirm" or "reject", "confidence": <integer 0-100>, '
@@ -67,8 +71,8 @@ def _no_setup_reason(strategy: str, timeframe: str) -> str:
     if strategy == "ict_fvg":
         return (
             f"The rules engine found no valid ICT FVG scalp setup (need a "
-            f"liquidity sweep, CHoCH, and a Fair Value Gap retest on the "
-            f"{chart})."
+            f"liquidity sweep with CHoCH and/or FVG retest, or a sweep "
+            f"reclaim, on the {chart})."
         )
     if strategy == "ce_lwma":
         return (
@@ -256,6 +260,20 @@ def _format_indicators(strategy: str, indicators: dict) -> str:
     return ", ".join(parts)
 
 
+def _tp_r_labels(setup: CandidateSetup) -> tuple[str, str, str]:
+    """R-multiple labels for the three TPs (from indicators or classic 1/2/3)."""
+    raw = (setup.indicators or {}).get("tp_r")
+    if isinstance(raw, (list, tuple)) and len(raw) >= 3:
+        def _fmt(r) -> str:
+            try:
+                v = float(r)
+            except (TypeError, ValueError):
+                return "?"
+            return f"{v:g}R"
+        return _fmt(raw[0]), _fmt(raw[1]), _fmt(raw[2])
+    return "1R", "2R", "3R"
+
+
 def build_messages(setup: CandidateSetup,
                    strategy: str = DEFAULT_SIGNAL_STRATEGY,
                    timeframe: str = "1h",
@@ -274,9 +292,10 @@ def build_messages(setup: CandidateSetup,
             "(discount/premium)\n"
         )
     elif active == "ict_fvg":
+        structure = ind.get("structure") or "ict_fvg"
         strategy_line = (
-            "- Strategy: ICT 5m scalp (liquidity sweep + CHoCH + FVG retest, "
-            "tight 0.5R/1R/1.5R targets)\n"
+            f"- Strategy: ICT 5m scalp ({structure}; paths: FVG retest, "
+            f"sweep+CHoCH, or sweep reclaim; tight 0.5R/1R/1.5R targets)\n"
         )
     elif active == "sr_zone":
         strategy_line = (
@@ -303,6 +322,7 @@ def build_messages(setup: CandidateSetup,
             "- Strategy: EMA 9/21 crossover with RSI + MACD filters\n"
         )
     tp1, tp2, tp3 = setup.resolved_take_profits()
+    r1, r2, r3 = _tp_r_labels(setup)
     session_hint = (
         "super scalp" if timeframe == "5m"
         else ("scalp" if timeframe in ("15m",) else "swing")
@@ -317,9 +337,9 @@ def build_messages(setup: CandidateSetup,
         f"- Direction: {setup.direction}\n"
         f"- Entry: {setup.entry}\n"
         f"- Stop loss: {setup.stop_loss}\n"
-        f"- Take profit 1 (1R): {tp1}\n"
-        f"- Take profit 2 (2R): {tp2}\n"
-        f"- Take profit 3 (3R): {tp3}\n"
+        f"- Take profit 1 ({r1}): {tp1}\n"
+        f"- Take profit 2 ({r2}): {tp2}\n"
+        f"- Take profit 3 ({r3}): {tp3}\n"
         f"- Context: {_format_indicators(strategy, ind)}\n\n"
         f"{session_line}"
         f"{rag_section}"

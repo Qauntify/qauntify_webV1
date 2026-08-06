@@ -320,6 +320,17 @@ def _reject(symbol, cfg, *, timeframe, report_kind, event_kind, rationale,
 # keeping storage and outcome-tracker load roughly flat.
 SHADOW_SAMPLE_RATE = float(os.environ.get("SHADOW_SAMPLE_RATE", "0.0"))
 
+# Per-strategy floor on top of admin min_store_confidence. cloud_mss is live
+# on 15m despite measured-weak expectancy — require a stronger LLM confirm
+# until forward net R earns a lower bar.
+STRATEGY_MIN_STORE_CONFIDENCE = {
+    "cloud_mss": 70,
+}
+
+
+def effective_min_store_confidence(strategy: str, admin_floor: int) -> int:
+    return max(int(admin_floor or 0), STRATEGY_MIN_STORE_CONFIDENCE.get(strategy, 0))
+
 
 def _shadow_sampled() -> bool:
     """Whether to record this rejected setup.
@@ -791,6 +802,11 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
             confidence=confirmation.confidence, session=session,
         )
 
+    # Re-check after LLM / gold snap — a concurrent run may have stored first.
+    if already_signaled(setup, cfg, timeframe=timeframe, session=session):
+        print(f"[{symbol}] lost race to concurrent store, skipping publish")
+        return ScanResult(candles=candles)
+
     signal = make_signal(setup, confirmation, [], timeframe=timeframe)
     signal = attach_chart(
         signal, candles,
@@ -840,9 +856,11 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
 
 
 def maybe_run_debate(signal, cfg, session=None):
-    """Best-effort AI War Room debate about a stored signal — a showcase that
-    never affects the signal. Runs the 3 technical agents and saves the
-    transcript."""
+    """Optional showcase debate about an already-stored signal.
+
+    Not called from `main()` — the live War Room Floor is `war_room_scan`
+    (separate workflow). Kept for tests / ad-hoc ops; never gates delivery.
+    """
     if not cfg.supabase_url or not cfg.supabase_service_key:
         return
     try:
@@ -930,6 +948,21 @@ def main(sessions=None):
     candles_by_symbol: dict = {}
     session_label = "+".join(s.timeframe for s in trading_sessions)
     try:
+        # Housekeeping before scans so drifted gold opens free the unique slot.
+        try:
+            live, source = resolve_gold_live_price(
+                cfg, session=db_session, require_mt5=False,
+            )
+            n = expire_drifted_open_gold_signals(
+                live, cfg.supabase_url, cfg.supabase_service_key,
+                session=db_session,
+            )
+            if n:
+                print(f"[XAUUSD] expired {n} drifted open signal(s) "
+                      f"vs {source} {live:.2f}")
+        except Exception as exc:
+            print(f"[XAUUSD] drift expire skipped ({type(exc).__name__})")
+
         settings = fetch_bot_settings(cfg.supabase_url, cfg.supabase_service_key,
                                       session=db_session)
         keys = cfg.sealion_api_keys or (cfg.sealion_api_key,)
@@ -962,11 +995,12 @@ def main(sessions=None):
                     recent_events=recent_events, recent_signals=recent_signals,
                     open_symbols=open_symbols,
                     confluence_timeframe=trading_session.confluence_timeframe,
-                    min_store_confidence=settings.min_store_confidence,
+                    min_store_confidence=effective_min_store_confidence(
+                        session_strategy, settings.min_store_confidence,
+                    ),
                 ), None
             except Exception as exc:
                 return None, exc
-
         workers = max(1, min(len(settings.symbols), MAX_SCAN_WORKERS))
 
         # Each session (scalp, swing) scans all symbols in parallel, one session

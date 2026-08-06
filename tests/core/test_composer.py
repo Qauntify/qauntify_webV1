@@ -70,6 +70,35 @@ def test_super_scalp_5m_uses_hot_confirm_prompt():
     assert "default to confirm" in system
     assert "50–65" in system or "50-65" in system
     assert "lean confirm" not in system  # balanced prompt phrasing
+    # Must match ict_fvg priority: FVG retest OR sweep+CHoCH OR reclaim.
+    assert "reclaim" in system
+    assert "no fvg" in system or "without fvg" in system
+
+
+def test_ict_fvg_messages_use_actual_tp_r_labels():
+    setup = CandidateSetup(
+        symbol="XAUUSD", direction="long", entry=4100.0,
+        stop_loss=4090.0, take_profit=4105.0,
+        take_profit_2=4110.0, take_profit_3=4115.0,
+        indicators={
+            "strategy": "ict_fvg", "structure": "bullish_sweep_reclaim",
+            "sweep_level": 4092.0, "atr": 3.0, "tp_r": [0.5, 1.0, 1.5],
+        },
+    )
+    user = build_messages(setup, strategy="ict_fvg", timeframe="5m")[1]["content"]
+    assert "Take profit 1 (0.5R)" in user
+    assert "Take profit 2 (1.0R)" in user or "Take profit 2 (1R)" in user
+    assert "Take profit 3 (1.5R)" in user
+    assert "reclaim" in user.lower() or "sweep" in user.lower()
+
+
+def test_ict_fvg_no_setup_mentions_reclaim_fallback():
+    from signals.composer import no_setup_rationale
+
+    text = no_setup_rationale(
+        "XAUUSD", "5m", {"atr": 2.0}, strategy="ict_fvg",
+    ).lower()
+    assert "reclaim" in text or "choch" in text
 
 
 def test_non_5m_keeps_balanced_confirm_prompt():

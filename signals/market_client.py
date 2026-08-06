@@ -237,7 +237,10 @@ def _trim_candles(candles: list[Candle], limit, start_time) -> list[Candle]:
 
 def _gold_from_mt5_1m(symbol, interval, limit, start_time, session,
                      supabase_url, service_key):
-    """Return MT5-based candles (with forming bar) or None to fall back."""
+    """Return (candles, rows, status).
+
+    status is "ok", "cold", or "shallow" (1m warm but HTF resample too thin).
+    """
     from signals.storage import (
         fetch_mt5_candles,
         mt5_candles_usable,
@@ -248,7 +251,7 @@ def _gold_from_mt5_1m(symbol, interval, limit, start_time, session,
         symbol, "1m", supabase_url, service_key, session=session,
     )
     if not mt5_candles_usable(rows):
-        return None, rows
+        return None, rows, "cold"
 
     m1 = mt5_rows_to_candles(rows)
     minutes = INTERVAL_MINUTES[interval]
@@ -257,7 +260,7 @@ def _gold_from_mt5_1m(symbol, interval, limit, start_time, session,
     else:
         candles = resample_candles(m1, minutes)
         if len(candles) < _MT5_RESAMPLE_MIN_BARS:
-            return None, rows
+            return None, rows, "shallow"
 
     candles = _trim_candles(candles, limit, start_time)
     candles = _append_forming_bar(candles, interval)
@@ -265,7 +268,7 @@ def _gold_from_mt5_1m(symbol, interval, limit, start_time, session,
     label = "1m" if minutes == 1 else f"{interval}←1m"
     print(f"[{canonical_symbol(symbol)}] using MT5 {label} candles "
           f"({closed} closed bars)")
-    return candles, rows
+    return candles, rows, "ok"
 
 
 def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
@@ -277,9 +280,10 @@ def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
     For XAUUSD with Supabase credentials, prefers the MT5 closed-bar buffer
     (direct 1m, or resampled for wider intervals). When that buffer is cold
     or too shallow, 1m raises by default so detection never mixes PAXG
-    structure with broker entries; wider intervals fall back to Kraken PAXG.
-    Pass `require_mt5_1m=False` to allow a Kraken PAXG fallback on 1m
-    (legacy / offline).
+    structure with broker entries; wider intervals also refuse PAXG when the
+    1m buffer is warm but too thin to resample (avoids PAXG structure + MT5
+    entry mix). Pass `require_mt5_1m=False` to allow a Kraken PAXG fallback
+    on 1m (legacy / offline).
     """
     session = session or requests.Session()
     if interval not in INTERVAL_MINUTES:
@@ -292,16 +296,23 @@ def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
     )
 
     if gold and supabase_url and service_key:
-        candles, rows = _gold_from_mt5_1m(
+        candles, rows, status = _gold_from_mt5_1m(
             symbol, interval, limit, start_time, session,
             supabase_url, service_key,
         )
         if candles is not None:
             return candles
-        if must_mt5:
+        if must_mt5 or status == "shallow":
+            reason = (
+                f"MT5 1m warm but too shallow to resample {interval}"
+                if status == "shallow"
+                else (
+                    f"MT5 1m candles unavailable "
+                    f"(have {len(rows)} bars; need EA backfill)"
+                )
+            )
             raise RuntimeError(
-                f"MT5 1m candles unavailable for {canonical_symbol(symbol)} "
-                f"(have {len(rows)} bars; need EA backfill) — "
+                f"{reason} for {canonical_symbol(symbol)} — "
                 f"refusing PAXG structure"
             )
 

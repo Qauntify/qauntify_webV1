@@ -34,6 +34,11 @@ def _patch_engine_lock(monkeypatch):
                         lambda *a, **k: True)
     monkeypatch.setattr(run_module, "release_engine_lock",
                         lambda *a, **k: None)
+    # Gold drift housekeeping would hit live MT5/Kraken without this.
+    monkeypatch.setattr(run_module, "resolve_gold_live_price",
+                        lambda *a, **k: (2000.0, "test"))
+    monkeypatch.setattr(run_module, "expire_drifted_open_gold_signals",
+                        lambda *a, **k: 0)
 
 
 SETUP = CandidateSetup(
@@ -1122,6 +1127,12 @@ def test_fifteen_minute_session_runs_cloud_mss():
     # off ALL_SESSIONS by timeframe, so a duplicate would win at random.
     timeframes = [s.timeframe for s in ALL_SESSIONS]
     assert len(timeframes) == len(set(timeframes))
+
+
+def test_cloud_mss_has_raised_store_confidence_floor():
+    assert run_module.effective_min_store_confidence("cloud_mss", 0) >= 70
+    assert run_module.effective_min_store_confidence("cloud_mss", 80) == 80
+    assert run_module.effective_min_store_confidence("ict_fvg", 0) == 0
 
 
 def test_load_market_data_fetches_h1_for_cloud_mss(monkeypatch):

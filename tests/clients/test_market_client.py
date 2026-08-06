@@ -210,16 +210,16 @@ def test_fetch_xauusd_5m_falls_back_to_paxg_when_mt5_shallow(monkeypatch):
         "signals.storage.fetch_mt5_candles",
         lambda *a, **k: _fresh_mt5_1m_rows(80),  # only ~16 five-minute bars
     )
-    candles = fetch_candles(
-        "XAUUSD",
-        interval="5m",
-        limit=50,
-        session=session,
-        supabase_url="https://example.supabase.co",
-        service_key="service-key",
-    )
-    assert session.last_params["pair"] == "PAXGUSD"
-    assert len(candles) == 2
+    # Warm-but-shallow must refuse PAXG mix (structure vs broker entry).
+    with pytest.raises(RuntimeError, match="refusing PAXG"):
+        fetch_candles(
+            "XAUUSD",
+            interval="5m",
+            limit=50,
+            session=session,
+            supabase_url="https://example.supabase.co",
+            service_key="service-key",
+        )
 
 
 def test_fetch_candles_raises_on_http_error():
