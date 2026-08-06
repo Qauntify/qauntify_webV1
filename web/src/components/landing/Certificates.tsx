@@ -3,8 +3,6 @@
 import Image from "next/image";
 import { useEffect, useId, useState } from "react";
 
-import { SectionHeader } from "@/components/shared/SectionHeader";
-
 type Certificate = {
   id: string;
   src: string;
@@ -104,37 +102,37 @@ export function Certificates() {
         target="_blank"
         rel="noopener noreferrer"
         tabIndex={interactive ? undefined : -1}
-        className="cert-card flex h-full w-[240px] flex-col justify-between sm:w-[280px]"
+        className="flex h-full w-[180px] flex-col justify-between rounded-md border border-line bg-white p-3 sm:w-[200px]"
       >
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-accent">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-ink">
             PDF
           </p>
-          <p className="mt-3 text-base font-semibold text-ink">{cert.title}</p>
-          <p className="mt-1 text-sm text-slate">{cert.issuer}</p>
+          <p className="mt-1.5 text-sm font-semibold text-ink">{cert.title}</p>
+          <p className="mt-0.5 text-xs text-slate">{cert.issuer}</p>
         </div>
-        <p className="mt-6 text-sm font-medium text-accent">Open certificate</p>
+        <p className="mt-3 text-xs font-semibold text-ink">Open →</p>
       </a>
     ) : (
       <button
         type="button"
         onClick={interactive ? () => setActive(cert) : undefined}
         tabIndex={interactive ? undefined : -1}
-        className="cert-card group w-[240px] text-left sm:w-[280px]"
+        className="w-[180px] rounded-md border border-line bg-white p-1.5 text-left transition-colors hover:border-ink/30 sm:w-[200px]"
         aria-label={`View ${cert.issuer} — ${cert.title}`}
       >
-        <div className="relative aspect-[4/3] overflow-hidden rounded-md bg-line/40">
+        <div className="relative aspect-[4/3] overflow-hidden rounded bg-[#e2e8f0]">
           <Image
             src={cert.src}
             alt={`${cert.issuer}: ${cert.title}`}
             fill
-            sizes="280px"
-            className="object-cover transition duration-300 group-hover:scale-[1.03]"
+            sizes="200px"
+            className="object-cover"
           />
         </div>
-        <div className="mt-3">
+        <div className="mt-1.5 px-1 pb-0.5">
           <p className="text-sm font-semibold text-ink">{cert.issuer}</p>
-          <p className="mt-0.5 text-xs text-slate">{cert.title}</p>
+          <p className="text-xs text-slate">{cert.title}</p>
         </div>
       </button>
     );
@@ -144,7 +142,7 @@ export function Certificates() {
       {[0, 1].map((copy) => (
         <ul
           key={copy}
-          className="flex shrink-0 items-stretch gap-4 pr-4"
+          className="flex shrink-0 items-stretch gap-2.5 pr-2.5"
           aria-hidden={copy === 1}
         >
           {CERTIFICATES.map((cert) => (
@@ -158,28 +156,35 @@ export function Certificates() {
   );
 
   return (
-    <section id="proof" className="section-block overflow-hidden bg-card/40">
-      <div className="page-container py-16 md:py-20">
-        <SectionHeader
-          eyebrow="Proof"
-          title="Verified certificates. Real props passed."        
-        />
+    <section id="proof" className="overflow-hidden border-b border-line bg-[#f1f5f9]">
+      <div className="page-container flex items-end justify-between gap-4 py-5 md:py-6">
+        <div>
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
+            Proof
+          </p>
+          <h2 className="mt-1 text-xl font-bold tracking-tight text-ink md:text-2xl">
+            Prop certificates. Real passes.
+          </h2>
+        </div>
+        <p className="hidden max-w-xs text-right text-xs text-slate sm:block">
+          Funded and evaluation certificates from live prop challenges.
+        </p>
       </div>
 
-      <div className="cert-marquee pb-16 md:pb-20" role="region" aria-label="Certificates">
+      <div className="cert-marquee pb-5 md:pb-6" role="region" aria-label="Certificates">
         {track}
       </div>
 
       {active && active.kind === "image" ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           onClick={() => setActive(null)}
         >
           <div
-            className="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-lg bg-card shadow-xl"
+            className="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-lg border border-line bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3">
@@ -197,7 +202,7 @@ export function Certificates() {
                 Close
               </button>
             </div>
-            <div className="relative aspect-[4/3] w-full bg-line/30">
+            <div className="relative aspect-[4/3] w-full bg-[#f1f5f9]">
               <Image
                 src={active.src}
                 alt={`${active.issuer}: ${active.title}`}

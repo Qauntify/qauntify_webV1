@@ -1,0 +1,232 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
+import type { DailyPnL } from "@/lib/signals";
+
+const DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+const DEFAULT_DESCRIPTION =
+  "Closed LLM signals by day — includes full TP hits and TP1/TP2 wins " +
+  "(even if price later tagged the stop). Green = more wins than losses.";
+
+type Props = {
+  data: DailyPnL[];
+  /** Optional blurb above the year tabs. Pass null to hide. */
+  description?: string | null;
+};
+
+export function DailyPnLCalendar({
+  data,
+  description = DEFAULT_DESCRIPTION,
+}: Props) {
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+    years.add(new Date().getFullYear());
+    data.forEach((d) => {
+      years.add(new Date(d.date).getFullYear());
+    });
+    return Array.from(years).sort((a, b) => a - b);
+  }, [data]);
+
+  const setYear = (year: number) => {
+    setCurrentDate((prev) => {
+      const next = new Date(prev);
+      next.setFullYear(year);
+      return next;
+    });
+  };
+
+  const prevMonth = () => {
+    setCurrentDate((prev) => {
+      const next = new Date(prev);
+      next.setMonth(next.getMonth() - 1);
+      return next;
+    });
+  };
+
+  const nextMonth = () => {
+    setCurrentDate((prev) => {
+      const next = new Date(prev);
+      next.setMonth(next.getMonth() + 1);
+      return next;
+    });
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const monthName = currentDate.toLocaleString("default", { month: "long" });
+
+  const calendarGrid = useMemo(() => {
+    const firstDayOfMonth = new Date(year, month, 1);
+    const lastDayOfMonth = new Date(year, month + 1, 0);
+
+    let startDayOfWeek = firstDayOfMonth.getDay() - 1;
+    if (startDayOfWeek === -1) startDayOfWeek = 6;
+
+    const days: { dateObj: Date; isCurrentMonth: boolean }[] = [];
+
+    const prevMonthLastDate = new Date(year, month, 0).getDate();
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      const d = new Date(year, month - 1, prevMonthLastDate - i);
+      days.push({ dateObj: d, isCurrentMonth: false });
+    }
+
+    for (let i = 1; i <= lastDayOfMonth.getDate(); i++) {
+      days.push({ dateObj: new Date(year, month, i), isCurrentMonth: true });
+    }
+
+    const remainingDays = (7 - (days.length % 7)) % 7;
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push({ dateObj: new Date(year, month + 1, i), isCurrentMonth: false });
+    }
+
+    return days.map((day) => {
+      const yyyy = day.dateObj.getFullYear();
+      const mm = String(day.dateObj.getMonth() + 1).padStart(2, "0");
+      const dd = String(day.dateObj.getDate()).padStart(2, "0");
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const match = data.find((x) => x.date === dateStr);
+
+      return {
+        ...day,
+        dateStr,
+        dayNum: day.dateObj.getDate(),
+        net: match?.net ?? 0,
+        wins: match?.wins ?? 0,
+        losses: match?.losses ?? 0,
+        totalTrades: (match?.wins ?? 0) + (match?.losses ?? 0),
+      };
+    });
+  }, [year, month, data]);
+
+  return (
+    <div className="card-surface rounded-xl border border-line p-6">
+      {description ? (
+        <p className="mb-6 text-sm text-slate">{description}</p>
+      ) : null}
+
+      <div className="mb-6 flex justify-center">
+        <div className="flex overflow-hidden rounded border border-line bg-card">
+          {availableYears.map((y) => (
+            <button
+              key={y}
+              type="button"
+              onClick={() => setYear(y)}
+              className={`px-4 py-2 text-sm font-semibold transition-colors ${
+                year === y
+                  ? "bg-slate/10 text-ink"
+                  : "text-slate hover:bg-slate/5"
+              }`}
+            >
+              {y}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-6 flex items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={prevMonth}
+          className="p-1 text-slate transition-colors hover:text-ink"
+          aria-label="Previous Month"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+
+        <div className="flex items-center gap-2">
+          <span className="min-w-[120px] text-center text-lg font-bold text-ink">
+            {monthName}
+          </span>
+          <button
+            type="button"
+            onClick={goToToday}
+            className="text-slate transition-colors hover:text-ink"
+            title="Go to Today"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={nextMonth}
+          className="p-1 text-slate transition-colors hover:text-ink"
+          aria-label="Next Month"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+
+      <div className="custom-scrollbar w-full overflow-x-auto">
+        <div className="min-w-[700px]">
+          <div className="mb-2 grid grid-cols-7">
+            {DAYS_OF_WEEK.map((day) => (
+              <div key={day} className="text-center text-sm font-semibold text-ink">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-2">
+            {calendarGrid.map((day, idx) => {
+              let bgColor = "bg-card";
+              let textColor = "text-ink";
+
+              if (day.totalTrades > 0) {
+                if (day.net > 0) {
+                  bgColor = "bg-[#67C26D] border-[#67C26D]";
+                  textColor = "text-white";
+                } else if (day.net < 0) {
+                  bgColor = "bg-[#DE4B56] border-[#DE4B56]";
+                  textColor = "text-white";
+                } else {
+                  bgColor = "bg-slate/20 border-slate/30";
+                  textColor = "text-ink";
+                }
+              }
+
+              const opacity = day.isCurrentMonth ? "opacity-100" : "opacity-40";
+
+              return (
+                <div
+                  key={`${day.dateStr}-${idx}`}
+                  className={`flex h-28 flex-col border border-line/70 p-2 ${bgColor} ${opacity} transition-colors`}
+                >
+                  <span className={`text-sm font-semibold ${textColor}`}>
+                    {day.dayNum}
+                  </span>
+
+                  <div className="mt-1 flex flex-1 flex-col items-center justify-center gap-0.5">
+                    {day.totalTrades > 0 ? (
+                      <>
+                        <span className={`text-sm font-bold ${textColor}`}>
+                          {day.wins} W
+                        </span>
+                        <span className={`text-sm font-bold ${textColor}`}>
+                          {day.losses} L
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm font-semibold text-ink">0 W</span>
+                        <span className="text-sm font-semibold text-ink">0 L</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

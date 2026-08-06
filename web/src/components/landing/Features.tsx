@@ -1,5 +1,3 @@
-import { SectionHeader } from "@/components/shared/SectionHeader";
-
 const FEATURES = [
   {
     title: "Technical scanning",
@@ -29,21 +27,24 @@ const FEATURES = [
 
 export function Features() {
   return (
-    <section id="features" className="section-block">
-      <div className="page-container py-16 md:py-20">
-        <SectionHeader
-          eyebrow="Features"
-          title="A signal is a checklist, not a hunch."
-        />
-        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((f, i) => (
-            <div 
-              key={f.title} 
-              className="stat-tile animate-fade-up"
-              style={{ animationDelay: `${i * 100}ms` }}
-            >
-              <h3 className="font-semibold text-ink">{f.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate">{f.body}</p>
+    <section id="features" className="border-b border-line bg-[#fff]">
+      <div className="page-container py-6 md:py-7">
+        <div className="mb-4">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
+            How it works
+          </p>
+          <h2 className="mt-1 text-xl font-bold tracking-tight text-ink md:text-2xl">
+            A signal is a checklist, not a hunch.
+          </h2>
+        </div>
+
+        <div className="grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((f) => (
+            <div key={f.title} className="bg-[#f8fafc] p-4">
+              <h3 className="text-sm font-semibold text-ink">{f.title}</h3>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate sm:text-[13px]">
+                {f.body}
+              </p>
             </div>
           ))}
         </div>

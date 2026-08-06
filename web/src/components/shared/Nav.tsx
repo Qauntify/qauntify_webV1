@@ -18,12 +18,12 @@ export async function Nav() {
   const email = user?.email ?? null;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-card backdrop-blur-xl transition-all duration-300">
+    <header className="sticky top-0 z-40 border-b border-line bg-card">
       <div className="page-container flex h-16 items-center justify-between">
         <Logo />
         <nav className="hidden items-center gap-8 text-sm font-medium text-slate md:flex">
           {links.map((l) => (
-            <Link key={l.href} href={l.href} className="hover:text-accent">
+            <Link key={l.href} href={l.href} className="hover:text-ink">
               {l.label}
             </Link>
           ))}

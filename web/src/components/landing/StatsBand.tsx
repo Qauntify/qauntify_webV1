@@ -1,8 +1,9 @@
 import type { Stats } from "@/lib/signals";
 
+/** Kept for reuse; homepage stats live inside Hero. */
 export function StatsBand({ stats }: { stats: Stats }) {
   const items = [
-    { value: stats.total, label: "Total signals" },
+    { value: stats.total, label: "Signals logged" },
     {
       value: stats.total > 0 ? `${stats.avgConfidence}%` : "—",
       label: "Avg confidence",
@@ -14,22 +15,20 @@ export function StatsBand({ stats }: { stats: Stats }) {
     },
   ];
   return (
-    <section className="section-block border-line bg-card/40 backdrop-blur-md">
-      <div className="page-container grid grid-cols-1 divide-y divide-line py-2 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        {items.map((item, i) => (
-          <div 
-            key={item.label} 
-            className="px-4 py-8 text-center sm:py-10 animate-fade-up"
-            style={{ animationDelay: `${i * 150}ms` }}
-          >
+    <section className="border-b border-line bg-[#f1f5f9]">
+      <div className="page-container grid grid-cols-3 divide-x divide-line">
+        {items.map((item) => (
+          <div key={item.label} className="px-3 py-4 text-center sm:px-6 sm:py-5">
             <p
-              className={`font-mono text-3xl font-bold ${
+              className={`font-mono text-xl font-bold tracking-tight sm:text-2xl ${
                 item.tone === "long" ? "text-long" : "text-ink"
               }`}
             >
               {item.value}
             </p>
-            <p className="mt-1.5 text-sm text-slate">{item.label}</p>
+            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate sm:text-[11px]">
+              {item.label}
+            </p>
           </div>
         ))}
       </div>

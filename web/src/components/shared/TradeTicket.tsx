@@ -62,10 +62,10 @@ function StatusBadge({
 function ConfidenceGauge({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-2" title={`Confidence ${value}/100`}>
-      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-line shadow-inner">
+      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-line">
         <div
-          className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
-          style={{ width: `${value}%`, boxShadow: "0 0 8px var(--accent-glow)" }}
+          className="h-full rounded-full bg-ink transition-all duration-300 ease-out"
+          style={{ width: `${value}%` }}
         />
       </div>
       <span className="font-mono text-xs font-medium text-slate">{value}%</span>
@@ -112,11 +112,11 @@ export function TradeTicket({
         isLong ? "border-l-long" : "border-l-short"
       }`}
     >
-      <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-        <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <DirectionBadge direction={signal.direction} />
           <span className="font-mono text-sm font-bold">{signal.symbol}</span>
-          <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase text-accent">
+          <span className="rounded bg-line px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase text-slate">
             {signal.timeframe}
           </span>
           <StatusBadge status={signal.status} closedAt={signal.closedAt} />
@@ -124,7 +124,7 @@ export function TradeTicket({
         <ConfidenceGauge value={signal.confidence} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 px-5 py-5 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 px-4 py-3.5 sm:grid-cols-3 lg:grid-cols-5">
         <PriceCell label="Entry" value={signal.entry} />
         <PriceCell label="Stop loss" value={signal.stopLoss} tone="short" />
         <PriceCell
@@ -141,12 +141,12 @@ export function TradeTicket({
       </div>
 
       {showRationale && signal.rationale && (
-        <p className="border-t border-line bg-accent-soft/30 px-5 py-3.5 text-sm leading-relaxed text-slate">
+        <p className="border-t border-line bg-[#f8fafc] px-4 py-3 text-sm leading-relaxed text-slate dark:bg-white/5">
           {signal.rationale}
         </p>
       )}
 
-      <div className="flex items-center justify-between border-t border-line px-5 py-2.5 text-xs text-slate">
+      <div className="flex items-center justify-between border-t border-line px-4 py-2 text-xs text-slate">
         <span className="font-mono">
           {sample ? "example signal" : formatRelativeTime(signal.createdAt)}
         </span>

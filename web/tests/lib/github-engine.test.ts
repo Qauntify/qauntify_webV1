@@ -105,3 +105,48 @@ describe("dispatchHealthcheckWorkflow", () => {
     );
   });
 });
+
+describe("listCronStatuses", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.GITHUB_DISPATCH_TOKEN;
+  });
+
+  it("returns errors when token is missing", async () => {
+    const { listCronStatuses } = await import("@/lib/github-engine");
+    const statuses = await listCronStatuses(1);
+    expect(statuses.length).toBeGreaterThan(0);
+    expect(statuses.every((s) => s.error?.includes("GITHUB_DISPATCH_TOKEN"))).toBe(
+      true,
+    );
+  });
+
+  it("maps workflow runs", async () => {
+    process.env.GITHUB_DISPATCH_TOKEN = "ghp_test";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        workflow_runs: [
+          {
+            id: 1,
+            name: "Signals engine",
+            status: "completed",
+            conclusion: "success",
+            html_url: "https://github.com/x/y/actions/runs/1",
+            created_at: "2026-08-06T00:00:00Z",
+            updated_at: "2026-08-06T00:01:00Z",
+            run_number: 42,
+            event: "workflow_dispatch",
+            head_branch: "main",
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { listCronStatuses } = await import("@/lib/github-engine");
+    const statuses = await listCronStatuses(1);
+    expect(statuses[0].runs[0]?.run_number).toBe(42);
+    expect(statuses[0].runs[0]?.conclusion).toBe("success");
+  });
+});

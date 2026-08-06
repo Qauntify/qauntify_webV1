@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { DispatchResult } from "@/lib/github-engine";
+import { formatCronFailAlert, sendOpsTelegram } from "@/lib/telegram-ops";
 import { authorizedBySecret } from "@/lib/webhook-guard";
 
 /** Shared GET/POST handler for cron-job.org → GitHub dispatch routes. */
@@ -15,6 +16,13 @@ export async function handleCronDispatch(
 
   const result = await dispatch();
   if (!result.ok) {
+    await sendOpsTelegram(
+      formatCronFailAlert({
+        job: triggered,
+        detail: result.message,
+        status: result.status,
+      }),
+    );
     return NextResponse.json(
       { error: "Dispatch failed", detail: result.message },
       { status: result.status === 500 ? 500 : 502 },

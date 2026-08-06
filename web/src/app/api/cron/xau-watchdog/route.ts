@@ -22,9 +22,32 @@ export async function GET(request: Request) {
 
   const result = await dispatchXauScalperRestart();
   if (!result.ok) {
+    const { formatCronFailAlert, sendOpsTelegram } = await import(
+      "@/lib/telegram-ops"
+    );
+    await sendOpsTelegram(
+      formatCronFailAlert({
+        job: "xau-watchdog",
+        detail: result.message,
+        status: result.status,
+      }),
+    );
     return NextResponse.json(
       { error: "Dispatch failed", detail: result.message },
       { status: result.status === 500 ? 500 : 502 },
+    );
+  }
+
+  {
+    const { formatCronFailAlert, sendOpsTelegram } = await import(
+      "@/lib/telegram-ops"
+    );
+    await sendOpsTelegram(
+      formatCronFailAlert({
+        job: "xau-watchdog",
+        title: "XAU heartbeat stale",
+        detail: `Heartbeat stale (${status?.ageMinutes?.toFixed(1) ?? "?"}m) — restarted xau-scalper`,
+      }),
     );
   }
 

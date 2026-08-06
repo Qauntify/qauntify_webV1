@@ -34,3 +34,11 @@ jobs:
           # never show up next to trade calls. Alerts are skipped (logged to
           # the run output only) until this secret is set.
           TELEGRAM_ALERTS_CHAT_ID: ${{ secrets.TELEGRAM_ALERTS_CHAT_ID }}
+      - name: Notify Telegram on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ALERTS_CHAT_ID: ${{ secrets.TELEGRAM_ALERTS_CHAT_ID }}
+          CRON_JOB_NAME: session-healthcheck
+          CRON_FAIL_DETAIL: Session healthcheck job failed — open the run log for the failing step
+        run: bash scripts/notify_cron_failure.sh

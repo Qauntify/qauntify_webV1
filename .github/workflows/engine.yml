@@ -74,3 +74,11 @@ jobs:
           # for no extra information. Turn it back on only if the swing session
           # is running something else and you still want the forward sample.
           PAPER_BBMA_REENTRY: "false"
+      - name: Notify Telegram on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ALERTS_CHAT_ID: ${{ secrets.TELEGRAM_ALERTS_CHAT_ID }}
+          CRON_JOB_NAME: signals-engine
+          CRON_FAIL_DETAIL: Signals engine job failed — open the run log for the failing step
+        run: bash scripts/notify_cron_failure.sh

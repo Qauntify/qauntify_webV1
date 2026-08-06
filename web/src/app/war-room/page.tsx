@@ -12,13 +12,32 @@ export const metadata: Metadata = {
     "Structure and Momentum robots debate every confirmed signal — the Manager decides.",
 };
 
-// Debates land as the engine confirms signals — read fresh-ish.
 export const revalidate = 20;
 
 const TABS = [
   { id: "stage", label: "Live Stage", href: "/war-room" },
   { id: "debates", label: "All Debates", href: "/war-room?tab=debates" },
 ] as const;
+
+function TabNav({ current }: { current: "stage" | "debates" }) {
+  return (
+    <nav className="flex shrink-0 gap-2" aria-label="War Room sections">
+      {TABS.map((t) => (
+        <Link
+          key={t.id}
+          href={t.href}
+          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            current === t.id
+              ? "bg-ink text-paper"
+              : "border border-line bg-card text-slate hover:border-ink/20 hover:text-ink"
+          }`}
+        >
+          {t.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
 
 export default async function WarRoom({
   searchParams,
@@ -36,53 +55,34 @@ export default async function WarRoom({
   return (
     <>
       <Nav />
-      <main className="flex h-[calc(100svh-4rem)] flex-1 flex-col overflow-hidden">
-        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-4 py-3 sm:px-6 lg:px-8 xl:px-10">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-              AI War Room
-            </p>
-            {!isStage ? (
+      {isStage ? (
+        <main className="relative h-[calc(100dvh-4rem)] overflow-hidden bg-[#0b1220]">
+          <div className="absolute right-3 top-3 z-30 sm:right-6">
+            <TabNav current="stage" />
+          </div>
+          {featured ? (
+            <div className="absolute inset-0">
+              <WarRoomStage debate={featured} fullScreen />
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center px-4">
+              <DebateBoard debates={[]} />
+            </div>
+          )}
+        </main>
+      ) : (
+        <main className="flex h-[calc(100svh-4rem)] flex-1 flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-4 py-3 sm:px-6 lg:px-8 xl:px-10">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-accent">
+                AI War Room
+              </p>
               <h1 className="mt-0.5 truncate text-lg font-bold md:text-xl">
                 All Debates
               </h1>
-            ) : (
-              <h1 className="mt-0.5 truncate text-lg font-bold md:text-xl">
-                Live Stage
-              </h1>
-            )}
+            </div>
+            <TabNav current="debates" />
           </div>
-          <nav
-            className="flex shrink-0 gap-2"
-            aria-label="War Room sections"
-          >
-            {TABS.map((t) => (
-              <Link
-                key={t.id}
-                href={t.href}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                  currentTab === t.id
-                    ? "bg-ink text-paper shadow-md"
-                    : "text-slate hover:bg-card hover:text-ink"
-                }`}
-              >
-                {t.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-
-        {isStage ? (
-          <div className="min-h-0 flex-1">
-            {featured ? (
-              <WarRoomStage debate={featured} fullScreen />
-            ) : (
-              <div className="flex h-full items-center justify-center px-4">
-                <DebateBoard debates={[]} />
-              </div>
-            )}
-          </div>
-        ) : (
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
             <p className="mb-4 text-xs text-slate">
               Every War Room transcript on file — newest first. Illustration
@@ -90,8 +90,8 @@ export default async function WarRoom({
             </p>
             <DebateBoard debates={cardDebates} />
           </div>
-        )}
-      </main>
+        </main>
+      )}
     </>
   );
 }

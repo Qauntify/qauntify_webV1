@@ -23,7 +23,7 @@ export function Logo({
         aria-hidden
       />
       <span className="text-ink">
-        Qaunt<span className="text-accent">ify</span>
+        Qaunt<span className="text-slate">ify</span>
         {suffix ? (
           <span className="ml-1.5 text-xs font-medium text-slate">{suffix}</span>
         ) : null}

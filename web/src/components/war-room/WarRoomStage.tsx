@@ -247,11 +247,11 @@ export function WarRoomStage({
     <div
       className={
         fullScreen
-          ? "flex h-full min-h-0 flex-col overflow-hidden border-0 bg-[#0b1220]"
+          ? "flex h-full min-h-0 w-full flex-col overflow-hidden border-0 bg-[#0b1220]"
           : "overflow-hidden rounded-2xl border border-line bg-[#0b1220]"
       }
     >
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3 lg:px-8">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3 pr-36 lg:px-8 lg:pr-48">
         <div className="flex items-center gap-2">
           <span className="wr-live-dot" />
           <span className="font-mono text-xs font-semibold uppercase tracking-widest text-teal-200/80">
@@ -280,7 +280,13 @@ export function WarRoomStage({
             : "relative flex flex-col"
         }
       >
-        <div className="wr-arena relative min-h-[280px] flex-1 md:min-h-[340px]">
+        <div
+          className={
+            fullScreen
+              ? "wr-arena relative min-h-0 flex-1"
+              : "wr-arena relative min-h-[280px] flex-1 md:min-h-[340px]"
+          }
+        >
           <div className="wr-arena-haze" aria-hidden />
           <div className="wr-floor-grid" aria-hidden />
 
@@ -323,11 +329,11 @@ export function WarRoomStage({
           </div>
         </div>
 
-        {/* dialogue HUD */}
+        {/* dialogue HUD — pinned under the arena, no leftover gap */}
         <div
           className={
             fullScreen
-              ? "relative z-10 mx-4 mb-4 mt-auto flex min-h-0 max-h-[38%] flex-col overflow-hidden rounded-xl border border-teal-500/25 bg-[#0a1628]/95 p-4 backdrop-blur md:mx-8 md:mb-6 md:p-6"
+              ? "relative z-10 mx-4 mb-3 mt-0 flex shrink-0 flex-col overflow-hidden rounded-xl border border-teal-500/25 bg-[#0a1628]/95 p-4 backdrop-blur md:mx-8 md:mb-4 md:p-5"
               : "relative z-10 m-4 flex flex-col rounded-xl border border-teal-500/25 bg-[#0a1628]/95 p-4"
           }
         >

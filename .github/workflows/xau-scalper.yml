@@ -42,3 +42,11 @@ jobs:
             python -m signals.xau_scan || true
             sleep 60
           done
+      - name: Notify Telegram on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ALERTS_CHAT_ID: ${{ secrets.TELEGRAM_ALERTS_CHAT_ID }}
+          CRON_JOB_NAME: xau-scalper
+          CRON_FAIL_DETAIL: XAU scalper job failed — open the run log for the failing step
+        run: bash scripts/notify_cron_failure.sh

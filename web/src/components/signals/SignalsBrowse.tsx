@@ -130,10 +130,10 @@ export async function SignalsBrowse({
           <Link
             key={id}
             href={tabHref(id)}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               tab === id
-                ? "bg-ink text-paper shadow-md"
-                : "text-slate hover:bg-card hover:text-ink"
+                ? "bg-ink text-paper"
+                : "border border-line bg-card text-slate hover:border-ink/20 hover:text-ink"
             }`}
           >
             {label}

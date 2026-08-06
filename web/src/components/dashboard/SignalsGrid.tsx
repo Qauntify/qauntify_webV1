@@ -205,20 +205,20 @@ export function SignalCard({
     <Component
       type={onSelect ? "button" : undefined}
       onClick={onSelect ? () => onSelect(signal) : undefined}
-      className={`group relative w-full overflow-hidden rounded-xl border border-line bg-card text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-accent/40 hover:shadow-xl hover:shadow-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${
-        isSlHit ? "grayscale opacity-60 hover:opacity-80" : ""
+      className={`group relative w-full overflow-hidden rounded-lg border border-line bg-card text-left transition-colors hover:border-ink/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${
+        isSlHit ? "opacity-60 grayscale hover:opacity-80" : ""
       }`}
     >
-      {/* Dynamic border based on direction */}
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${isLong ? "bg-long" : "bg-short"} transition-all duration-300 group-hover:w-1.5`} />
-      
-      {/* Subtle background glow on hover */}
-      <div className={`absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br ${isLong ? "from-long/5" : "from-short/5"} to-transparent pointer-events-none`} />
+      <div
+        className={`absolute bottom-0 left-0 top-0 w-1 ${isLong ? "bg-long" : "bg-short"}`}
+      />
 
       <div className="relative flex items-start justify-between gap-3 p-5 pb-4 pl-6">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-lg font-bold tracking-tight text-ink drop-shadow-sm">{signal.symbol}</span>
+            <span className="font-mono text-lg font-bold tracking-tight text-ink">
+              {signal.symbol}
+            </span>
             <DirectionPill direction={signal.direction} />
             {showLlmBadge ? (
               <span className="rounded-md bg-accent-soft px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-accent">
