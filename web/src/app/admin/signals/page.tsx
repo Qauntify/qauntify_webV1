@@ -79,7 +79,7 @@ export default async function AdminSignals({
       ? "LLM Signals"
       : "Signals";
   const subtitle = isWarRoomTab
-    ? "Signal cards that have an AI War Room debate on file — same cards as the main list."
+    ? "Trading Floor only — Structure / Momentum / Manager. Separate from strategy tabs."
     : isLlmTab
       ? "Every signal SEA-LION confirmed and stored. Same cards as the main list, scoped to LLM-approved setups."
       : "Manage and view all stored signals. Export includes TP/SL hits only.";
@@ -140,7 +140,7 @@ export default async function AdminSignals({
           </p>
           <p className="mt-1 text-sm text-slate">
             {isWarRoomTab
-              ? `Showing ${total} signal${total === 1 ? "" : "s"} with a War Room debate.`
+              ? `Showing ${total} Floor-decided War Room signal${total === 1 ? "" : "s"}.`
               : `Showing ${total} SEA-LION-confirmed signal${total === 1 ? "" : "s"} across every timeframe.`}
           </p>
         </div>

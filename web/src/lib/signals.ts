@@ -129,6 +129,9 @@ function supabaseConfig(): { url: string; anonKey: string } | null {
 // RLS already blocks them for anon and member roles — this is defence in depth,
 // applied centrally so no caller can forget it.
 const EXCLUDE_SHADOW = "&shadow=is.false";
+// War Room Floor signals use timeframe=floor — keep them out of strategy tabs.
+const EXCLUDE_WAR_ROOM = "&timeframe=neq.floor";
+const WAR_ROOM_ONLY = "&timeframe=eq.floor";
 
 async function fetchRows(
   query: string,
@@ -138,7 +141,7 @@ async function fetchRows(
   if (!config) return null;
   try {
     const response = await fetch(
-      `${config.url}/rest/v1/signals?${query}${EXCLUDE_SHADOW}`,
+      `${config.url}/rest/v1/signals?${query}${EXCLUDE_SHADOW}${EXCLUDE_WAR_ROOM}`,
       {
         headers: {
           apikey: config.anonKey,
@@ -196,7 +199,7 @@ async function fetchRowsPaginated(
   const rangeEnd = offset + pageSize - 1;
   try {
     const response = await fetch(
-      `${config.url}/rest/v1/signals?${query}${EXCLUDE_SHADOW}`,
+      `${config.url}/rest/v1/signals?${query}${EXCLUDE_SHADOW}${EXCLUDE_WAR_ROOM}`,
       {
         headers: {
           apikey: config.anonKey,
@@ -389,69 +392,46 @@ export async function getSignalsPaginated(
 }
 
 /**
- * Signals that have a War Room debate, newest debate first.
- * Uses agent_debates.signal_id to filter the signals grid.
+ * War Room Floor signals only (timeframe=floor) — never mixed with strategy tabs.
  */
 export async function getWarRoomSignalsPaginated(
   page = 1,
   accessToken?: string,
   pageSize = SIGNALS_PAGE_SIZE,
 ): Promise<SignalsPage> {
+  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const query = `select=*${WAR_ROOM_ONLY}&order=created_at.desc`;
   const config = supabaseConfig();
   const empty: SignalsPage = { signals: [], page: 1, pageSize, total: 0, totalPages: 1 };
   if (!config) return empty;
 
-  const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+  const offset = (safePage - 1) * pageSize;
+  const rangeEnd = offset + pageSize - 1;
   try {
-    // Debate volume is modest — load linked ids newest-first, then unique + page.
-    const debateRes = await fetch(
-      `${config.url}/rest/v1/agent_debates?select=signal_id,created_at` +
-        `&signal_id=not.is.null&order=created_at.desc&limit=1000`,
+    const response = await fetch(
+      `${config.url}/rest/v1/signals?${query}${EXCLUDE_SHADOW}`,
       {
         headers: {
           apikey: config.anonKey,
           Authorization: `Bearer ${accessToken ?? config.anonKey}`,
+          Range: `${offset}-${rangeEnd}`,
+          Prefer: "count=exact",
         },
         cache: "no-store",
       },
     );
-    if (!debateRes.ok) return empty;
-    const debateRows = (await debateRes.json()) as { signal_id?: string | null }[];
-    const orderedIds: string[] = [];
-    const seen = new Set<string>();
-    for (const row of debateRows) {
-      const id = row.signal_id;
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      orderedIds.push(id);
-    }
-    const total = orderedIds.length;
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const pageClamped = Math.min(safePage, totalPages);
-    const start = (pageClamped - 1) * pageSize;
-    const pageIds = orderedIds.slice(start, start + pageSize);
-    if (pageIds.length === 0) {
-      return { signals: [], page: pageClamped, pageSize, total, totalPages };
-    }
-
-    const idList = pageIds.join(",");
-    const signalRows = await fetchRows(
-      `select=*&id=in.(${idList})&order=created_at.desc`,
-      accessToken,
-    );
-    const byId = new Map(
-      (signalRows ?? [])
-        .map(parseRow)
-        .filter((s): s is Signal => s !== null)
-        .map((s) => [s.id, s]),
-    );
-    const signals = pageIds
-      .map((id) => byId.get(id))
-      .filter((s): s is Signal => s !== undefined);
-
+    if (!response.ok) return empty;
+    const rows = (await response.json()) as SignalRow[];
+    const contentRange = response.headers.get("content-range");
+    const match = contentRange?.match(/\d+-\d+\/(\d+|\*)/);
+    const total = match && match[1] !== "*" ? Number(match[1]) : rows.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
+    const signals = (Array.isArray(rows) ? rows : [])
+      .map(parseRow)
+      .filter((s): s is Signal => s !== null);
     return {
       signals,
-      page: pageClamped,
+      page: Math.min(safePage, totalPages),
       pageSize,
       total,
       totalPages,

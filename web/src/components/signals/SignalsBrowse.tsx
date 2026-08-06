@@ -148,8 +148,8 @@ export async function SignalsBrowse({
               War Room
             </p>
             <p className="mt-1 text-sm text-slate">
-              Showing {warRoomPage.total} signal
-              {warRoomPage.total === 1 ? "" : "s"} with a War Room debate.
+              Trading Floor only — Structure / Momentum / Manager decide these
+              trades. Separate from Super Scalp / Scalp / Swing.
             </p>
           </div>
 
@@ -172,7 +172,7 @@ export async function SignalsBrowse({
             <div className="mt-4 rounded-lg border border-dashed border-line bg-card p-10 text-center">
               <p className="text-sm font-semibold">No War Room signals yet</p>
               <p className="mx-auto mt-1 max-w-sm text-xs text-slate">
-                Signals with an AI War Room debate will show up here.
+                Floor-decided signals will show up here — not strategy-tab trades.
               </p>
             </div>
           )}

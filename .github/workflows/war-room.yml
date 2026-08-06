@@ -1,0 +1,41 @@
+name: War Room Floor
+
+# Independent Trading Floor pipeline — BTC/ETH/XAU on 15m candidates, gated by
+# Structure / Momentum / Manager on FLOOR_LLM_* keys only. Never uses
+# SEALION_API_KEY1–4 and never writes into Super Scalp / Scalp / Swing tabs.
+
+on:
+  schedule:
+    - cron: "7,17,27,37,47,57 * * * *"
+  workflow_dispatch: {}
+  repository_dispatch:
+    types: [run-war-room]
+
+concurrency:
+  group: war-room-floor
+  cancel-in-progress: false
+
+jobs:
+  floor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Scan War Room Floor
+        run: python -m signals.war_room_scan
+        env:
+          FLOOR_LLM_API_KEY_TECHNICAL: ${{ secrets.FLOOR_LLM_API_KEY_TECHNICAL }}
+          FLOOR_LLM_API_KEY_MACRO: ${{ secrets.FLOOR_LLM_API_KEY_MACRO }}
+          FLOOR_LLM_API_KEY_NEWS: ${{ secrets.FLOOR_LLM_API_KEY_NEWS }}
+          FLOOR_LLM_BASE_URL: ${{ secrets.FLOOR_LLM_BASE_URL }}
+          FLOOR_LLM_MODEL: ${{ secrets.FLOOR_LLM_MODEL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

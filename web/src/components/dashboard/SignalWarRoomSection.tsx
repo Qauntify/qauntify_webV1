@@ -88,8 +88,8 @@ export function SignalWarRoomSection({ signalId }: { signalId: string }) {
         <DebateBody debate={debate} />
       ) : (
         <p className="text-sm leading-relaxed text-slate">
-          No war-room debate was recorded for this signal. Newer confirmed
-          setups include the Structure, Momentum, and Manager exchange here.
+          No Floor debate on file. War Room transcripts are recorded when the
+          Trading Floor publishes a signal — not for Super Scalp / Scalp / Swing.
         </p>
       )}
     </div>

@@ -1,11 +1,11 @@
-"""AI War Room: a 3-agent technical debate about a candidate trade (showcase).
+"""AI War Room: Structure + Momentum + Manager (Trading Floor).
 
-A Structure Analyst and a Momentum Analyst argue independently on the chart,
-then a Manager synthesises both into a verdict. Purely for the gamified UI —
-it never gates real signals. Fail-soft: any agent error becomes an abstention,
-and the Manager still returns a (safe) verdict.
+Used by the independent Floor pipeline to gate War Room-only signals.
+Fail-soft: any agent error becomes an abstention; the Manager still returns
+a (safe) verdict.
 """
 import json
+from dataclasses import dataclass
 
 # Agent identities carried into the transcript for the UI.
 STRUCTURE = {"agent": "Structure Analyst", "avatar": "📐"}
@@ -36,6 +36,25 @@ _MANAGER_SYSTEM = (
     '{"verdict": "agree" | "caution" | "reject", "confidence": <integer 0-100>, '
     '"rationale": "<one short sentence>"}'
 )
+
+# When the Floor publishes live War Room signals, agree = store the trade.
+_MANAGER_GATE_SYSTEM = (
+    "You are the Manager on the Trading Floor. Structure and Momentum have "
+    "briefed you on a candidate trade. You alone decide whether to PUBLISH "
+    "it to the War Room feed.\n"
+    "agree = publish the trade. caution or reject = do not publish.\n"
+    "Weigh both technical views only. Respond with ONLY a JSON object:\n"
+    '{"verdict": "agree" | "caution" | "reject", "confidence": <integer 0-100>, '
+    '"rationale": "<one short sentence>"}'
+)
+
+
+@dataclass(frozen=True)
+class FloorAgents:
+    """One SEA-LION client per Floor desk (do not reuse strategy-engine keys)."""
+    structure: object
+    momentum: object
+    manager: object
 
 
 def _setup_prompt(setup, timeframe: str, lens: str) -> str:
@@ -74,8 +93,7 @@ def _clean_message(text: str) -> str:
 
 
 def _ask(llm, system: str, user: str):
-    """One agent turn; None on any failure (the agent abstains). Raw reply —
-    the Manager's JSON must reach parse_manager intact."""
+    """One agent turn; None on any failure (the agent abstains)."""
     try:
         reply = llm.chat([
             {"role": "system", "content": system},
@@ -87,11 +105,7 @@ def _ask(llm, system: str, user: str):
 
 
 def parse_manager(text: str):
-    """(verdict, confidence, rationale) from the Manager's JSON.
-
-    Falls back to a neutral 'caution' / confidence 0 — never a confident yes —
-    when the reply is missing or unparseable.
-    """
+    """(verdict, confidence, rationale) from the Manager's JSON."""
     text = text or ""
     start, end = text.find("{"), text.rfind("}")
     if start != -1 and end > start:
@@ -110,28 +124,37 @@ def parse_manager(text: str):
     return "caution", 0, (text.strip()[:200] or "Manager reply unclear.")
 
 
-def run_debate(setup, llm, *, timeframe: str, headlines=None,
-               calendar_block=None) -> dict:
+def run_debate(setup, llm=None, *, timeframe: str, headlines=None,
+               calendar_block=None, agents: FloorAgents | None = None,
+               gate: bool = False) -> dict:
     """Run the 3-agent technical debate; return transcript + Manager verdict.
 
-    `headlines` and `calendar_block` are accepted for call-site compatibility
-    but ignored — the War Room is technical-only.
+    Prefer `agents` (per-desk Floor clients). Falls back to a single `llm` for
+    all three turns when agents is None. `gate=True` uses the publish-or-not
+    Manager prompt for the live War Room pipeline.
     """
-    del headlines, calendar_block  # unused; kept in signature for callers
+    del headlines, calendar_block
+    structure_llm = agents.structure if agents is not None else llm
+    momentum_llm = agents.momentum if agents is not None else llm
+    manager_llm = agents.manager if agents is not None else llm
+    if structure_llm is None or momentum_llm is None or manager_llm is None:
+        raise ValueError("run_debate requires llm or FloorAgents")
+
+    manager_system = _MANAGER_GATE_SYSTEM if gate else _MANAGER_SYSTEM
     structure = _clean_message(
         _ask(
-            llm, _STRUCTURE_SYSTEM,
+            structure_llm, _STRUCTURE_SYSTEM,
             _setup_prompt(setup, timeframe, "structure / levels / R:R"),
         ) or ""
     ) or "(The Structure Analyst abstains — no response.)"
     momentum = _clean_message(
         _ask(
-            llm, _MOMENTUM_SYSTEM,
+            momentum_llm, _MOMENTUM_SYSTEM,
             _setup_prompt(setup, timeframe, "momentum / timing / HTF"),
         ) or ""
     ) or "(The Momentum Analyst abstains — no response.)"
     manager_reply = _ask(
-        llm, _MANAGER_SYSTEM,
+        manager_llm, manager_system,
         _manager_prompt(setup, timeframe, structure, momentum),
     )
     verdict, confidence, rationale = parse_manager(manager_reply or "")

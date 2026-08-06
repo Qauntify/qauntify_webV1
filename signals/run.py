@@ -1003,7 +1003,6 @@ def main():
                 if result.signal is not None:
                     stored += 1
                     maybe_send_alert(result.signal, settings, cfg)
-                    maybe_run_debate(result.signal, cfg, session=db_session)
                     outcomes.append({
                         "symbol": symbol,
                         "timeframe": trading_session.timeframe,

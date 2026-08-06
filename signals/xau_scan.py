@@ -17,7 +17,6 @@ from signals.config import load_config
 from signals.llm_client import SeaLionClient
 from signals.models import ScanResult
 from signals.run import (
-    maybe_run_debate,
     maybe_send_alert,
     resolve_gold_live_price,
     scan_symbol,
@@ -90,7 +89,6 @@ def scan_once(cfg, settings, session=None) -> "object":
     )
     if result.signal is not None:
         maybe_send_alert(result.signal, settings, cfg)
-        maybe_run_debate(result.signal, cfg, session=session)
     return result
 
 

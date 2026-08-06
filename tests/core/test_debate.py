@@ -1,5 +1,5 @@
 """Unit tests for the AI War Room technical debate orchestration."""
-from signals.debate import parse_manager, run_debate
+from signals.debate import FloorAgents, parse_manager, run_debate
 from signals.models import CandidateSetup
 
 SETUP = CandidateSetup(
@@ -95,6 +95,35 @@ def test_run_debate_unwraps_json_wrapped_agent_replies():
     d = run_debate(SETUP, llm, timeframe="1h")
     assert d["transcript"][0]["message"] == "Strong bullish continuation structure."
     assert d["transcript"][1]["message"] == "Momentum still supportive."
+
+
+def test_run_debate_gate_uses_publish_manager_prompt():
+    llm = SeqLLM([
+        "Structure ok.",
+        "Momentum ok.",
+        '{"verdict":"agree","confidence":70,"rationale":"Publish."}',
+    ])
+    run_debate(SETUP, llm, timeframe="15m", gate=True)
+    manager_system = llm.calls[2][0]["content"].lower()
+    assert "publish" in manager_system
+
+
+def test_run_debate_uses_per_desk_floor_agents():
+    structure = SeqLLM(["Structure view."])
+    momentum = SeqLLM(["Momentum view."])
+    manager = SeqLLM([
+        '{"verdict":"caution","confidence":40,"rationale":"Wait."}',
+    ])
+    d = run_debate(
+        SETUP,
+        agents=FloorAgents(structure, momentum, manager),
+        timeframe="15m",
+        gate=True,
+    )
+    assert len(structure.calls) == 1
+    assert len(momentum.calls) == 1
+    assert len(manager.calls) == 1
+    assert d["manager_verdict"] == "caution"
 
 
 def test_parse_manager_handles_valid_json():

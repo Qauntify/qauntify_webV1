@@ -83,3 +83,54 @@ def load_config() -> Config:
         ),
         telegram_alerts_chat_id=os.environ.get("TELEGRAM_ALERTS_CHAT_ID", "").strip(),
     )
+
+
+@dataclass(frozen=True)
+class FloorConfig:
+    """Trading Floor / War Room — separate SEA-LION desks from the strategy engine."""
+    structure_key: str
+    momentum_key: str
+    manager_key: str
+    supabase_url: str
+    supabase_service_key: str
+    base_url: str = "https://api.sea-lion.ai/v1"
+    model: str = "aisingapore/Qwen-SEA-LION-v4.5-27B-IT"
+    telegram_bot_token: str = ""
+    telegram_channel_id: str = ""
+    symbols: tuple = ("BTCUSD", "ETHUSD", "XAUUSD")
+
+
+def load_floor_config() -> FloorConfig:
+    load_dotenv()
+    structure = os.environ.get("FLOOR_LLM_API_KEY_TECHNICAL", "").strip()
+    momentum = os.environ.get("FLOOR_LLM_API_KEY_MACRO", "").strip()
+    manager = os.environ.get("FLOOR_LLM_API_KEY_NEWS", "").strip()
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    supabase_service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not (structure and momentum and manager):
+        raise SystemExit(
+            "War Room Floor needs FLOOR_LLM_API_KEY_TECHNICAL, "
+            "FLOOR_LLM_API_KEY_MACRO, and FLOOR_LLM_API_KEY_NEWS"
+        )
+    if not supabase_url or not supabase_service_key:
+        raise SystemExit("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY required for War Room")
+    return FloorConfig(
+        structure_key=structure,
+        momentum_key=momentum,
+        manager_key=manager,
+        supabase_url=supabase_url.rstrip("/"),
+        supabase_service_key=supabase_service_key,
+        base_url=(
+            os.environ.get("FLOOR_LLM_BASE_URL", "").strip()
+            or "https://api.sea-lion.ai/v1"
+        ),
+        model=(
+            os.environ.get("FLOOR_LLM_MODEL", "").strip()
+            or "aisingapore/Qwen-SEA-LION-v4.5-27B-IT"
+        ),
+        telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", "").strip(),
+        telegram_channel_id=(
+            os.environ.get("TELEGRAM_CHANNEL_ID", "").strip()
+            or os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+        ),
+    )

@@ -65,7 +65,7 @@ describe("getSignals", () => {
     await getSignals(5);
     const [url, options] = fetchFn.mock.calls[0];
     expect(url).toBe(
-      "https://abc.supabase.co/rest/v1/signals?select=*&order=created_at.desc&limit=5&shadow=is.false",
+      "https://abc.supabase.co/rest/v1/signals?select=*&order=created_at.desc&limit=5&shadow=is.false&timeframe=neq.floor",
     );
     expect(options.headers.apikey).toBe("anon-key");
     expect(options.headers.Authorization).toBe("Bearer anon-key");
@@ -77,7 +77,7 @@ describe("getSignals", () => {
     await getSignals(10, undefined, "15m");
     const [url] = fetchFn.mock.calls[0];
     expect(url).toBe(
-      "https://abc.supabase.co/rest/v1/signals?select=*&timeframe=eq.15m&order=created_at.desc&limit=10&shadow=is.false",
+      "https://abc.supabase.co/rest/v1/signals?select=*&timeframe=eq.15m&order=created_at.desc&limit=10&shadow=is.false&timeframe=neq.floor",
     );
   });
 
@@ -259,32 +259,34 @@ describe("getDailyPnLStats", () => {
 });
 
 describe("getWarRoomSignalsPaginated", () => {
-  it("loads signals linked from agent_debates newest first", async () => {
-    const fetchFn = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve([
-            { signal_id: "sig-b", created_at: "2026-08-02T00:00:00Z" },
-            { signal_id: "sig-a", created_at: "2026-08-01T00:00:00Z" },
-            { signal_id: "sig-b", created_at: "2026-07-30T00:00:00Z" },
-          ]),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve([
-            { ...ROW, id: "sig-a", created_at: "2026-08-01T00:00:00Z" },
-            { ...ROW, id: "sig-b", created_at: "2026-08-02T00:00:00Z" },
-          ]),
-      });
+  it("loads timeframe=floor signals newest first", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => "0-1/2" },
+      json: () =>
+        Promise.resolve([
+          {
+            ...ROW,
+            id: "sig-b",
+            timeframe: "floor",
+            created_at: "2026-08-02T00:00:00Z",
+          },
+          {
+            ...ROW,
+            id: "sig-a",
+            timeframe: "floor",
+            created_at: "2026-08-01T00:00:00Z",
+          },
+        ]),
+    });
     vi.stubGlobal("fetch", fetchFn);
 
     const page = await getWarRoomSignalsPaginated(1);
     expect(page.total).toBe(2);
     expect(page.signals.map((s) => s.id)).toEqual(["sig-b", "sig-a"]);
-    expect(String(fetchFn.mock.calls[0][0])).toContain("agent_debates");
-    expect(String(fetchFn.mock.calls[1][0])).toContain("id=in.(sig-b,sig-a)");
+    const url = String(fetchFn.mock.calls[0][0]);
+    expect(url).toContain("timeframe=eq.floor");
+    expect(url).not.toContain("agent_debates");
+    expect(url).not.toContain("timeframe=neq.floor");
   });
 });
