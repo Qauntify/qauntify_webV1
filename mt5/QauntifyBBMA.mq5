@@ -13,13 +13,14 @@
 //+------------------------------------------------------------------+
 #property strict
 #property copyright "Qauntify"
-#property version   "1.02"
+#property version   "1.03"
 
 input string AppSymbol       = "XAUUSD";
 input string SignalApiUrl    = "https://web-seven-pi-76.vercel.app/api/mt5/signal";
 input string WebhookSecret   = "906f61d7dbd1aa2c72cc19a7a0382ce61434f8bd5d6d6c65466912d9808097e4";
 input bool   ShowBbmaStack   = true;  // draw BB + MA5/10 H/L + EMA50 on chart
 input bool   ShowSignalPins  = true;  // BUY/SELL arrows + entry/SL/TP lines
+input int    HistoryPinBars  = 300;   // pin past setups on chart (never push)
 input int    Confidence      = 75;
 input int    MinBars         = 60;
 input double StopAtrBuffer   = 0.5;
@@ -29,6 +30,7 @@ input int    ExtremeLookback = 6;
 input int    MhvLookback     = 8;
 
 datetime lastEvaluatedBar = 0;
+bool     historyDone = false;
 long     signalsOk = 0;
 long     signalsFail = 0;
 long     signalsSkip = 0;
@@ -98,20 +100,21 @@ void LevelLine(const string name, const datetime t0, const datetime t1,
   }
 
 void PinSignal(const string direction, const double entry, const double stop,
-               const double tp1, const string strategy)
+               const double tp1, const string strategy, const int confirmShift,
+               const bool withLevels)
   {
    if(!ShowSignalPins) return;
+   if(confirmShift < 1) return;
 
-   datetime t = iTime(_Symbol, PERIOD_H1, 1);
+   datetime t = iTime(_Symbol, PERIOD_H1, confirmShift);
    if(t == 0) return;
-   double low = iLow(_Symbol, PERIOD_H1, 1);
-   double high = iHigh(_Symbol, PERIOD_H1, 1);
+   double low = iLow(_Symbol, PERIOD_H1, confirmShift);
+   double high = iHigh(_Symbol, PERIOD_H1, confirmShift);
    bool isBuy = (direction == "long");
    color markClr = isBuy ? clrLime : clrRed;
    datetime tEnd = t + (datetime)(PeriodSeconds(PERIOD_H1) * 8);
    string id = "QB_" + IntegerToString((long)t) + (isBuy ? "_B" : "_S");
 
-   // Arrow on the signal candle
    string arrow = id + "_arr";
    ObjectDelete(0, arrow);
    ENUM_OBJECT arrowType = isBuy ? OBJ_ARROW_BUY : OBJ_ARROW_SELL;
@@ -123,7 +126,6 @@ void PinSignal(const string direction, const double entry, const double stop,
       ObjectSetInteger(0, arrow, OBJPROP_SELECTABLE, false);
      }
 
-   // BUY / SELL tag
    string tag = id + "_tag";
    ObjectDelete(0, tag);
    double tagPrice = isBuy ? (low - (high - low) * 0.15 - 0.5)
@@ -140,10 +142,12 @@ void PinSignal(const string direction, const double entry, const double stop,
       ObjectSetInteger(0, tag, OBJPROP_SELECTABLE, false);
      }
 
-   // Entry / SL / TP1 pins
-   LevelLine(id + "_en", t, tEnd, entry, clrDodgerBlue, STYLE_SOLID, 2);
-   LevelLine(id + "_sl", t, tEnd, stop, clrOrangeRed, STYLE_DASH, 1);
-   LevelLine(id + "_tp", t, tEnd, tp1, clrMediumSeaGreen, STYLE_DASH, 1);
+   if(withLevels)
+     {
+      LevelLine(id + "_en", t, tEnd, entry, clrDodgerBlue, STYLE_SOLID, 2);
+      LevelLine(id + "_sl", t, tEnd, stop, clrOrangeRed, STYLE_DASH, 1);
+      LevelLine(id + "_tp", t, tEnd, tp1, clrMediumSeaGreen, STYLE_DASH, 1);
+     }
 
    ChartRedraw(0);
   }
@@ -201,24 +205,34 @@ bool StructuralTps(const double entry, const double stop, const bool isLong,
    return true;
   }
 
-// Returns 1=up, -1=down, 0=neutral
-int HtfBias()
+// Returns 1=up, -1=down, 0=neutral — H4 closed as of this H1 confirm bar.
+int HtfBiasAt(const int confirmShift)
   {
-   // iBands buffers: 0=BASE(mid), 1=UPPER, 2=LOWER — last closed H4 = shift 1
+   datetime t = iTime(_Symbol, PERIOD_H1, confirmShift);
+   if(t <= 0) return 0;
+   datetime h1Close = t + (datetime)PeriodSeconds(PERIOD_H1);
+   int h4 = iBarShift(_Symbol, PERIOD_H4, h1Close - 1, true);
+   if(h4 < 0) return 0;
+   datetime h4Open = iTime(_Symbol, PERIOD_H4, h4);
+   if(h4Open > 0 && h4Open + (datetime)PeriodSeconds(PERIOD_H4) > h1Close)
+      h4 += 1; // H4 still forming at H1 close → use prior closed
+   if(h4 < 0) return 0;
+
    double mid, ema50, close;
-   if(!Copy1(hBb4, 0, 1, mid)) return 0;
-   if(!Copy1(hEma504, 0, 1, ema50)) return 0;
-   close = iClose(_Symbol, PERIOD_H4, 1);
+   if(!Copy1(hBb4, 0, h4, mid)) return 0;
+   if(!Copy1(hEma504, 0, h4, ema50)) return 0;
+   close = iClose(_Symbol, PERIOD_H4, h4);
    if(close > mid && close > ema50) return 1;
    if(close < mid && close < ema50) return -1;
    return 0;
   }
 
-string ArmingSignal(const bool up)
+string ArmingSignalAt(const bool up, const int confirmShift)
   {
-   // Arming must precede the pullback (shift 2). Confirm is shift 1.
+   // Arming must precede the pullback (confirmShift+1). Confirm = confirmShift.
    string found = "";
-   for(int shift = 3; shift <= 2 + SignalLookback; shift++)
+   int pull = confirmShift + 1;
+   for(int shift = pull + 1; shift <= pull + SignalLookback; shift++)
      {
       double upper, lower, mid, ma5, ma10, close;
       if(!Copy1(hBb1, 1, shift, upper)) continue;
@@ -247,9 +261,9 @@ string ArmingSignal(const bool up)
    return found;
   }
 
-bool Escaped(const bool above)
+bool EscapedAt(const bool above, const int confirmShift)
   {
-   for(int shift = 1; shift <= ExtremeLookback; shift++)
+   for(int shift = confirmShift; shift < confirmShift + ExtremeLookback; shift++)
      {
       double ma, band;
       if(above)
@@ -268,11 +282,11 @@ bool Escaped(const bool above)
    return false;
   }
 
-// Newest MHV bar shift in [2 .. 1+MhvLookback]; 0 if none
-int MhvShift(const bool sell)
+// Newest MHV bar shift in (confirmShift, confirmShift+MhvLookback]; 0 if none
+int MhvShiftAt(const bool sell, const int confirmShift)
   {
    int best = 0;
-   for(int shift = 2; shift <= 1 + MhvLookback; shift++)
+   for(int shift = confirmShift + 1; shift <= confirmShift + MhvLookback; shift++)
      {
       double upper, lower;
       if(!Copy1(hBb1, 1, shift, upper)) continue;
@@ -289,41 +303,42 @@ int MhvShift(const bool sell)
          if(low <= lower && close > lower) { best = shift; break; }
         }
      }
-   // Prefer newest: loop from shift=2 upward already finds newest first
    return best;
   }
 
-bool TryReentry(const int bias, string &direction, double &entry, double &stop,
-                double &tp1, double &tp2, double &tp3, string &strategy,
-                string &trigger, string &side)
+bool TryReentryAt(const int bias, const int confirmShift,
+                  string &direction, double &entry, double &stop,
+                  double &tp1, double &tp2, double &tp3, string &strategy,
+                  string &trigger, string &side)
   {
-   if(bias == 0) return false;
+   if(bias == 0 || confirmShift < 1) return false;
+   int pull = confirmShift + 1;
    double atr;
-   if(!Copy1(hAtr1, 0, 1, atr) || atr <= 0.0) return false;
+   if(!Copy1(hAtr1, 0, confirmShift, atr) || atr <= 0.0) return false;
 
    double ma5l_p, ma10l_p, mid_p, ma5h_p, ma10h_p;
    double ma10l, ma10h, mid, ma5h, ma5l;
-   if(!Copy1(hMa5l1, 0, 2, ma5l_p)) return false;
-   if(!Copy1(hMa10l1, 0, 2, ma10l_p)) return false;
-   if(!Copy1(hBb1, 0, 2, mid_p)) return false;
-   if(!Copy1(hMa5h1, 0, 2, ma5h_p)) return false;
-   if(!Copy1(hMa10h1, 0, 2, ma10h_p)) return false;
-   if(!Copy1(hMa10l1, 0, 1, ma10l)) return false;
-   if(!Copy1(hMa10h1, 0, 1, ma10h)) return false;
-   if(!Copy1(hBb1, 0, 1, mid)) return false;
-   if(!Copy1(hMa5h1, 0, 1, ma5h)) return false;
-   if(!Copy1(hMa5l1, 0, 1, ma5l)) return false;
+   if(!Copy1(hMa5l1, 0, pull, ma5l_p)) return false;
+   if(!Copy1(hMa10l1, 0, pull, ma10l_p)) return false;
+   if(!Copy1(hBb1, 0, pull, mid_p)) return false;
+   if(!Copy1(hMa5h1, 0, pull, ma5h_p)) return false;
+   if(!Copy1(hMa10h1, 0, pull, ma10h_p)) return false;
+   if(!Copy1(hMa10l1, 0, confirmShift, ma10l)) return false;
+   if(!Copy1(hMa10h1, 0, confirmShift, ma10h)) return false;
+   if(!Copy1(hBb1, 0, confirmShift, mid)) return false;
+   if(!Copy1(hMa5h1, 0, confirmShift, ma5h)) return false;
+   if(!Copy1(hMa5l1, 0, confirmShift, ma5l)) return false;
 
-   double pullLow = iLow(_Symbol, PERIOD_H1, 2);
-   double pullHigh = iHigh(_Symbol, PERIOD_H1, 2);
-   double pullClose = iClose(_Symbol, PERIOD_H1, 2);
-   double barLow = iLow(_Symbol, PERIOD_H1, 1);
-   double barHigh = iHigh(_Symbol, PERIOD_H1, 1);
-   double barClose = iClose(_Symbol, PERIOD_H1, 1);
+   double pullLow = iLow(_Symbol, PERIOD_H1, pull);
+   double pullHigh = iHigh(_Symbol, PERIOD_H1, pull);
+   double pullClose = iClose(_Symbol, PERIOD_H1, pull);
+   double barLow = iLow(_Symbol, PERIOD_H1, confirmShift);
+   double barHigh = iHigh(_Symbol, PERIOD_H1, confirmShift);
+   double barClose = iClose(_Symbol, PERIOD_H1, confirmShift);
 
    if(bias > 0)
      {
-      trigger = ArmingSignal(true);
+      trigger = ArmingSignalAt(true, confirmShift);
       if(trigger == "") return false;
       if(!(pullLow <= ma5l_p && pullClose > ma10l_p && pullClose > mid_p &&
            barClose > pullClose && barClose > ma10l && barClose > mid))
@@ -339,7 +354,7 @@ bool TryReentry(const int bias, string &direction, double &entry, double &stop,
       return true;
      }
 
-   trigger = ArmingSignal(false);
+   trigger = ArmingSignalAt(false, confirmShift);
    if(trigger == "") return false;
    if(!(pullHigh >= ma5h_p && pullClose < ma10h_p && pullClose < mid_p &&
         barClose < pullClose && barClose < ma10h && barClose < mid))
@@ -355,35 +370,37 @@ bool TryReentry(const int bias, string &direction, double &entry, double &stop,
    return true;
   }
 
-bool TryExtremeMhv(const int bias, string &direction, double &entry, double &stop,
-                   double &tp1, double &tp2, double &tp3, string &strategy,
-                   string &side)
+bool TryExtremeMhvAt(const int bias, const int confirmShift,
+                     string &direction, double &entry, double &stop,
+                     double &tp1, double &tp2, double &tp3, string &strategy,
+                     string &side)
   {
+   if(confirmShift < 1) return false;
    double atr;
-   if(!Copy1(hAtr1, 0, 1, atr) || atr <= 0.0) return false;
-   double barOpen = iOpen(_Symbol, PERIOD_H1, 1);
-   double barHigh = iHigh(_Symbol, PERIOD_H1, 1);
-   double barLow = iLow(_Symbol, PERIOD_H1, 1);
-   double barClose = iClose(_Symbol, PERIOD_H1, 1);
+   if(!Copy1(hAtr1, 0, confirmShift, atr) || atr <= 0.0) return false;
+   double barOpen = iOpen(_Symbol, PERIOD_H1, confirmShift);
+   double barHigh = iHigh(_Symbol, PERIOD_H1, confirmShift);
+   double barLow = iLow(_Symbol, PERIOD_H1, confirmShift);
+   double barClose = iClose(_Symbol, PERIOD_H1, confirmShift);
 
-   // short Extreme — don't fade strong H4 up
-   if(bias != 1 && Escaped(true))
+   if(bias != 1 && EscapedAt(true, confirmShift))
      {
-      int mhv = MhvShift(true);
+      int mhv = MhvShiftAt(true, confirmShift);
       double ma5h;
-      if(mhv > 0 && Copy1(hMa5h1, 0, 1, ma5h))
+      if(mhv > 0 && Copy1(hMa5h1, 0, confirmShift, ma5h))
         {
          if(barClose < barOpen && barHigh >= ma5h && barClose < ma5h)
            {
             entry = barClose;
             double spikeHigh = barHigh;
-            for(int s = 1; s <= mhv; s++)
+            for(int s = confirmShift; s <= mhv; s++)
                spikeHigh = MathMax(spikeHigh, iHigh(_Symbol, PERIOD_H1, s));
             stop = spikeHigh + StopAtrBuffer * atr;
             if(stop > entry && RiskOk(entry, stop, atr))
               {
                double ma5l, ma10l;
-               if(Copy1(hMa5l1, 0, 1, ma5l) && Copy1(hMa10l1, 0, 1, ma10l))
+               if(Copy1(hMa5l1, 0, confirmShift, ma5l) &&
+                  Copy1(hMa10l1, 0, confirmShift, ma10l))
                  {
                   double target = MathMax(ma5l, ma10l);
                   if(StructuralTps(entry, stop, false, target, tp1, tp2, tp3))
@@ -399,24 +416,24 @@ bool TryExtremeMhv(const int bias, string &direction, double &entry, double &sto
         }
      }
 
-   // long Extreme — don't fade strong H4 down
-   if(bias != -1 && Escaped(false))
+   if(bias != -1 && EscapedAt(false, confirmShift))
      {
-      int mhv = MhvShift(false);
+      int mhv = MhvShiftAt(false, confirmShift);
       double ma5l;
-      if(mhv > 0 && Copy1(hMa5l1, 0, 1, ma5l))
+      if(mhv > 0 && Copy1(hMa5l1, 0, confirmShift, ma5l))
         {
          if(barClose > barOpen && barLow <= ma5l && barClose > ma5l)
            {
             entry = barClose;
             double spikeLow = barLow;
-            for(int s = 1; s <= mhv; s++)
+            for(int s = confirmShift; s <= mhv; s++)
                spikeLow = MathMin(spikeLow, iLow(_Symbol, PERIOD_H1, s));
             stop = spikeLow - StopAtrBuffer * atr;
             if(stop < entry && RiskOk(entry, stop, atr))
               {
                double ma5h, ma10h;
-               if(Copy1(hMa5h1, 0, 1, ma5h) && Copy1(hMa10h1, 0, 1, ma10h))
+               if(Copy1(hMa5h1, 0, confirmShift, ma5h) &&
+                  Copy1(hMa10h1, 0, confirmShift, ma10h))
                  {
                   double target = MathMin(ma5h, ma10h);
                   if(StructuralTps(entry, stop, true, target, tp1, tp2, tp3))
@@ -432,6 +449,48 @@ bool TryExtremeMhv(const int bias, string &direction, double &entry, double &sto
         }
      }
    return false;
+  }
+
+bool DetectAt(const int confirmShift,
+              string &direction, double &entry, double &stop,
+              double &tp1, double &tp2, double &tp3, string &strategy,
+              string &trigger, string &side, int &bias)
+  {
+   bias = HtfBiasAt(confirmShift);
+   trigger = "";
+   side = "";
+   if(TryReentryAt(bias, confirmShift, direction, entry, stop, tp1, tp2, tp3,
+                   strategy, trigger, side))
+      return true;
+   return TryExtremeMhvAt(bias, confirmShift, direction, entry, stop, tp1, tp2,
+                          tp3, strategy, side);
+  }
+
+void BackfillHistoryPins()
+  {
+   if(!ShowSignalPins || HistoryPinBars <= 0) return;
+   int bars = Bars(_Symbol, PERIOD_H1);
+   int maxShift = HistoryPinBars;
+   if(maxShift > bars - MinBars - 5)
+      maxShift = bars - MinBars - 5;
+   if(maxShift < 1) return;
+
+   int pinned = 0;
+   for(int s = maxShift; s >= 1; s--)
+     {
+      string direction = "", strategy = "", trigger = "", side = "";
+      double entry = 0, stop = 0, tp1 = 0, tp2 = 0, tp3 = 0;
+      int bias = 0;
+      if(!DetectAt(s, direction, entry, stop, tp1, tp2, tp3, strategy,
+                   trigger, side, bias))
+         continue;
+      // History = arrows only (no level clutter). Live bars get full levels.
+      PinSignal(direction, entry, stop, tp1, strategy, s, false);
+      pinned++;
+     }
+   lastStatus = StringFormat("history pins:%d (no push)", pinned);
+   Print("QauntifyBBMA: ", lastStatus);
+   ChartRedraw(0);
   }
 
 bool Publish(const string direction, const double entry, const double stop,
@@ -544,23 +603,30 @@ void OnTick()
    if(Bars(_Symbol, PERIOD_H1) < MinBars + 5) return;
    if(Bars(_Symbol, PERIOD_H4) < MinBars) return;
 
+   // One-shot: draw historical BUY/SELL pins. Never webhook those.
+   if(!historyDone)
+     {
+      BackfillHistoryPins();
+      lastEvaluatedBar = iTime(_Symbol, PERIOD_H1, 1);
+      historyDone = true;
+      UpdateComment();
+      return;
+     }
+
    datetime barTime = iTime(_Symbol, PERIOD_H1, 1); // last closed H1
    if(barTime == 0 || barTime == lastEvaluatedBar) return;
    lastEvaluatedBar = barTime;
 
-   int bias = HtfBias();
    string direction = "", strategy = "", trigger = "", side = "";
    double entry = 0, stop = 0, tp1 = 0, tp2 = 0, tp3 = 0;
+   int bias = 0;
 
-   bool found = TryReentry(bias, direction, entry, stop, tp1, tp2, tp3,
-                           strategy, trigger, side);
-   if(!found)
-      found = TryExtremeMhv(bias, direction, entry, stop, tp1, tp2, tp3,
-                            strategy, side);
+   bool found = DetectAt(1, direction, entry, stop, tp1, tp2, tp3, strategy,
+                         trigger, side, bias);
 
    if(found)
      {
-      PinSignal(direction, entry, stop, tp1, strategy);
+      PinSignal(direction, entry, stop, tp1, strategy, 1, true);
       Publish(direction, entry, stop, tp1, tp2, tp3, strategy, trigger, side, bias);
      }
    else
