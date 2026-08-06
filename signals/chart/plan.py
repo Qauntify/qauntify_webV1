@@ -47,19 +47,10 @@ def _ict_fvg(candles, signal):
     if ind.get("retest_time") is not None:
         out.append(marker(ind["retest_time"], signal.entry,
                           "FVG retest → entry", "entry", 3))
-    elif "sweep_reclaim" in str(ind.get("structure", "")):
-        out.append(marker(signal.created_at if False else ind.get("sweep_time") or 0,
-                          signal.entry, "Sweep reclaim → entry", "entry", 3)
-                   if ind.get("sweep_time") is not None else
-                   marker(0, signal.entry, "Sweep reclaim → entry", "entry", 3))
-    # Cleaner reclaim marker — only when we have a sweep time.
-    if (
+    elif (
         "sweep_reclaim" in str(ind.get("structure", ""))
-        and ind.get("retest_time") is None
         and ind.get("sweep_time") is not None
     ):
-        # Replace any placeholder above: rebuild cleanly.
-        out = [a for a in out if getattr(a, "label", None) != "Sweep reclaim → entry"]
         out.append(marker(ind["sweep_time"], signal.entry,
                           "Sweep reclaim → entry", "entry", 3))
     return out
