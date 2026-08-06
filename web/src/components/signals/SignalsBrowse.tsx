@@ -1,19 +1,17 @@
 import { SignalsGrid } from "@/components/dashboard/SignalsGrid";
 import { StatsBar } from "@/components/dashboard/StatsBar";
 import { Pagination } from "@/components/shared/Pagination";
-import {
-  SignalsBrowseFilter,
-  type SignalsBrowseTab,
-} from "@/components/signals/SignalsBrowseFilter";
+import { SignalsBrowseFilter } from "@/components/signals/SignalsBrowseFilter";
 import {
   getSignals,
   getStats,
   getWarRoomSignalsPaginated,
   type SignalLane,
 } from "@/lib/signals";
+import type { SignalsBrowseTab } from "@/lib/signals-browse-tabs";
 
 export type { SignalsBrowseTab };
-export { parseSignalsBrowseTab } from "@/components/signals/SignalsBrowseFilter";
+export { parseSignalsBrowseTab } from "@/lib/signals-browse-tabs";
 
 const SESSIONS = [
   {

@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 
-import {
-  parseSignalsBrowseTab,
-  SignalsBrowse,
-} from "@/components/signals/SignalsBrowse";
+import { SignalsBrowse } from "@/components/signals/SignalsBrowse";
 import { Nav } from "@/components/shared/Nav";
+import { parseSignalsBrowseTab } from "@/lib/signals-browse-tabs";
 
 export const metadata: Metadata = {
   title: "Signals — Qauntify",

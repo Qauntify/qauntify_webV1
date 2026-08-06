@@ -1,11 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
-import {
-  parseSignalsBrowseTab,
-  SignalsBrowse,
-} from "@/components/signals/SignalsBrowse";
+import { SignalsBrowse } from "@/components/signals/SignalsBrowse";
 import { Notice } from "@/components/shared/Notice";
+import { parseSignalsBrowseTab } from "@/lib/signals-browse-tabs";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = {

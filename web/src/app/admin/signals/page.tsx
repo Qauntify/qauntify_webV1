@@ -5,7 +5,6 @@ import { ExportSignalsMenu } from "@/components/admin/ExportSignalsMenu";
 import { SignalCard } from "@/components/dashboard/SignalsGrid";
 import { Pagination } from "@/components/shared/Pagination";
 import {
-  ADMIN_SIGNAL_FILTER_OPTIONS,
   SignalsBrowseFilter,
 } from "@/components/signals/SignalsBrowseFilter";
 import { requireAdminPage } from "@/lib/admin-guard";
@@ -14,6 +13,7 @@ import {
   getStats,
   getWarRoomSignalsPaginated,
 } from "@/lib/signals";
+import { ADMIN_SIGNAL_FILTER_OPTIONS } from "@/lib/signals-browse-tabs";
 import { serviceRoleToken } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
