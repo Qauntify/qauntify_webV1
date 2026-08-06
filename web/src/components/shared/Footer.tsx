@@ -21,9 +21,6 @@ export function Footer() {
             <Link href="/war-room" className="font-medium text-slate hover:text-ink">
               War Room
             </Link>
-            <Link href="/markets" className="font-medium text-slate hover:text-ink">
-              Markets
-            </Link>
             <Link href="/track-record" className="font-medium text-slate hover:text-ink">
               Track Record
             </Link>

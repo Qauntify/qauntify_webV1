@@ -23,7 +23,7 @@ describe("RecentTrades", () => {
   it("renders closed trades as cards with outcome and R", () => {
     render(<RecentTrades trades={[trade]} />);
     expect(screen.getByText("XAUUSD")).toBeDefined();
-    expect(screen.getByText(/✓ TP3/)).toBeDefined();
+    expect(screen.getByText("TP3")).toBeDefined();
     expect(screen.getByText(/\+.*R/)).toBeDefined();
     expect(screen.getByAltText(/outcome chart/i)).toBeDefined();
   });

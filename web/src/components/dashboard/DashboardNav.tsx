@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/dashboard", label: "Signals", match: "signals" },
   { href: "/dashboard/war-room", label: "War Room", match: "war-room" },
-  { href: "/dashboard/markets", label: "Markets", match: "markets" },
 ] as const;
 
 export function DashboardNav({
@@ -29,13 +28,7 @@ export function DashboardNav({
             href={l.href}
             className={`nav-item ${active ? "nav-item-active" : ""}`}
           >
-            {l.match === "markets" ? (
-              <CandlesIcon />
-            ) : l.match === "war-room" ? (
-              <RobotIcon />
-            ) : (
-              <ChartIcon />
-            )}
+            {l.match === "war-room" ? <RobotIcon /> : <ChartIcon />}
             {l.label}
           </Link>
         );
@@ -67,14 +60,6 @@ function RobotIcon() {
       <circle cx="12" cy="3" r="1" fill="currentColor" />
       <path d="M9 13h.01M15 13h.01" />
       <path d="M2 12v3M22 12v3" />
-    </svg>
-  );
-}
-
-function CandlesIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M8 4v16M16 7v13M5 9h6M13 12h6" />
     </svg>
   );
 }

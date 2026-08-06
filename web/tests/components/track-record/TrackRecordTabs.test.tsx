@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { TrackRecordTabs } from "@/components/track-record/TrackRecordTabs";
 import type { DailyPnL } from "@/lib/signals";
-import type { BreakdownRow, ClosedTrade, DailyNet } from "@/lib/track-record";
+import type { BreakdownRow, ClosedTrade } from "@/lib/track-record";
 
 const byStrategy: BreakdownRow[] = [{ name: "ict_fvg", winRate: 60, netR: 3, count: 5 }];
 const bySymbol: BreakdownRow[] = [{ name: "XAUUSD", winRate: 66, netR: 5, count: 8 }];
@@ -13,7 +13,6 @@ const todayStr = [
   String(today.getMonth() + 1).padStart(2, "0"),
   String(today.getDate()).padStart(2, "0"),
 ].join("-");
-const daily: DailyNet[] = [{ date: todayStr, net: 1.5 }];
 const dailyPnL: DailyPnL[] = [{ date: todayStr, wins: 2, losses: 1, net: 1 }];
 const recent: ClosedTrade[] = [
   {
@@ -29,7 +28,6 @@ function setup() {
     <TrackRecordTabs
       byStrategy={byStrategy}
       bySymbol={bySymbol}
-      daily={daily}
       dailyPnL={dailyPnL}
       recent={recent}
     />,
@@ -43,16 +41,16 @@ describe("TrackRecordTabs", () => {
     expect(screen.getByText("Calendar")).toBeDefined();
     expect(screen.getByText("Breakdown")).toBeDefined();
     expect(screen.getByText("Trades")).toBeDefined();
-    expect(screen.getByText(/same calendar as Admin/i)).toBeDefined();
+    expect(screen.getByText(/Win \/ loss calendar/i)).toBeDefined();
     expect(screen.getByText("2 W")).toBeDefined();
     expect(screen.getByText("1 L")).toBeDefined();
-    expect(screen.queryByText(/Recent closed trades/i)).toBeNull();
+    expect(screen.queryByText(/Recent trades/i)).toBeNull();
   });
 
   it("switches to the Trades panel when the Trades tab is clicked", () => {
     setup();
     fireEvent.click(screen.getByText("Trades"));
-    expect(screen.getByText(/Recent closed trades/i)).toBeDefined();
-    expect(screen.queryByText(/same calendar as Admin/i)).toBeNull();
+    expect(screen.getByText(/Recent trades/i)).toBeDefined();
+    expect(screen.queryByText(/Win \/ loss calendar/i)).toBeNull();
   });
 });

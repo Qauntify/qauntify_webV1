@@ -8,6 +8,7 @@ import {
   type SignalsBrowseTab,
 } from "@/lib/signals-browse-tabs";
 
+/** Clean underline session tabs. */
 export function SignalsSessionRail({
   tab,
   basePath,
@@ -23,8 +24,8 @@ export function SignalsSessionRail({
 
   return (
     <nav
-      aria-label="Signal lanes"
-      className="signals-rail flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      aria-label="Sessions"
+      className="flex gap-1 overflow-x-auto border-b border-line [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {options.map((opt) => {
         const active = opt.id === tab;
@@ -33,25 +34,16 @@ export function SignalsSessionRail({
             key={opt.id}
             href={hrefFor(opt.id)}
             aria-current={active ? "page" : undefined}
-            className={`group relative flex shrink-0 flex-col rounded-md px-3.5 py-2.5 transition-colors ${
+            className={`relative shrink-0 whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors ${
               active
-                ? "bg-ink text-paper"
-                : "bg-card text-ink ring-1 ring-inset ring-line hover:ring-ink/25"
+                ? "text-ink"
+                : "text-slate hover:text-ink"
             }`}
           >
-            <span className="font-mono text-[11px] font-bold tracking-[0.14em]">
-              {opt.code ?? opt.label.slice(0, 4).toUpperCase()}
-            </span>
-            <span
-              className={`mt-0.5 text-[11px] font-medium ${
-                active ? "text-paper/70" : "text-slate"
-              }`}
-            >
-              {opt.label}
-            </span>
+            {opt.label}
             {active ? (
               <span
-                className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-long"
+                className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-ink"
                 aria-hidden
               />
             ) : null}

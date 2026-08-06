@@ -24,7 +24,7 @@ export function parseSignalsBrowseTab(tab: string | undefined): SignalsBrowseTab
 }
 
 export const SIGNAL_FILTER_OPTIONS: SignalFilterOption[] = [
-  { id: "all", label: "All lanes", hint: "Every session", code: "ALL" },
+  { id: "all", label: "All", hint: "Every session", code: "ALL" },
   { id: "war-room", label: "War Room", hint: "Floor debate", code: "WR" },
   { id: "super-scalping", label: "Super scalp", hint: "5m ICT FVG", code: "5M" },
   { id: "scalping", label: "Scalping", hint: "15m cloud + MSS", code: "15M" },

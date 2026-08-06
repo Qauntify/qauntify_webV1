@@ -73,41 +73,6 @@ body {
   color: #fff;
 }
 
-@keyframes signals-lane-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.signals-lane {
-  animation: signals-lane-in 0.35s ease both;
-}
-
-.signals-desk .signals-lane:nth-child(2) {
-  animation-delay: 0.04s;
-}
-.signals-desk .signals-lane:nth-child(3) {
-  animation-delay: 0.08s;
-}
-.signals-desk .signals-lane:nth-child(4) {
-  animation-delay: 0.12s;
-}
-.signals-desk .signals-lane:nth-child(5) {
-  animation-delay: 0.16s;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .signals-lane {
-    animation: none;
-  }
-}
-
-
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

@@ -30,9 +30,9 @@ export default async function Dashboard({
   return (
     <DashboardShell
       title="Signals"
-      subtitle="Lane desk — AI sessions, BBMA live, War Room"
+      subtitle="AI-confirmed and live EA setups"
     >
-      <div className="w-full space-y-5">
+      <div className="w-full space-y-6">
         {admin === "denied" ? (
           <Notice tone="error">
             Admin access is not enabled for {user.email}. Ask the
@@ -41,9 +41,9 @@ export default async function Dashboard({
         ) : null}
 
         <div className="lg:hidden">
-          <h1 className="text-xl font-bold tracking-tight">Signals</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Signals</h1>
           <p className="mt-1 text-sm text-slate">
-            Pick a lane, then trade the levels.
+            AI-confirmed and live EA setups
           </p>
         </div>
 
@@ -52,7 +52,6 @@ export default async function Dashboard({
           page={page}
           accessToken={accessToken}
           basePath="/dashboard"
-          desk
           hideFilter
         />
       </div>

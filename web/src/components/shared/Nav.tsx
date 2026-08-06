@@ -8,7 +8,6 @@ import { createClient } from "@/lib/supabase/server";
 const links = [
   { href: "/signals", label: "Signals" },
   { href: "/war-room", label: "War Room" },
-  { href: "/markets", label: "Markets" },
   { href: "/track-record", label: "Track Record" },
 ];
 
