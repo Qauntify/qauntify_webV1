@@ -779,10 +779,9 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
     ]
 
 
-def test_main_scans_gbpusd_on_the_swing_session_only(monkeypatch):
-    """GBPUSD is restricted to swing (SESSION_SYMBOLS). The fast sessions must
-    skip it entirely — not scan and discard, which would still burn the fetch
-    and the Supabase round trips."""
+def test_main_skips_retired_gbpusd_even_when_in_bot_settings(monkeypatch):
+    """GBPUSD is retired (RETIRED_SYMBOLS). It must not be scanned on any
+    session even if an old bot_settings row still lists it."""
     _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT", "GBPUSD"))
     monkeypatch.setattr(run_module, "load_config", _config)
@@ -814,13 +813,12 @@ def test_main_scans_gbpusd_on_the_swing_session_only(monkeypatch):
 
     assert sorted(scanned) == [
         ("BTCUSDT", "15m"), ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
-        ("GBPUSD", "1h"),
     ]
-    # The fast sessions must not even query for it.
+    assert all("GBP" not in symbol for symbol, _ in scanned)
     assert prefetched == [
         (("BTCUSDT",), "5m"),
         (("BTCUSDT",), "15m"),
-        (("BTCUSDT", "GBPUSD"), "1h"),
+        (("BTCUSDT",), "1h"),
     ]
 
 

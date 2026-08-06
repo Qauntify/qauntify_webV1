@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { shouldDispatchEngineFromM1Push } from "@/lib/bar-close";
+import { dispatchEngineWorkflow } from "@/lib/github-engine";
 import { mergeMt5Candles } from "@/lib/supabase/admin";
 import { authorizedBySecret } from "@/lib/webhook-guard";
 
@@ -108,5 +110,24 @@ export async function POST(request: Request) {
   if (!ok) {
     return NextResponse.json({ error: "Persist failed" }, { status: 502 });
   }
-  return NextResponse.json({ ok: true, merged: candles.length });
+
+  // VPS runs EA only — on 5m/15m/1h close, kick GitHub Actions engine.
+  // Soft-fail: candle storage already succeeded; never 5xx for dispatch.
+  const due = shouldDispatchEngineFromM1Push(candles);
+  let engine: "skipped" | "dispatched" | "failed" = "skipped";
+  if (due.length > 0) {
+    try {
+      const result = await dispatchEngineWorkflow();
+      engine = result.ok ? "dispatched" : "failed";
+    } catch {
+      engine = "failed";
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    merged: candles.length,
+    engine,
+    due,
+  });
 }

@@ -36,7 +36,7 @@ STRATEGY_TIMEFRAMES = {
     "bbma_reentry": "1h",
 }
 DEFAULT_WARMUP = 60
-DEFAULT_SYMBOLS = ("BTCUSD", "ETHUSD", "XAUUSD", "GBPUSD")
+DEFAULT_SYMBOLS = ("BTCUSD", "ETHUSD", "XAUUSD")
 DEFAULT_CANDLE_LIMIT = 720
 
 # Higher-timeframe confluence per strategy (matches the live sessions), so the

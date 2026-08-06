@@ -901,7 +901,12 @@ OUTCOME_LABELS = {
 }
 
 
-def main():
+def main(sessions=None):
+    """Run the signal engine once.
+
+    `sessions` defaults to every TRADING_SESSION. The live bar-close scanner
+    passes only the sessions whose candle just closed.
+    """
     cfg = load_config()
     # Main-thread session for Supabase reads/writes outside the scan workers.
     db_session = requests.Session()
@@ -912,16 +917,24 @@ def main():
         print(f"Another engine run holds the lock; skipping this trigger ({run_id}).")
         return
 
+    trading_sessions = tuple(sessions) if sessions is not None else TRADING_SESSIONS
+    if not trading_sessions:
+        print(f"No sessions due; skipping ({run_id}).")
+        release_engine_lock(
+            run_id, cfg.supabase_url, cfg.supabase_service_key, session=db_session,
+        )
+        return
+
     stored = 0
     outcomes: list[dict] = []
     candles_by_symbol: dict = {}
-    session_label = "+".join(s.timeframe for s in TRADING_SESSIONS)
+    session_label = "+".join(s.timeframe for s in trading_sessions)
     try:
         settings = fetch_bot_settings(cfg.supabase_url, cfg.supabase_service_key,
                                       session=db_session)
         keys = cfg.sealion_api_keys or (cfg.sealion_api_key,)
         print(f"Using {len(keys)} SEA-LION API key(s) across "
-              f"{len(settings.symbols)} symbol(s) in {len(TRADING_SESSIONS)} "
+              f"{len(settings.symbols)} symbol(s) in {len(trading_sessions)} "
               f"session(s) ({session_label}), "
               f"swing_strategy={settings.signal_strategy}, "
               f"scalp=cloud_mss, super_scalp=ict_fvg.")
@@ -958,7 +971,7 @@ def main():
 
         # Each session (scalp, swing) scans all symbols in parallel, one session
         # at a time — so a run's outcomes group by session for a clear summary.
-        for trading_session in TRADING_SESSIONS:
+        for trading_session in trading_sessions:
             # Not every symbol belongs on every session — see SESSION_SYMBOLS.
             # Filtered once here so the prefetches, the scan tasks and the
             # result pairing below all agree on the same list; querying for a

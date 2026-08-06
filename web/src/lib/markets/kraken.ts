@@ -7,7 +7,6 @@ export const DEFAULT_MARKET_SYMBOLS = [
   "BTCUSD",
   "ETHUSD",
   "XAUUSD",
-  "GBPUSD",
 ] as const;
 
 export type MarketInterval = "5m" | "15m" | "1h";

@@ -9,7 +9,7 @@ FEED_URLS = (
     "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "https://decrypt.co/feed",
     "https://www.theblock.co/rss.xml",
-    # Gold + forex, so XAUUSD/GBPUSD confirmation sees real headlines.
+    # Gold macro headlines for XAUUSD confirmation.
     "https://www.fxstreet.com/rss/news",
     "https://www.forexlive.com/feed/news",
 )
@@ -18,13 +18,11 @@ SYMBOL_KEYWORDS = {
     "BTCUSD": ("bitcoin", "btc"),
     "ETHUSD": ("ethereum", "ether", "eth"),
     "XAUUSD": ("gold", "xau", "bullion"),
-    "GBPUSD": ("gbp", "sterling", "pound sterling", "bank of england", "boe"),
     # Legacy symbols still used on older signal rows.
     "BTCUSDT": ("bitcoin", "btc"),
     "ETHUSDT": ("ethereum", "ether", "eth"),
     "PAXGUSD": ("gold", "paxg", "xau"),
     "PAXGUSDT": ("gold", "paxg", "xau"),
-    "GBPUSDT": ("gbp", "sterling", "pound sterling", "bank of england", "boe"),
 }
 
 

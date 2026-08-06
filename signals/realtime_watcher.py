@@ -1,5 +1,5 @@
 """Real-time SL/TP outcome tracking for the Kraken-sourced symbols (BTCUSD,
-ETHUSD, GBPUSD) via a live WebSocket feed.
+ETHUSD) via a live WebSocket feed.
 
 XAUUSD/MT5 does NOT go through this process — the MT5 EA
 (mt5/QauntifyTickPush.mq5) pushes ticks straight to the production API
@@ -47,7 +47,6 @@ HISTORY_LIMIT = 1000
 KRAKEN_WS_PAIR_BY_SYMBOL = {
     "BTCUSD": "BTC/USD",
     "ETHUSD": "ETH/USD",
-    "GBPUSD": "GBP/USD",
 }
 KRAKEN_WS_URL = "wss://ws.kraken.com/v2"
 
@@ -136,7 +135,7 @@ class RealtimeWatcher:
 
 
 async def run_kraken_ws(watcher: RealtimeWatcher) -> None:
-    """Subscribes to BTCUSD/ETHUSD/GBPUSD tickers, reconnecting on drop."""
+    """Subscribes to BTCUSD/ETHUSD tickers, reconnecting on drop."""
     import websockets  # imported lazily: only this coroutine needs it
 
     pairs = list(KRAKEN_WS_PAIR_BY_SYMBOL.values())

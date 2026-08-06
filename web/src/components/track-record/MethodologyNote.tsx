@@ -13,14 +13,15 @@ export function MethodologyNote() {
       <p>
         <strong className="text-slate/80">Costs are deducted.</strong> Every trade is charged an estimated
         round-trip cost — spread plus commission — before it counts: 20&nbsp;bps on crypto, 2&nbsp;bps on
-        gold, 1.5&nbsp;bps on GBPUSD. Cost is a share of price while R is a share of the stop distance, so
+        gold. Cost is a share of price while R is a share of the stop distance, so
         tighter stops carry proportionally more of it. Gross is shown next to net so the gap is visible.
       </p>
       <p>
         <strong className="text-slate/80">Gold prices track your broker.</strong> XAUUSD
-        1m structure requires closed MT5 candles from your EA (no PAXG mix);
-        entry snaps to a fresh MT5 mid. Gold signals are refused if candles or
-        ticks are stale. 1m scalps only fire in London/New York sessions.
+        structure prefers closed MT5 candles (1m direct; 5m/15m/1h resampled from
+        the same buffer) so levels match your entries. Entry snaps to a fresh MT5
+        mid. Gold signals are refused if candles or ticks are stale. 1m scalps
+        only fire in London/New York sessions.
       </p>
       <p>
         Every closed signal is included — nothing is cherry-picked or removed after the fact. Outcomes are

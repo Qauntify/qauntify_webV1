@@ -47,7 +47,7 @@ class Config:
     # public signals channel, so "a session went silent" doesn't show up
     # next to trade calls. Healthcheck alerts are skipped when unset.
     telegram_alerts_chat_id: str = ""
-    symbols: tuple = ("BTCUSD", "ETHUSD", "XAUUSD", "GBPUSD")
+    symbols: tuple = ("BTCUSD", "ETHUSD", "XAUUSD")
     timeframe: str = "1h"
     candle_limit: int = 201  # one extra: the last fetched candle is still forming and gets dropped
     sealion_base_url: str = "https://api.sea-lion.ai/v1"

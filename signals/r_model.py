@@ -113,8 +113,8 @@ def gross_r(row: dict) -> float | None:
 # does not multiply the cost.
 #
 # Crypto reuses the taker figure already assumed in the sr_limit detector
-# (0.20% round-trip). Gold and FX are conservative retail all-in estimates:
-# XAUUSD ~$0.60 on a $3,300 price, GBPUSD ~1 pip.
+# (0.20% round-trip). Gold is a conservative retail all-in estimate
+# (~$0.60 on a $3,300 price). GBPUSD kept for historical DB rows only.
 #
 # TUNE THESE to your actual venue and fee tier — they are the single biggest
 # lever on the net track record, because at these stop distances cost is a
@@ -123,7 +123,7 @@ COST_BPS = {
     "BTCUSD": 20.0,
     "ETHUSD": 20.0,
     "XAUUSD": 2.0,
-    "GBPUSD": 1.5,
+    "GBPUSD": 1.5,  # legacy rows only — GBP is not scanned
 }
 # Unknown symbols take the most expensive assumption rather than a free ride.
 DEFAULT_COST_BPS = 20.0

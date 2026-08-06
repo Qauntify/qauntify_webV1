@@ -4,7 +4,6 @@ const MARKETS = [
   { name: "Bitcoin", symbol: "BTCUSD", live: true },
   { name: "Ethereum", symbol: "ETHUSD", live: true },
   { name: "Gold", symbol: "XAUUSD", live: true },
-  { name: "GBP", symbol: "GBPUSD", live: true },
   { name: "Stocks", symbol: "AAPL +", live: false },
   { name: "Indices", symbol: "NAS100 +", live: false },
 ];
@@ -15,10 +14,10 @@ export function Markets() {
       <div className="page-container py-16 md:py-20">
         <SectionHeader
           eyebrow="Markets"
-          title="Four markets live. More when they earn it."
+          title="Three markets live. More when they earn it."
           subtitle="We only list a market once the engine actually trades it well."
         />
-        <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {MARKETS.map((m) => (
             <div
               key={m.name}

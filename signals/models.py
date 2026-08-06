@@ -208,17 +208,13 @@ AUXILIARY_SESSIONS = (
 ALL_SESSIONS = TRADING_SESSIONS + AUXILIARY_SESSIONS
 
 
+# Symbols the engine must never scan (even if still listed in bot_settings).
+# Historical signal rows stay in the DB for track record / outcome settlement.
+RETIRED_SYMBOLS = frozenset({"GBPUSD"})
+
 # Symbols that only some sessions may scan. A symbol absent from this map is
-# scanned by every session, which is the default for crypto.
-#
-# GBPUSD is restricted to the swing session. Retail FX carries roughly a pip of
-# spread, and cost expressed in R scales inversely with the stop distance — so
-# the same spread that is a rounding error against a 1h stop is a large
-# fraction of a 5m or 15m one. The fast sessions cannot pay for themselves on
-# it. Same instrument and same rules; only the timeframe makes it viable.
-SESSION_SYMBOLS = {
-    "GBPUSD": ("swing",),
-}
+# scanned by every session. Empty while every live market is unrestricted.
+SESSION_SYMBOLS: dict[str, tuple[str, ...]] = {}
 
 
 def session_scans(session_name: str, symbol: str) -> bool:
@@ -228,14 +224,17 @@ def session_scans(session_name: str, symbol: str) -> bool:
     # canonical_symbol keeps one definition of how BTCUSDT maps to BTCUSD.
     from signals.market_client import canonical_symbol
 
-    allowed = SESSION_SYMBOLS.get(canonical_symbol(symbol))
+    canon = canonical_symbol(symbol)
+    if canon in RETIRED_SYMBOLS:
+        return False
+    allowed = SESSION_SYMBOLS.get(canon)
     return allowed is None or session_name in allowed
 
 
 @dataclass(frozen=True)
 class BotSettings:
     """Engine behavior controlled from the /admin page (bot_settings table)."""
-    symbols: tuple = ("BTCUSD", "ETHUSD", "XAUUSD", "GBPUSD")
+    symbols: tuple = ("BTCUSD", "ETHUSD", "XAUUSD")
     min_alert_confidence: int = 0  # Telegram floor only
     min_store_confidence: int = 0  # storage floor for LLM confirms
     signal_strategy: str = DEFAULT_SIGNAL_STRATEGY

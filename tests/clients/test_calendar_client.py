@@ -102,13 +102,13 @@ def test_filter_btc_keeps_usd_high_near_now():
     assert "Building Permits" not in titles
 
 
-def test_filter_gbp_includes_gbp_and_usd():
+def test_filter_xau_keeps_usd_events():
     now = datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc)
     events = fetch_calendar_events(session=_FakeSession())
-    filtered = filter_events_for_symbol(events, "GBPUSDT", now=now)
+    filtered = filter_events_for_symbol(events, "XAUUSD", now=now)
     titles = [e["title"] for e in filtered]
     assert "CPI m/m" in titles
-    assert "BoE Bank Rate" in titles
+    assert "BoE Bank Rate" not in titles
 
 
 def test_calendar_block_formats_events():

@@ -642,7 +642,7 @@ export type Mt5CandleBar = {
   volume: number;
 };
 
-const MT5_CANDLE_MAX_BARS = 720;
+const MT5_CANDLE_MAX_BARS = 14_400; // ~10 days of M1 for 5m/15m/1h resample
 
 /** Merge closed MT5 bars into a Storage ring buffer used by the Python
  * gold 1m detector. Soft-fails if Storage is unreachable. */

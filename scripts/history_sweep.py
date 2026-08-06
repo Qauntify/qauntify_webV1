@@ -10,8 +10,8 @@ Data provenance: scripts/history_provenance.py verifies each monthly archive
 against Binance's published SHA256 and locates known market events (the 2021
 all-time high, Black Thursday) at their correct dates. Run it first.
 
-Only BTC and ETH can be extended: Binance lists no gold or GBP, so XAUUSD and
-GBPUSD results elsewhere remain on ~4 months and are not comparable to these.
+Only BTC and ETH can be extended: Binance lists no gold, so XAUUSD results
+elsewhere remain on a shorter sample and are not comparable to these.
 
 A strategy whose module is absent is reported as unavailable rather than
 skipped silently — `orb_rvol` currently lives only on an unmerged branch.

@@ -160,6 +160,68 @@ def test_fetch_xauusd_1m_refuses_paxg_when_mt5_cold(monkeypatch):
     assert len(candles) == 2
 
 
+def _fresh_mt5_1m_rows(n: int, *, close: float = 2650.0):
+    """n closed M1 rows ending one minute ago (usable / fresh)."""
+    from datetime import datetime, timezone
+
+    now = int(datetime.now(timezone.utc).timestamp())
+    end = now - (now % 60) - 60
+    rows = []
+    for i in range(n):
+        t = end - (n - 1 - i) * 60
+        rows.append({
+            "open_time": t,
+            "open": close,
+            "high": close + 1,
+            "low": close - 1,
+            "close": close + (i % 3) * 0.1,
+            "volume": 1.0,
+        })
+    return rows
+
+
+def test_fetch_xauusd_5m_resamples_mt5_1m_when_warm(monkeypatch):
+    """Gold 5m/15m/1h structure must come from broker M1, not PAXG."""
+    session = FakeSession(OHLC_PAYLOAD)
+    rows = _fresh_mt5_1m_rows(600)  # → 120 five-minute bars
+
+    monkeypatch.setattr(
+        "signals.storage.fetch_mt5_candles",
+        lambda *a, **k: rows,
+    )
+    candles = fetch_candles(
+        "XAUUSD",
+        interval="5m",
+        limit=50,
+        session=session,
+        supabase_url="https://example.supabase.co",
+        service_key="service-key",
+    )
+    # Synthetic forming bar appended; closed history is MT5-resampled.
+    assert len(candles) == 51
+    assert session.last_url is None or "kraken" not in (session.last_url or "")
+    # 5m bucket width
+    assert candles[1].open_time - candles[0].open_time == 5 * 60_000
+
+
+def test_fetch_xauusd_5m_falls_back_to_paxg_when_mt5_shallow(monkeypatch):
+    session = FakeSession(OHLC_PAYLOAD)
+    monkeypatch.setattr(
+        "signals.storage.fetch_mt5_candles",
+        lambda *a, **k: _fresh_mt5_1m_rows(80),  # only ~16 five-minute bars
+    )
+    candles = fetch_candles(
+        "XAUUSD",
+        interval="5m",
+        limit=50,
+        session=session,
+        supabase_url="https://example.supabase.co",
+        service_key="service-key",
+    )
+    assert session.last_params["pair"] == "PAXGUSD"
+    assert len(candles) == 2
+
+
 def test_fetch_candles_raises_on_http_error():
     session = FakeSession({}, status=500)
     with pytest.raises(RuntimeError):
@@ -212,7 +274,7 @@ def test_gold_entry_live_ok_rejects_stale():
 
 
 def test_gold_5m_allows_paxg_mt5_basis_drift():
-    """5m structure is PAXG; publish snaps to MT5 — ~10pt basis must pass."""
+    """PAXG fallback vs MT5 mid can sit ~10pt apart — still publishable."""
     from signals.market_client import gold_entry_live_ok, max_gold_entry_drift
 
     assert max_gold_entry_drift("5m", atr=3.0) >= 15.0

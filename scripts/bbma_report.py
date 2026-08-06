@@ -17,7 +17,7 @@ from signals.backtest import backtest_strategy
 from signals.market_client import fetch_candles
 
 STRATEGIES = ("bbma_extreme", "bbma_reentry")
-SYMBOLS = ("BTCUSD", "ETHUSD", "XAUUSD", "GBPUSD")
+SYMBOLS = ("BTCUSD", "ETHUSD", "XAUUSD")
 # 15m is omitted deliberately — see the module docstring.
 TIMEFRAMES = ("1h", "4h")
 # One step up for the higher-timeframe trend gate.

@@ -353,7 +353,7 @@ def fetch_mt5_last_tick(symbol: str, supabase_url: str, service_key: str,
         return None
 
 
-MT5_CANDLE_MAX_BARS = 720
+MT5_CANDLE_MAX_BARS = 14_400  # ~10 days of M1 — enough to resample 1h/4h
 # Match ict structure window so a partial EA backfill can go live sooner.
 MT5_CANDLE_MIN_BARS = 60
 # Last closed M1 bar must be newer than now - this (seconds).

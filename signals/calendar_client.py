@@ -14,12 +14,10 @@ SYMBOL_CURRENCIES = {
     "BTCUSD": ("USD",),
     "ETHUSD": ("USD",),
     "XAUUSD": ("USD",),
-    "GBPUSD": ("GBP", "USD"),
     "BTCUSDT": ("USD",),
     "ETHUSDT": ("USD",),
     "PAXGUSDT": ("USD",),
     "PAXGUSD": ("USD",),
-    "GBPUSDT": ("GBP", "USD"),
 }
 
 RELEVANT_IMPACTS = frozenset({"High", "Medium"})

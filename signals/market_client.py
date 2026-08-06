@@ -1,16 +1,21 @@
 """Fetches OHLCV candles (no API key required).
 
-Crypto + FX (BTCUSD, ETHUSD, GBPUSD) come from Kraken public OHLC.
+Crypto (BTCUSD, ETHUSD) come from Kraken public OHLC. Legacy GBPUSD/GBPUSDT
+pair maps stay so older DB rows can still settle outcomes; GBP is not scanned.
+
 Legacy PAXG* symbols canonicalize to XAUUSD so older rows still settle.
 
 Gold OHLC prefers closed MT5 1m bars (pushed by QauntifyTickPush) when the
-EA ring buffer is warm; otherwise Kraken PAXGUSD. App symbol stays XAUUSD.
+EA ring buffer is warm — 1m used directly, 5m/15m/1h/4h resampled from that
+same buffer — so structure matches broker entries. Falls back to Kraken
+PAXGUSD when the buffer is cold or too shallow for the requested interval.
 Yahoo GC=F futures were removed — they sat ~40–60 USD above broker spot.
 """
 from __future__ import annotations
 
 import requests
 
+from signals.candle_resample import resample_candles
 from signals.models import Candle
 
 OHLC_URL = "https://api.kraken.com/0/public/OHLC"
@@ -41,6 +46,10 @@ INTERVAL_MINUTES = {
     "4h": 240,
     "1d": 1440,
 }
+
+# Minimum closed HTF bars after resampling before we trust MT5 over PAXG.
+_MT5_RESAMPLE_MIN_BARS = 40
+
 
 def canonical_symbol(symbol: str) -> str:
     """Normalize to a USD quote symbol (BTCUSDT → BTCUSD, PAXG* → XAUUSD)."""
@@ -106,8 +115,6 @@ def _fetch_kraken_candles(symbol, interval, limit, start_time, session):
     ]
 
 
-
-
 def _fetch_kraken_gold_candles(interval, limit, start_time, session):
     """Spot-gold OHLC via PAXGUSD; 4h uses Kraken's native 240m bucket."""
     return _fetch_kraken_candles(
@@ -153,8 +160,9 @@ def fetch_gold_last_price(session=None) -> float:
 def max_gold_entry_drift(timeframe: str, atr: float | None) -> float:
     """Max allowed |entry - live| before a gold signal is treated as stale.
 
-    5m candles are Kraken PAXG while publish snaps to MT5 — basis can sit
-    several dollars wide, so Super Scalp needs a looser cap than 1m.
+    When 5m structure is still PAXG fallback, basis vs MT5 mid can sit several
+    dollars wide — Super Scalp needs a looser cap than 1m. MT5-resampled
+    structure keeps the same caps (safe); tighten later once PAXG path is rare.
     """
     base = {"1m": 2.5, "5m": 15.0, "15m": 12.0}.get(timeframe, 8.0)
     hard_cap = {"1m": 12.0, "5m": 25.0, "15m": 20.0}.get(timeframe, 12.0)
@@ -201,58 +209,94 @@ def setup_stop_risk_ok(entry: float, stop_loss: float, *,
     )
 
 
+def _append_forming_bar(candles: list[Candle], interval: str) -> list[Candle]:
+    """MT5 buffer is closed-only; callers drop candles[:-1] like Kraken."""
+    if not candles:
+        return candles
+    last = candles[-1]
+    width_ms = INTERVAL_MINUTES[interval] * 60_000
+    return list(candles) + [
+        Candle(
+            open_time=last.open_time + width_ms,
+            open=last.close,
+            high=last.close,
+            low=last.close,
+            close=last.close,
+            volume=0.0,
+        )
+    ]
+
+
+def _trim_candles(candles: list[Candle], limit, start_time) -> list[Candle]:
+    if start_time is not None:
+        candles = [c for c in candles if c.open_time >= int(start_time)]
+    if limit is not None and limit > 0 and len(candles) > limit:
+        candles = candles[-limit:]
+    return candles
+
+
+def _gold_from_mt5_1m(symbol, interval, limit, start_time, session,
+                     supabase_url, service_key):
+    """Return MT5-based candles (with forming bar) or None to fall back."""
+    from signals.storage import (
+        fetch_mt5_candles,
+        mt5_candles_usable,
+        mt5_rows_to_candles,
+    )
+
+    rows = fetch_mt5_candles(
+        symbol, "1m", supabase_url, service_key, session=session,
+    )
+    if not mt5_candles_usable(rows):
+        return None, rows
+
+    m1 = mt5_rows_to_candles(rows)
+    minutes = INTERVAL_MINUTES[interval]
+    if minutes == 1:
+        candles = m1
+    else:
+        candles = resample_candles(m1, minutes)
+        if len(candles) < _MT5_RESAMPLE_MIN_BARS:
+            return None, rows
+
+    candles = _trim_candles(candles, limit, start_time)
+    candles = _append_forming_bar(candles, interval)
+    closed = max(0, len(candles) - 1)
+    label = "1m" if minutes == 1 else f"{interval}←1m"
+    print(f"[{canonical_symbol(symbol)}] using MT5 {label} candles "
+          f"({closed} closed bars)")
+    return candles, rows
+
+
 def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
                   session=None, *, supabase_url=None, service_key=None,
                   require_mt5_1m: bool | None = None):
     """Return candles newest-last, same shape as the old Binance client.
 
     `start_time` is epoch **milliseconds** (engine convention).
-    For XAUUSD 1m with Supabase credentials, uses the MT5 closed-bar buffer
-    only. When that buffer is cold, raises (default) so detection never
-    mixes PAXG structure with broker entries. Pass
-    `require_mt5_1m=False` to allow a Kraken PAXG fallback (legacy / offline).
+    For XAUUSD with Supabase credentials, prefers the MT5 closed-bar buffer
+    (direct 1m, or resampled for wider intervals). When that buffer is cold
+    or too shallow, 1m raises by default so detection never mixes PAXG
+    structure with broker entries; wider intervals fall back to Kraken PAXG.
+    Pass `require_mt5_1m=False` to allow a Kraken PAXG fallback on 1m
+    (legacy / offline).
     """
     session = session or requests.Session()
     if interval not in INTERVAL_MINUTES:
         raise ValueError(f"unsupported interval: {interval}")
 
-    gold_1m = is_gold_symbol(symbol) and interval == "1m"
+    gold = is_gold_symbol(symbol)
+    gold_1m = gold and interval == "1m"
     must_mt5 = require_mt5_1m if require_mt5_1m is not None else (
         gold_1m and bool(supabase_url and service_key)
     )
 
-    if gold_1m and supabase_url and service_key:
-        from signals.storage import (
-            fetch_mt5_candles,
-            mt5_candles_usable,
-            mt5_rows_to_candles,
+    if gold and supabase_url and service_key:
+        candles, rows = _gold_from_mt5_1m(
+            symbol, interval, limit, start_time, session,
+            supabase_url, service_key,
         )
-        rows = fetch_mt5_candles(
-            symbol, "1m", supabase_url, service_key, session=session,
-        )
-        if mt5_candles_usable(rows):
-            candles = mt5_rows_to_candles(rows)
-            if start_time is not None:
-                candles = [c for c in candles if c.open_time >= int(start_time)]
-            if limit is not None and limit > 0 and len(candles) > limit:
-                candles = candles[-limit:]
-            # Callers drop candles[:-1] assuming a still-forming bar exists
-            # (Kraken). MT5 buffer is closed-only — append a synthetic forming
-            # bar so the closed history survives that slice.
-            if candles:
-                last = candles[-1]
-                candles = list(candles) + [
-                    Candle(
-                        open_time=last.open_time + 60_000,
-                        open=last.close,
-                        high=last.close,
-                        low=last.close,
-                        close=last.close,
-                        volume=0.0,
-                    )
-                ]
-            print(f"[{canonical_symbol(symbol)}] using MT5 1m candles "
-                  f"({len(candles) - 1} closed bars)")
+        if candles is not None:
             return candles
         if must_mt5:
             raise RuntimeError(
@@ -261,17 +305,11 @@ def fetch_candles(symbol, interval="1h", limit=200, start_time=None,
                 f"refusing PAXG structure"
             )
 
-    if is_gold_symbol(symbol):
+    if gold:
         candles = _fetch_kraken_gold_candles(interval, limit, start_time, session)
     else:
         candles = _fetch_kraken_candles(
             symbol, interval, limit, start_time, session,
         )
 
-    if start_time is not None:
-        candles = [c for c in candles if c.open_time >= int(start_time)]
-
-    if limit is not None and limit > 0 and len(candles) > limit:
-        candles = candles[-limit:]
-
-    return candles
+    return _trim_candles(candles, limit, start_time)

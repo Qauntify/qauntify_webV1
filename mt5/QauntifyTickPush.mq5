@@ -3,6 +3,9 @@
 //| 1) Pushes bid/ask ticks → /api/mt5/tick (SL/TP + live mid snap)   |
 //| 2) Pushes closed M1 OHLC → /api/mt5/candles (pattern detection)   |
 //|                                                                    |
+//| VPS: attach this EA only — no Python on the VPS. On each 5m/15m/  |
+//| 1h close the candles API dispatches the GitHub signals engine.   |
+//|                                                                    |
 //| Allow WebRequest for the ApiUrl / CandleApiUrl origin:            |
 //| Tools → Options → Expert Advisors                                 |
 //+------------------------------------------------------------------+
@@ -14,7 +17,7 @@ input string CandleApiUrl   = "https://web-seven-pi-76.vercel.app/api/mt5/candle
 input string WebhookSecret  = "906f61d7dbd1aa2c72cc19a7a0382ce61434f8bd5d6d6c65466912d9808097e4";
 input int    MinIntervalMs  = 150;
 input double MinPriceMove   = 0.0;
-input int    BackfillBars   = 300;   // closed M1 bars sent on init
+input int    BackfillBars   = 2000;  // closed M1 bars sent on init (chunked)
 
 double   lastSentMid    = 0.0;
 uint     lastSentTick   = 0;
@@ -84,25 +87,36 @@ bool PushCandlesJson(const string candlesArrayJson)
 
 void BackfillClosedM1()
   {
+   // Push in chunks so WebRequest bodies stay under broker size limits while
+   // still warming a buffer deep enough to resample 5m/15m/1h structure.
+   const int chunk = 400;
    int total = Bars(_Symbol, PERIOD_M1);
    int n = BackfillBars;
    if(n < 60) n = 60;
    if(total <= 1) return;
    if(n > total - 1) n = total - 1;
 
-   string arr = "[";
-   // Oldest → newest among closed bars (shift n … 1).
-   for(int shift = n; shift >= 1; shift--)
+   int sent = 0;
+   for(int endShift = n; endShift >= 1; endShift -= chunk)
      {
-      if(shift < n) arr += ",";
-      arr += CandleJson(shift);
+      int startShift = endShift - chunk + 1;
+      if(startShift < 1) startShift = 1;
+      string arr = "[";
+      for(int shift = endShift; shift >= startShift; shift--)
+        {
+         if(shift < endShift) arr += ",";
+         arr += CandleJson(shift);
+        }
+      arr += "]";
+      if(!PushCandlesJson(arr))
+        {
+         Print("QauntifyTickPush: backfill stopped early after ", sent, " bars");
+         return;
+        }
+      sent += (endShift - startShift + 1);
      }
-   arr += "]";
-   if(PushCandlesJson(arr))
-     {
-      lastClosedBar = iTime(_Symbol, PERIOD_M1, 1);
-      Print("QauntifyTickPush: backfilled ", n, " closed M1 bars");
-     }
+   lastClosedBar = iTime(_Symbol, PERIOD_M1, 1);
+   Print("QauntifyTickPush: backfilled ", sent, " closed M1 bars");
   }
 
 void MaybePushClosedM1()

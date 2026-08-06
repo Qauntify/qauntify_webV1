@@ -28,7 +28,7 @@ export async function saveBotSettings(formData: FormData) {
   const symbols = String(formData.get("symbols") ?? "")
     .split(",")
     .map((s) => canonicalMarketSymbol(s.trim()))
-    .filter(Boolean);
+    .filter((s) => Boolean(s) && s !== "GBPUSD");
   const alertConfidence = Number(formData.get("minAlertConfidence"));
   const storeConfidence = Number(formData.get("minStoreConfidence"));
   const signalStrategy = String(formData.get("signalStrategy") ?? "ema_cross");

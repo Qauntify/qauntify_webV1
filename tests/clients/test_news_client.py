@@ -171,15 +171,3 @@ def test_gold_headlines_match_xau_and_gold():
     assert "Gold retreats from record high on dollar strength" in headlines
     assert "XAU/USD holds above key support" in headlines
     assert "Bitcoin ETF inflows surge" not in headlines
-
-
-def test_gbp_headlines_match_boe_and_sterling():
-    titles = [
-        "GBP/USD climbs as BoE holds rates",
-        "Sterling rallies on inflation surprise",
-        "Ethereum upgrade ships",
-    ]
-    headlines = filter_headlines(titles, "GBPUSDT")
-    assert "GBP/USD climbs as BoE holds rates" in headlines
-    assert "Sterling rallies on inflation surprise" in headlines
-    assert "Ethereum upgrade ships" not in headlines
