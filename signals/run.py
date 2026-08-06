@@ -92,6 +92,13 @@ def _dedup_window(timeframe: str) -> timedelta:
 # logged outcome — 90% of the bar, so a slightly early cron tick still
 # lands inside the window instead of missing it by a few minutes.
 EVAL_THROTTLE_FRACTION = 0.9
+# Super Scalp runs hot: re-check 5m sooner so a no_setup does not blank the
+# whole next bar window before a sweep reclaim can print.
+EVAL_THROTTLE_BY_TIMEFRAME = {"5m": 0.3}
+
+
+def _eval_throttle_fraction(timeframe: str) -> float:
+    return EVAL_THROTTLE_BY_TIMEFRAME.get(timeframe, EVAL_THROTTLE_FRACTION)
 
 
 def _prefetch_recent_events(symbols, timeframe, cfg, session=None):
@@ -100,7 +107,7 @@ def _prefetch_recent_events(symbols, timeframe, cfg, session=None):
     PREFETCH_UNAVAILABLE on failure so callers fail closed."""
     minutes = TIMEFRAME_MINUTES.get(timeframe, TIMEFRAME_MINUTES["1h"])
     since = (datetime.now(timezone.utc)
-             - timedelta(minutes=minutes * EVAL_THROTTLE_FRACTION)).isoformat()
+             - timedelta(minutes=minutes * _eval_throttle_fraction(timeframe))).isoformat()
     try:
         return latest_ai_event_times_since(
             symbols, timeframe, since, cfg.supabase_url,
@@ -155,7 +162,7 @@ def _recently_evaluated(symbol, timeframe, cfg, session=None,
     if last is None:
         return False
     minutes = TIMEFRAME_MINUTES.get(timeframe, TIMEFRAME_MINUTES["1h"])
-    threshold = timedelta(minutes=minutes * EVAL_THROTTLE_FRACTION)
+    threshold = timedelta(minutes=minutes * _eval_throttle_fraction(timeframe))
     elapsed = datetime.now(timezone.utc) - datetime.fromisoformat(last)
     return elapsed < threshold
 
