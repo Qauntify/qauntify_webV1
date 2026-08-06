@@ -151,11 +151,16 @@ def fetch_gold_last_price(session=None) -> float:
 
 
 def max_gold_entry_drift(timeframe: str, atr: float | None) -> float:
-    """Max allowed |entry - live| before a gold signal is treated as stale."""
-    base = {"1m": 2.5, "5m": 4.0, "15m": 6.0}.get(timeframe, 8.0)
+    """Max allowed |entry - live| before a gold signal is treated as stale.
+
+    5m candles are Kraken PAXG while publish snaps to MT5 — basis can sit
+    several dollars wide, so Super Scalp needs a looser cap than 1m.
+    """
+    base = {"1m": 2.5, "5m": 15.0, "15m": 12.0}.get(timeframe, 8.0)
+    hard_cap = {"1m": 12.0, "5m": 25.0, "15m": 20.0}.get(timeframe, 12.0)
     if atr is not None and atr > 0:
-        scale = {"1m": 0.25, "5m": 0.3, "15m": 0.35}.get(timeframe, 0.4)
-        base = max(base, min(12.0, scale * atr))
+        scale = {"1m": 0.25, "5m": 1.5, "15m": 0.75}.get(timeframe, 0.4)
+        base = max(base, min(hard_cap, scale * atr))
     return base
 
 

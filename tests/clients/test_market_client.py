@@ -211,6 +211,15 @@ def test_gold_entry_live_ok_rejects_stale():
     assert "stale" in msg.lower() or "refusing" in msg.lower()
 
 
+def test_gold_5m_allows_paxg_mt5_basis_drift():
+    """5m structure is PAXG; publish snaps to MT5 — ~10pt basis must pass."""
+    from signals.market_client import gold_entry_live_ok, max_gold_entry_drift
+
+    assert max_gold_entry_drift("5m", atr=3.0) >= 15.0
+    ok, msg = gold_entry_live_ok(4250.07, 4259.80, "5m", atr=3.0)
+    assert ok and msg == ""
+
+
 def test_setup_stop_risk_ok_rejects_tight_stop():
     from signals.market_client import setup_stop_risk_ok, stop_risk_fraction
 

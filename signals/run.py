@@ -543,7 +543,11 @@ def _load_market_data(symbol, timeframe, strategy, cfg, *,
 def _snap_gold_setup_to_live(setup: CandidateSetup, live: float,
                              timeframe: str, *,
                              source: str = "paxg") -> tuple[CandidateSetup | None, str]:
-    """Align published gold levels to a live bid when drift is small."""
+    """Align published gold levels to a live bid when drift is small.
+
+    Shifts stop by the same delta as entry so R geometry stays intact when
+    candle structure (PAXG) and broker mid (MT5) disagree.
+    """
     atr = setup.indicators.get("atr")
     if isinstance(atr, (int, float)):
         atr_val: float | None = float(atr)
@@ -557,19 +561,21 @@ def _snap_gold_setup_to_live(setup: CandidateSetup, live: float,
         ind["live_snap_source"] = source
         ind["live_snap_to"] = live
         return replace(setup, indicators=ind), ""
+    delta = live - setup.entry
+    new_stop = setup.stop_loss + delta
     tp_r = setup.indicators.get("tp_r")
     if isinstance(tp_r, (list, tuple)) and len(tp_r) == 3:
         tp1, tp2, tp3 = take_profits_from_risk(
-            live, setup.stop_loss, setup.direction,
+            live, new_stop, setup.direction,
             r1=float(tp_r[0]), r2=float(tp_r[1]), r3=float(tp_r[2]),
         )
     else:
         tp1, tp2, tp3 = take_profits_from_risk(
-            live, setup.stop_loss, setup.direction,
+            live, new_stop, setup.direction,
         )
-    if setup.direction == "long" and live <= setup.stop_loss:
+    if setup.direction == "long" and live <= new_stop:
         return None, "Live price at or below stop — not publishing"
-    if setup.direction == "short" and live >= setup.stop_loss:
+    if setup.direction == "short" and live >= new_stop:
         return None, "Live price at or above stop — not publishing"
     ind = dict(setup.indicators)
     ind["live_snap_from"] = setup.entry
@@ -578,6 +584,7 @@ def _snap_gold_setup_to_live(setup: CandidateSetup, live: float,
     return replace(
         setup,
         entry=live,
+        stop_loss=new_stop,
         take_profit=tp1,
         take_profit_2=tp2,
         take_profit_3=tp3,
