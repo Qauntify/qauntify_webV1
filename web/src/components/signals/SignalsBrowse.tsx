@@ -64,7 +64,7 @@ async function LanePanel({
   lane,
   emptyHint,
   accessToken,
-  featured = false,
+  embedded = false,
 }: {
   title: string;
   subtitle: string;
@@ -73,19 +73,16 @@ async function LanePanel({
   lane: SignalLane;
   emptyHint: string;
   accessToken: string | undefined;
-  featured?: boolean;
+  /** Inside the combined desk card — no second outer frame. */
+  embedded?: boolean;
 }) {
   const [signals, stats] = await Promise.all([
     getSignals(30, accessToken, timeframe === "bbma" ? undefined : timeframe, lane),
     getStats(accessToken, timeframe === "bbma" ? "bbma" : timeframe, lane),
   ]);
 
-  return (
-    <section
-      className={`signals-lane overflow-hidden rounded-xl border border-line bg-card ${
-        featured ? "shadow-[0_0_0_1px_color-mix(in_srgb,var(--ink)_6%,transparent)]" : ""
-      }`}
-    >
+  const inner = (
+    <>
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line px-5 py-4 sm:px-6">
         <div className="flex min-w-0 items-start gap-3">
           <span className="mt-0.5 inline-flex h-9 min-w-12 items-center justify-center rounded-md bg-ink px-2 font-mono text-xs font-bold tracking-[0.12em] text-paper">
@@ -127,6 +124,16 @@ async function LanePanel({
           </div>
         )}
       </div>
+    </>
+  );
+
+  if (embedded) {
+    return <section className="signals-lane border-t border-line">{inner}</section>;
+  }
+
+  return (
+    <section className="signals-lane overflow-hidden rounded-xl border border-line bg-card">
+      {inner}
     </section>
   );
 }
@@ -155,8 +162,8 @@ export async function SignalsBrowse({
   const activeMeta =
     SIGNAL_FILTER_OPTIONS.find((o) => o.id === tab) ?? SIGNAL_FILTER_OPTIONS[0];
 
-  const body = isWarRoomTab && warRoomPage ? (
-    <section className="signals-lane overflow-hidden rounded-xl border border-line bg-card">
+  const warRoomInner = warRoomPage ? (
+    <>
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line px-5 py-4 sm:px-6">
         <div className="flex min-w-0 items-start gap-3">
           <span className="mt-0.5 inline-flex h-9 min-w-12 items-center justify-center rounded-md bg-ink px-2 font-mono text-xs font-bold tracking-[0.12em] text-paper">
@@ -200,9 +207,19 @@ export async function SignalsBrowse({
           </div>
         )}
       </div>
-    </section>
+    </>
+  ) : null;
+
+  const content = isWarRoomTab && warRoomInner ? (
+    desk ? (
+      <div className="signals-lane border-t border-line">{warRoomInner}</div>
+    ) : (
+      <section className="signals-lane overflow-hidden rounded-xl border border-line bg-card">
+        {warRoomInner}
+      </section>
+    )
   ) : tab === "all" ? (
-    <div className={`space-y-5 ${desk ? "lg:space-y-6" : ""}`}>
+    <>
       {SESSIONS.map((s) => (
         <LanePanel
           key={s.id}
@@ -213,9 +230,10 @@ export async function SignalsBrowse({
           lane={s.lane}
           emptyHint={s.emptyHint}
           accessToken={accessToken}
+          embedded={desk}
         />
       ))}
-    </div>
+    </>
   ) : (
     <LanePanel
       accessToken={accessToken}
@@ -225,7 +243,7 @@ export async function SignalsBrowse({
       timeframe={SESSIONS.find((s) => s.id === tab)!.timeframe}
       lane={SESSIONS.find((s) => s.id === tab)!.lane}
       emptyHint={SESSIONS.find((s) => s.id === tab)!.emptyHint}
-      featured
+      embedded={desk}
     />
   );
 
@@ -235,34 +253,33 @@ export async function SignalsBrowse({
         {hideFilter ? null : (
           <SignalsBrowseFilter tab={tab} basePath={basePath} />
         )}
-        {body}
+        {tab === "all" ? (
+          <div className="space-y-5">{content}</div>
+        ) : (
+          content
+        )}
       </div>
     );
   }
 
   return (
-    <div className="signals-desk w-full space-y-5 sm:space-y-6">
-      <div className="overflow-hidden rounded-xl border border-line bg-card">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-          <div className="flex items-center gap-2.5">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-long opacity-40" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-long" />
-            </span>
-            <p className="font-mono text-[11px] font-semibold tracking-[0.14em] text-slate">
-              DESK · {activeMeta.code}
-            </p>
-          </div>
-          <p className="font-mono text-[11px] text-slate">
-            {activeMeta.hint}
+    <div className="signals-desk w-full overflow-hidden rounded-xl border border-line bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+        <div className="flex items-center gap-2.5">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-long opacity-40" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-long" />
+          </span>
+          <p className="font-mono text-[11px] font-semibold tracking-[0.14em] text-slate">
+            DESK · {activeMeta.code}
           </p>
         </div>
-        <div className="px-3 py-3 sm:px-4">
-          <SignalsSessionRail tab={tab} basePath={basePath} />
-        </div>
+        <p className="font-mono text-[11px] text-slate">{activeMeta.hint}</p>
       </div>
-
-      {body}
+      <div className="border-b border-line px-3 py-3 sm:px-4">
+        <SignalsSessionRail tab={tab} basePath={basePath} />
+      </div>
+      {content}
     </div>
   );
 }
