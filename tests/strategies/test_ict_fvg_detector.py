@@ -74,15 +74,18 @@ def test_detect_ict_fvg_allows_htf_against():
 
 
 def test_detect_ict_fvg_none_without_retest():
+    """Without FVG retest, hot mode still fires on sweep + CHoCH alone."""
     candles = _bullish_ict_fvg_series()[:-1]  # drop retest bar
     atr14 = [4.0] * len(candles)
-    assert detect_setup("BTCUSDT", candles, atr14) is None
+    setup = detect_setup("BTCUSDT", candles, atr14)
+    assert setup is not None
+    assert setup.direction == "long"
+    assert setup.indicators["structure"] in ("bullish_choch", "bullish_choch_fvg")
 
 
 def test_detect_ict_fvg_accepts_older_retest():
-    """Retest may be up to 10 bars before the latest close (hot volume mode)."""
+    """Retest may be up to 12 bars before the latest close (hot volume mode)."""
     candles = _bullish_ict_fvg_series()
-    # Pad eight closed bars after the retest so last_i - retest_i == 9.
     base = len(candles)
     for i in range(8):
         candles.append(_c(base + i, 101.8, 102.2, 101.4, 101.9))
@@ -92,14 +95,35 @@ def test_detect_ict_fvg_accepts_older_retest():
     assert setup.direction == "long"
 
 
-def test_detect_ict_fvg_rejects_stale_retest_beyond_window():
-    """Retest older than MAX_BARS_SINCE_RETEST (10) still fails."""
+def test_detect_ict_fvg_rejects_stale_structure_beyond_window():
+    """Very old structure (past CHoCH and sweep windows) still fails."""
     candles = _bullish_ict_fvg_series()
     base = len(candles)
-    for i in range(12):
+    for i in range(30):
         candles.append(_c(base + i, 101.8, 102.2, 101.4, 101.9))
     atr14 = [4.0] * len(candles)
     assert detect_setup("BTCUSDT", candles, atr14) is None
+
+
+def test_detect_ict_fvg_sweep_reclaim_without_choch():
+    """Fresh sweep reclaim fires even when no CHoCH prints."""
+    candles = []
+    for i in range(20):
+        candles.append(_c(i, 100, 100.5, 99.5, 100))
+    # Pivot low around 98.
+    candles.append(_c(20, 99.5, 100.0, 98.0, 99.0))
+    candles.append(_c(21, 99.0, 100.2, 98.8, 99.8))
+    candles.append(_c(22, 99.8, 100.5, 99.2, 100.0))
+    # Sweep below 98 and reclaim (close back above).
+    candles.append(_c(23, 99.5, 100.0, 96.5, 99.2))
+    # A couple of quiet bars — no CHoCH past a swing high.
+    candles.append(_c(24, 99.2, 99.8, 98.8, 99.4))
+    candles.append(_c(25, 99.4, 100.0, 99.0, 99.6))
+    atr14 = [4.0] * len(candles)
+    setup = detect_setup("BTCUSDT", candles, atr14)
+    assert setup is not None
+    assert setup.direction == "long"
+    assert setup.indicators["structure"] == "bullish_sweep_reclaim"
 
 
 def test_router_dispatches_ict_fvg():
@@ -121,6 +145,8 @@ def test_detect_ict_fvg_stores_event_timestamps():
     setup = detect_setup("BTCUSDT", candles, atr14)
     assert setup is not None
     ind = setup.indicators
-    for key in ("sweep_time", "choch_time", "fvg_start_time", "retest_time"):
-        assert key in ind, f"missing {key}"
-        assert isinstance(ind[key], int)
+    assert "sweep_time" in ind
+    assert isinstance(ind["sweep_time"], int)
+    if ind["structure"].endswith("_fvg"):
+        for key in ("choch_time", "fvg_start_time", "retest_time"):
+            assert key in ind, f"missing {key}"
