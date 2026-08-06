@@ -22,28 +22,46 @@ def _trade_levels(signal):
 
 def _ict_smc(candles, signal):
     ind = signal.indicators
-    out = [
-        level(ind["choch_level"], "CHoCH level", "choch",
-              style="dashed", start_time=ind.get("choch_time")),
-        level(ind["sweep_level"], "Swept liquidity", "liquidity",
-              style="dotted", start_time=ind.get("sweep_time")),
-    ]
+    out = []
+    if "sweep_level" in ind:
+        out.append(level(ind["sweep_level"], "Swept liquidity", "liquidity",
+                         style="dotted", start_time=ind.get("sweep_time")))
+    if "choch_level" in ind:
+        out.append(level(ind["choch_level"], "CHoCH level", "choch",
+                         style="dashed", start_time=ind.get("choch_time")))
     sweep_px = ind.get("sweep_low") if signal.direction == "long" else ind.get("sweep_high")
     if ind.get("sweep_time") is not None and sweep_px is not None:
         out.append(marker(ind["sweep_time"], sweep_px, "Liquidity sweep", "liquidity", 1))
-    if ind.get("choch_time") is not None:
+    if ind.get("choch_time") is not None and "choch_level" in ind:
         out.append(marker(ind["choch_time"], ind["choch_level"], "CHoCH ✓", "choch", 2))
     return out
 
 
 def _ict_fvg(candles, signal):
     ind = signal.indicators
-    out = [zone(ind["fvg_top"], ind["fvg_bottom"], ind.get("fvg_start_time"),
-                "Fair Value Gap", "fvg")]
+    out = []
+    if "fvg_top" in ind and "fvg_bottom" in ind:
+        out.append(zone(ind["fvg_top"], ind["fvg_bottom"], ind.get("fvg_start_time"),
+                        "Fair Value Gap", "fvg"))
     out.extend(_ict_smc(candles, signal))
     if ind.get("retest_time") is not None:
         out.append(marker(ind["retest_time"], signal.entry,
                           "FVG retest → entry", "entry", 3))
+    elif "sweep_reclaim" in str(ind.get("structure", "")):
+        out.append(marker(signal.created_at if False else ind.get("sweep_time") or 0,
+                          signal.entry, "Sweep reclaim → entry", "entry", 3)
+                   if ind.get("sweep_time") is not None else
+                   marker(0, signal.entry, "Sweep reclaim → entry", "entry", 3))
+    # Cleaner reclaim marker — only when we have a sweep time.
+    if (
+        "sweep_reclaim" in str(ind.get("structure", ""))
+        and ind.get("retest_time") is None
+        and ind.get("sweep_time") is not None
+    ):
+        # Replace any placeholder above: rebuild cleanly.
+        out = [a for a in out if getattr(a, "label", None) != "Sweep reclaim → entry"]
+        out.append(marker(ind["sweep_time"], signal.entry,
+                          "Sweep reclaim → entry", "entry", 3))
     return out
 
 
