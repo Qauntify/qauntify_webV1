@@ -37,7 +37,7 @@ export default async function SignalsPage({
             }}
             aria-hidden
           />
-          <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-8 sm:px-6 lg:flex-row lg:items-end lg:justify-between lg:px-8 xl:px-10">
+          <div className="relative flex w-full flex-col gap-4 px-4 py-8 sm:px-6 lg:flex-row lg:items-end lg:justify-between lg:px-8 xl:px-10">
             <div className="min-w-0">
               <p className="font-mono text-[11px] font-semibold tracking-[0.2em] text-slate">
                 Qauntify · SIGNAL DESK
@@ -64,7 +64,7 @@ export default async function SignalsPage({
           </div>
         </div>
 
-        <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
+        <div className="w-full flex-1 px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
           <SignalsBrowse
             tab={currentTab}
             page={page}
