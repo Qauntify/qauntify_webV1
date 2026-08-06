@@ -1,14 +1,7 @@
-"""The live signal path must not depend on the ML research tree.
+"""The live signal path must not depend on an ML research tree.
 
-`signals/ml/` and `ml/` are scaffolding: a whole training, replay, thresholding
-and inference stack exists in-tree, and none of it decides what a user
-receives. That is a deliberate choice — the training data's leakage-safety is
-not verified end to end (docs/ml-training-progress-report.md) — but it is the
-kind of choice that quietly stops being true.
-
-These tests make the claim executable. If a model is ever connected, the right
-move is to delete the assertion in the same commit that adds the wiring, and to
-put it behind a sampling flag with shadow-recorded verdicts first.
+Research scaffolding under `ml/` / `signals/ml/` was removed. This guard stays
+so those packages cannot be reintroduced onto the delivery path by accident.
 """
 import ast
 from pathlib import Path
@@ -49,10 +42,8 @@ def test_live_module_does_not_import_the_ml_tree(path):
         or name == "signals.ml" or name.startswith("signals.ml.")
     }
     assert not offenders, (
-        f"{path.name} imports {sorted(offenders)}. The ML tree is research "
-        "scaffolding and is not wired into the live signal path — see "
-        "signals/ml/__init__.py. If this is intentional, gate it behind a "
-        "sampling flag with shadow-recorded verdicts and update this test."
+        f"{path.name} imports {sorted(offenders)}. ML research code is not "
+        "part of the live signal path."
     )
 
 
@@ -62,3 +53,10 @@ def test_strategy_router_dispatches_only_to_rule_detectors():
     source = (SIGNALS / "strategies" / "router.py").read_text()
     for banned in ("predict", "score_candidate", "expected_r", "keras", "load_model"):
         assert banned not in source, f"router.py references {banned!r}"
+
+
+def test_ml_packages_are_gone():
+    root = SIGNALS.parent
+    assert not (root / "ml").exists()
+    assert not (SIGNALS / "ml").exists()
+    assert not (root / "tests" / "ml").exists()

@@ -8,29 +8,7 @@ signals.json
 .superpowers/
 .vercel
 
-# Local ML datasets and generated experiment output.
-ml/data/raw/*
-ml/data/processed/*
-ml/data/reports/*
-ml/data/features/*
-ml/data/datasets/*
-artifacts/candidates/*
-artifacts/experiments/
-artifacts/tuning/
-artifacts/thresholding/
-
-# Keep the repository structure visible while ignoring generated contents.
-!ml/data/raw/.gitkeep
-!ml/data/processed/.gitkeep
-!ml/data/reports/.gitkeep
-!ml/data/features/.gitkeep
-!ml/data/datasets/.gitkeep
-!artifacts/candidates/.gitkeep
-
 .ipynb_checkpoints/
-catboost_info/
-mlruns/
-optuna.db
 
 # Cached historical archives for backtesting (verified downloads).
 .cache/
