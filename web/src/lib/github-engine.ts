@@ -12,9 +12,11 @@ export type DispatchResult =
   | { ok: true }
   | { ok: false; status: number; message: string };
 
+type DispatchFailure = Extract<DispatchResult, { ok: false }>;
+
 function resolveGithubTarget():
   | { token: string; owner: string; name: string }
-  | { error: DispatchResult } {
+  | { error: DispatchFailure } {
   const token = process.env.GITHUB_DISPATCH_TOKEN?.trim();
   const repo = (process.env.GITHUB_REPO ?? DEFAULT_REPO).trim();
 
