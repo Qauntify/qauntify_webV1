@@ -24,11 +24,17 @@ export function SignalsBrowseFilter({
   basePath,
   options = SIGNAL_FILTER_OPTIONS,
   label = "Session",
+  showLabel = true,
+  compact = false,
 }: {
   tab: string;
   basePath: string;
   options?: SignalFilterOption[];
   label?: string;
+  /** When false, label is screen-reader only (for header rows). */
+  showLabel?: boolean;
+  /** Single-line trigger — better in tight header rows. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -58,15 +64,20 @@ export function SignalsBrowseFilter({
   }
 
   return (
-    <div ref={rootRef} className="relative w-full max-w-xs sm:max-w-sm">
-      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate/70">
-        {label}
-      </label>
+    <div ref={rootRef} className="relative w-full min-w-[11rem] max-w-xs sm:w-56">
+      {showLabel ? (
+        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate/70">
+          {label}
+        </label>
+      ) : (
+        <span className="sr-only">{label}</span>
+      )}
       <button
         type="button"
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-controls={menuId}
+        aria-label={label}
         onClick={() => setOpen((v) => !v)}
         className="btn-secondary flex w-full items-center justify-between gap-3 text-left"
       >
@@ -74,9 +85,11 @@ export function SignalsBrowseFilter({
           <span className="block truncate text-sm font-semibold text-ink">
             {current.label}
           </span>
-          <span className="block truncate text-[11px] font-medium text-slate">
-            {current.hint}
-          </span>
+          {!compact ? (
+            <span className="block truncate text-[11px] font-medium text-slate">
+              {current.hint}
+            </span>
+          ) : null}
         </span>
         <svg
           className={`h-4 w-4 shrink-0 text-slate transition-transform ${

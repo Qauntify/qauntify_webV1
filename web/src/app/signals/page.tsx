@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { SignalsBrowse } from "@/components/signals/SignalsBrowse";
+import { SignalsBrowseFilter } from "@/components/signals/SignalsBrowseFilter";
 import { Nav } from "@/components/shared/Nav";
 import { parseSignalsBrowseTab } from "@/lib/signals-browse-tabs";
 
@@ -26,16 +27,25 @@ export default async function SignalsPage({
       <Nav />
       <main className="flex min-h-[calc(100svh-4rem)] flex-1 flex-col">
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
-          <div className="mb-5 shrink-0">
-            <h1 className="text-2xl font-bold md:text-3xl">Signals</h1>
-            <p className="mt-1 text-sm text-slate">
-              AI-confirmed setups — refreshed every engine run
-            </p>
+          <div className="mb-5 flex shrink-0 flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold md:text-3xl">Signals</h1>
+              <p className="mt-1 text-sm text-slate">
+                AI-confirmed setups — refreshed every engine run
+              </p>
+            </div>
+            <SignalsBrowseFilter
+              tab={currentTab}
+              basePath="/signals"
+              showLabel={false}
+              compact
+            />
           </div>
           <SignalsBrowse
             tab={currentTab}
             page={page}
             basePath="/signals"
+            hideFilter
           />
         </div>
       </main>

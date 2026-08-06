@@ -103,11 +103,13 @@ export async function SignalsBrowse({
   page = 1,
   accessToken,
   basePath,
+  hideFilter = false,
 }: {
   tab: SignalsBrowseTab;
   page?: number;
   accessToken?: string;
   basePath: string;
+  hideFilter?: boolean;
 }) {
   const isWarRoomTab = tab === "war-room";
   const warRoomPage = isWarRoomTab
@@ -116,7 +118,9 @@ export async function SignalsBrowse({
 
   return (
     <div className="w-full space-y-6">
-      <SignalsBrowseFilter tab={tab} basePath={basePath} />
+      {hideFilter ? null : (
+        <SignalsBrowseFilter tab={tab} basePath={basePath} />
+      )}
 
       {isWarRoomTab && warRoomPage ? (
         <section>

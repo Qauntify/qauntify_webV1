@@ -12,11 +12,13 @@ export async function DashboardShell({
   title,
   subtitle,
   fullBleed = false,
+  actions,
 }: {
   children: React.ReactNode;
   title: string;
   subtitle?: string;
   fullBleed?: boolean;
+  actions?: React.ReactNode;
 }) {
   const supabase = await createClient();
   const {
@@ -46,26 +48,28 @@ export async function DashboardShell({
         </div>
       </aside>
       <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:ml-56">
-        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-line bg-card px-4 lg:px-8">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line bg-card px-4 lg:px-8">
           <div className="lg:hidden">
             <Logo />
           </div>
-          <div className="hidden lg:block">
+          <div className="hidden min-w-0 lg:block">
             <h1 className="text-lg font-bold">{title}</h1>
             {subtitle ? (
               <p className="text-xs text-slate">{subtitle}</p>
             ) : null}
           </div>
-          <div className="flex items-center gap-2 lg:hidden">
+          <div className="ml-auto flex items-center gap-2">
+            {actions ? (
+              <div className="hidden lg:block">{actions}</div>
+            ) : null}
+            <div className="flex items-center gap-2 lg:hidden">
             <Link href="/dashboard/war-room" className="btn-ghost text-sm">
               War Room
-            </Link>
-            <Link href="/dashboard/markets" className="btn-ghost text-sm">
-              Markets
             </Link>
             <Link href="/" className="btn-ghost text-sm">
               Home
             </Link>
+            </div>
           </div>
         </header>
         <main
