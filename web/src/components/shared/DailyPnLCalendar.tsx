@@ -14,11 +14,20 @@ type Props = {
   data: DailyPnL[];
   /** Optional blurb above the year tabs. Pass null to hide. */
   description?: string | null;
+  /** When false, locks to the current month — no year tabs, no prev/next
+   * nav. For compact placements (e.g. the homepage) that don't need
+   * browsing, only a snapshot. */
+  interactive?: boolean;
+  /** Smaller day cells and tighter padding, for placements alongside other
+   * content (e.g. the homepage) rather than as the page's main content. */
+  compact?: boolean;
 };
 
 export function DailyPnLCalendar({
   data,
   description = DEFAULT_DESCRIPTION,
+  interactive = true,
+  compact = false,
 }: Props) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
@@ -107,66 +116,74 @@ export function DailyPnLCalendar({
   }, [year, month, data]);
 
   return (
-    <div className="card-surface rounded-xl border border-line p-6">
+    <div className={`card-surface rounded-xl border border-line ${compact ? "p-4" : "p-6"}`}>
       {description ? (
         <p className="mb-6 text-sm text-slate">{description}</p>
       ) : null}
 
-      <div className="mb-6 flex justify-center">
-        <div className="flex overflow-hidden rounded border border-line bg-card">
-          {availableYears.map((y) => (
-            <button
-              key={y}
-              type="button"
-              onClick={() => setYear(y)}
-              className={`px-4 py-2 text-sm font-semibold transition-colors ${
-                year === y
-                  ? "bg-slate/10 text-ink"
-                  : "text-slate hover:bg-slate/5"
-              }`}
-            >
-              {y}
-            </button>
-          ))}
+      {interactive ? (
+        <div className="mb-6 flex justify-center">
+          <div className="flex overflow-hidden rounded border border-line bg-card">
+            {availableYears.map((y) => (
+              <button
+                key={y}
+                type="button"
+                onClick={() => setYear(y)}
+                className={`px-4 py-2 text-sm font-semibold transition-colors ${
+                  year === y
+                    ? "bg-slate/10 text-ink"
+                    : "text-slate hover:bg-slate/5"
+                }`}
+              >
+                {y}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="mb-6 flex items-center justify-center gap-4">
-        <button
-          type="button"
-          onClick={prevMonth}
-          className="p-1 text-slate transition-colors hover:text-ink"
-          aria-label="Previous Month"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
+        {interactive ? (
+          <button
+            type="button"
+            onClick={prevMonth}
+            className="p-1 text-slate transition-colors hover:text-ink"
+            aria-label="Previous Month"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+        ) : null}
 
         <div className="flex items-center gap-2">
           <span className="min-w-[120px] text-center text-lg font-bold text-ink">
-            {monthName}
+            {monthName} {year}
           </span>
-          <button
-            type="button"
-            onClick={goToToday}
-            className="text-slate transition-colors hover:text-ink"
-            title="Go to Today"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-          </button>
+          {interactive ? (
+            <button
+              type="button"
+              onClick={goToToday}
+              className="text-slate transition-colors hover:text-ink"
+              title="Go to Today"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            </button>
+          ) : null}
         </div>
 
-        <button
-          type="button"
-          onClick={nextMonth}
-          className="p-1 text-slate transition-colors hover:text-ink"
-          aria-label="Next Month"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
+        {interactive ? (
+          <button
+            type="button"
+            onClick={nextMonth}
+            className="p-1 text-slate transition-colors hover:text-ink"
+            aria-label="Next Month"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        ) : null}
       </div>
 
       <div className="custom-scrollbar w-full overflow-x-auto">
-        <div className="min-w-[700px]">
+        <div className={compact ? "min-w-120" : "min-w-175"}>
           <div className="mb-2 grid grid-cols-7">
             {DAYS_OF_WEEK.map((day) => (
               <div key={day} className="text-center text-sm font-semibold text-ink">
@@ -198,26 +215,26 @@ export function DailyPnLCalendar({
               return (
                 <div
                   key={`${day.dateStr}-${idx}`}
-                  className={`flex h-28 flex-col border border-line/70 p-2 ${bgColor} ${opacity} transition-colors`}
+                  className={`flex ${compact ? "h-16 p-1.5" : "h-28 p-2"} flex-col border border-line/70 ${bgColor} ${opacity} transition-colors`}
                 >
-                  <span className={`text-sm font-semibold ${textColor}`}>
+                  <span className={`${compact ? "text-xs" : "text-sm"} font-semibold ${textColor}`}>
                     {day.dayNum}
                   </span>
 
                   <div className="mt-1 flex flex-1 flex-col items-center justify-center gap-0.5">
                     {day.totalTrades > 0 ? (
                       <>
-                        <span className={`text-sm font-bold ${textColor}`}>
+                        <span className={`${compact ? "text-xs" : "text-sm"} font-bold ${textColor}`}>
                           {day.wins} W
                         </span>
-                        <span className={`text-sm font-bold ${textColor}`}>
+                        <span className={`${compact ? "text-xs" : "text-sm"} font-bold ${textColor}`}>
                           {day.losses} L
                         </span>
                       </>
                     ) : (
                       <>
-                        <span className="text-sm font-semibold text-ink">0 W</span>
-                        <span className="text-sm font-semibold text-ink">0 L</span>
+                        <span className={`${compact ? "text-xs" : "text-sm"} font-semibold text-ink`}>0 W</span>
+                        <span className={`${compact ? "text-xs" : "text-sm"} font-semibold text-ink`}>0 L</span>
                       </>
                     )}
                   </div>

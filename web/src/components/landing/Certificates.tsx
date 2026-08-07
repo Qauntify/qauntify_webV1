@@ -157,7 +157,7 @@ export function Certificates() {
 
   return (
     <section id="proof" className="overflow-hidden border-b border-line bg-paper">
-      <div className="page-container flex items-end justify-between gap-4 py-5 md:py-6">
+      <div className="page-container flex items-end justify-between gap-4 py-10 md:py-14">
         <div>
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
             Proof

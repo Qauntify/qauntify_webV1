@@ -24,16 +24,22 @@ export function Hero({ stats }: { stats: Stats }) {
 
       <div className="page-container relative z-10 grid flex-1 items-center gap-6 py-6 md:grid-cols-[1fr_1.05fr] md:gap-8 md:py-8 lg:grid-cols-[1fr_0.95fr]">
         <div className="flex flex-col">
-          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-ink">
-            Qauntify
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-ink">
+              Qauntify
+            </p>
+            <span className="rounded-full bg-long-soft px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide text-long">
+              Free · no account needed
+            </span>
+          </div>
           <h1 className="mt-2 text-[1.85rem] font-extrabold leading-[1.08] tracking-tight text-ink sm:text-4xl lg:text-[2.5rem]">
             Trade with clarity.
             <span className="block text-slate">Not guesswork.</span>
           </h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-slate">
             Rules scan the chart. AI confirms the setup. You get entry, stop,
-            targets, and a plain-language rationale — logged live.
+            targets, and a plain-language rationale — logged live, free for
+            every trader who'd rather see the logic than trust a black box.
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-2.5">
             <Link href="/signals" className="btn-primary">
@@ -51,7 +57,7 @@ export function Hero({ stats }: { stats: Stats }) {
           </div>
         </div>
 
-        <HowAiWorks compact />
+        <HowAiWorks stats={stats} />
       </div>
 
       <div className="relative z-10 shrink-0 border-t border-line bg-paper">

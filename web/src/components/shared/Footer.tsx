@@ -11,7 +11,8 @@ export function Footer() {
             <Logo />
             <p className="mt-1.5 max-w-sm text-sm text-slate">
               AI-confirmed trading signals with entry, stop, targets, and
-              outcome tracking.
+              outcome tracking. Free for every trader — no account, no
+              paywall.
             </p>
           </div>
           <nav className="flex flex-wrap gap-x-5 gap-y-1 text-sm">

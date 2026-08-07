@@ -377,103 +377,6 @@ body {
   overflow: hidden;
 }
 
-/* Homepage — How AI works stage (flat, no gradients) */
-@keyframes hai-scan {
-  0% {
-    left: 0%;
-    opacity: 0;
-  }
-  8% {
-    opacity: 1;
-  }
-  92% {
-    opacity: 1;
-  }
-  100% {
-    left: 100%;
-    opacity: 0;
-  }
-}
-
-@keyframes hai-pulse {
-  0%,
-  100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@keyframes hai-dot {
-  0%,
-  80%,
-  100% {
-    opacity: 0.25;
-    transform: translateY(0);
-  }
-  40% {
-    opacity: 1;
-    transform: translateY(-2px);
-  }
-}
-
-@keyframes hai-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes hai-stamp {
-  0% {
-    opacity: 0;
-    transform: scale(1.35) rotate(-8deg);
-  }
-  60% {
-    opacity: 1;
-    transform: scale(0.96) rotate(-3deg);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) rotate(-4deg);
-  }
-}
-
-.hai-scan-line {
-  animation: hai-scan 1.8s linear infinite;
-}
-
-.hai-pulse {
-  animation: hai-pulse 1.2s ease-in-out infinite;
-}
-
-.hai-dot {
-  animation: hai-dot 0.9s ease-in-out infinite;
-}
-
-.hai-fade-in {
-  animation: hai-fade-in 0.35s ease-out both;
-}
-
-.hai-stamp {
-  animation: hai-stamp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hai-scan-line,
-  .hai-pulse,
-  .hai-dot,
-  .hai-fade-in,
-  .hai-stamp {
-    animation: none !important;
-  }
-}
-
 /* Hero ambient — CSS animated trading backdrop (solid colors, no washes) */
 .hero-ambient {
   position: relative;
@@ -742,6 +645,28 @@ body {
 
   .cert-card:hover {
     transform: none;
+  }
+}
+
+/* Nav warning banner ticker */
+.warn-marquee {
+  overflow: hidden;
+}
+
+.warn-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: cert-marquee 20s linear infinite;
+}
+
+.warn-marquee:hover .warn-marquee-track,
+.warn-marquee:focus-within .warn-marquee-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .warn-marquee-track {
+    animation: none;
   }
 }
 

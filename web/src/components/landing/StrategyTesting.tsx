@@ -27,7 +27,7 @@ export function StrategyTesting() {
 
   return (
     <section id="strategy-testing" className="border-b border-line bg-card">
-      <div className="page-container py-5 md:py-6">
+      <div className="page-container py-10 md:py-14">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <div>
             <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
