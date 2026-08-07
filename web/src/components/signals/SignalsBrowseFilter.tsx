@@ -111,6 +111,20 @@ export function SignalsBrowseFilter({
           className="absolute left-0 z-30 mt-2 w-full overflow-hidden rounded-lg border border-line bg-card shadow-[var(--shadow-card-hover)]"
         >
           {options.map((opt, index) => {
+            if (opt.disabled) {
+              return (
+                <li key={opt.id} role="option" aria-disabled="true" aria-selected={false}>
+                  <span
+                    className={`block cursor-not-allowed px-4 py-2.5 opacity-50 ${
+                      index > 0 ? "border-t border-line" : ""
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold text-ink">{opt.label}</span>
+                    <span className="block text-[11px] text-slate">{opt.hint}</span>
+                  </span>
+                </li>
+              );
+            }
             const active = opt.id === tab;
             return (
               <li key={opt.id} role="option" aria-selected={active}>

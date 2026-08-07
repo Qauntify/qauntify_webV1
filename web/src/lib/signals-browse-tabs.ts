@@ -12,6 +12,8 @@ export type SignalFilterOption = {
   hint: string;
   /** Compact lane code for the session rail (e.g. 5M). */
   code?: string;
+  /** Shown but not selectable — a "coming soon" placeholder strategy. */
+  disabled?: boolean;
 };
 
 export function parseSignalsBrowseTab(tab: string | undefined): SignalsBrowseTab {
@@ -30,6 +32,17 @@ export const SIGNAL_FILTER_OPTIONS: SignalFilterOption[] = [
   { id: "scalping", label: "Scalping", hint: "15m cloud + MSS", code: "15M" },
   { id: "swing", label: "Swing", hint: "1h AI confirm", code: "1H" },
   { id: "bbma", label: "BBMA", hint: "XAU live EA", code: "BBMA" },
+  { id: "ict", label: "ICT", hint: "Coming soon", code: "ICT", disabled: true },
+  { id: "smc", label: "SMC", hint: "Coming soon", code: "SMC", disabled: true },
+  {
+    id: "supply-demand",
+    label: "Supply Demand",
+    hint: "Coming soon",
+    code: "S/D",
+    disabled: true,
+  },
+  { id: "crt", label: "CRT", hint: "Coming soon", code: "CRT", disabled: true },
+  { id: "msnr", label: "MSNR", hint: "Coming soon", code: "MSNR", disabled: true },
 ];
 
 export const ADMIN_SIGNAL_FILTER_OPTIONS: SignalFilterOption[] = [
