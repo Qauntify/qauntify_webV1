@@ -5,7 +5,7 @@ import type { Signal } from "@/lib/signals";
 
 export function SignalsPreview({ signals }: { signals: Signal[] }) {
   return (
-    <section id="signals" className="border-b border-line bg-[#f1f5f9]">
+    <section id="signals" className="border-b border-line bg-paper">
       <div className="page-container py-5 md:py-6">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -28,7 +28,7 @@ export function SignalsPreview({ signals }: { signals: Signal[] }) {
             ))}
           </div>
         ) : (
-          <div className="mt-4 rounded-lg border border-dashed border-line bg-white p-6 text-center text-sm text-slate">
+          <div className="mt-4 rounded-lg border border-dashed border-line bg-card p-6 text-center text-sm text-slate">
             No signals yet — the engine publishes here the moment a setup is
             confirmed.
           </div>

@@ -27,9 +27,6 @@ export function HeroAmbient() {
 
   return (
     <div className="hero-ambient-bg" aria-hidden>
-      <div className="hero-ambient-grid" />
-      <div className="hero-ambient-scan" />
-
       <div className="hero-ambient-ticker">
         <div className="hero-ambient-ticker-track">
           {ticker.map((t, i) => (

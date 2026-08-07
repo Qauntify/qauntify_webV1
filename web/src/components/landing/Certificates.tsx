@@ -102,7 +102,7 @@ export function Certificates() {
         target="_blank"
         rel="noopener noreferrer"
         tabIndex={interactive ? undefined : -1}
-        className="flex h-full w-[180px] flex-col justify-between rounded-md border border-line bg-white p-3 sm:w-[200px]"
+        className="flex h-full w-[180px] flex-col justify-between rounded-md border border-line bg-card p-3 sm:w-[200px]"
       >
         <div>
           <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-ink">
@@ -118,10 +118,10 @@ export function Certificates() {
         type="button"
         onClick={interactive ? () => setActive(cert) : undefined}
         tabIndex={interactive ? undefined : -1}
-        className="w-[180px] rounded-md border border-line bg-white p-1.5 text-left transition-colors hover:border-ink/30 sm:w-[200px]"
+        className="w-[180px] rounded-md border border-line bg-card p-1.5 text-left transition-colors hover:border-ink/30 sm:w-[200px]"
         aria-label={`View ${cert.issuer} — ${cert.title}`}
       >
-        <div className="relative aspect-[4/3] overflow-hidden rounded bg-[#e2e8f0]">
+        <div className="relative aspect-[4/3] overflow-hidden rounded bg-line">
           <Image
             src={cert.src}
             alt={`${cert.issuer}: ${cert.title}`}
@@ -156,7 +156,7 @@ export function Certificates() {
   );
 
   return (
-    <section id="proof" className="overflow-hidden border-b border-line bg-[#f1f5f9]">
+    <section id="proof" className="overflow-hidden border-b border-line bg-paper">
       <div className="page-container flex items-end justify-between gap-4 py-5 md:py-6">
         <div>
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
@@ -177,14 +177,14 @@ export function Certificates() {
 
       {active && active.kind === "image" ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           onClick={() => setActive(null)}
         >
           <div
-            className="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-lg border border-line bg-white shadow-xl"
+            className="relative max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-lg border border-line bg-card shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3">
@@ -202,7 +202,7 @@ export function Certificates() {
                 Close
               </button>
             </div>
-            <div className="relative aspect-[4/3] w-full bg-[#f1f5f9]">
+            <div className="relative aspect-[4/3] w-full bg-paper">
               <Image
                 src={active.src}
                 alt={`${active.issuer}: ${active.title}`}

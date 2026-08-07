@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { SignalsBrowse } from "@/components/signals/SignalsBrowse";
 import { Notice } from "@/components/shared/Notice";
@@ -18,8 +16,9 @@ export default async function Dashboard({
   searchParams: Promise<{ admin?: string; tab?: string; page?: string }>;
 }) {
   const supabase = await createClient();
+  // No login gate: anon visitors see the same RLS-limited (24h) history as
+  // /signals. accessToken stays undefined for them, same as that page.
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
   const { data: { session } } = await supabase.auth.getSession();
   const accessToken = session?.access_token;
   const { admin, tab, page: pageParam } = await searchParams;
@@ -33,7 +32,7 @@ export default async function Dashboard({
       subtitle="AI-confirmed and live EA setups"
     >
       <div className="w-full space-y-6">
-        {admin === "denied" ? (
+        {admin === "denied" && user ? (
           <Notice tone="error">
             Admin access is not enabled for {user.email}. Ask the
             owner to add your email to ADMIN_EMAILS, then sign out and back in.

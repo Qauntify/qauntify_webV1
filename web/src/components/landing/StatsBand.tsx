@@ -15,7 +15,7 @@ export function StatsBand({ stats }: { stats: Stats }) {
     },
   ];
   return (
-    <section className="border-b border-line bg-[#f1f5f9]">
+    <section className="border-b border-line bg-paper">
       <div className="page-container grid grid-cols-3 divide-x divide-line">
         {items.map((item) => (
           <div key={item.label} className="px-3 py-4 text-center sm:px-6 sm:py-5">

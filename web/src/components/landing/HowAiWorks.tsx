@@ -69,12 +69,12 @@ export function HowAiWorks({ compact = false }: { compact?: boolean }) {
 
   const panel = (
     <div
-      className={`overflow-hidden border border-line bg-white ${
+      className={`overflow-hidden border border-line bg-card ${
         compact ? "rounded-lg" : "rounded-lg"
       }`}
     >
       {/* Step pills */}
-      <div className="flex border-b border-line bg-[#f8fafc]">
+      <div className="flex border-b border-line bg-paper">
         {STEPS.map((s, i) => {
           const on = i === step;
           const done = i < step;
@@ -84,16 +84,16 @@ export function HowAiWorks({ compact = false }: { compact?: boolean }) {
               type="button"
               onClick={() => setStep(i)}
               className={`flex flex-1 items-center justify-center gap-1 border-r border-line px-1 py-2 last:border-r-0 transition-colors ${
-                on ? "bg-white" : "hover:bg-white/70"
+                on ? "bg-card" : "hover:bg-card/70"
               }`}
               title={s.label}
             >
               <span
                 className={`flex h-4 w-4 items-center justify-center rounded font-mono text-[9px] font-bold ${
                   on
-                    ? "bg-ink text-white"
+                    ? "bg-ink text-card"
                     : done
-                      ? "bg-long text-white"
+                      ? "bg-long text-card"
                       : "bg-line text-slate"
                 }`}
               >
@@ -300,7 +300,7 @@ export function HowAiWorks({ compact = false }: { compact?: boolean }) {
         ) : null}
       </div>
 
-      <div className="grid grid-cols-5 border-t border-line bg-[#f8fafc]">
+      <div className="grid grid-cols-5 border-t border-line bg-paper">
         {STEPS.map((s, i) => (
           <div
             key={s.id}
@@ -318,7 +318,7 @@ export function HowAiWorks({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <section id="how-ai-works" className="border-b border-line bg-[#f1f5f9]">
+    <section id="how-ai-works" className="border-b border-line bg-paper">
       <div className="page-container py-5 md:py-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
           <div>

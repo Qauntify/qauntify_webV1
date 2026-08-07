@@ -12,8 +12,8 @@ const TIERS = [
       "Signal history with rationale",
       "Win rate and outcome tracking",
     ],
-    cta: "Create free account",
-    href: "/signup",
+    cta: "View signals",
+    href: "/signals",
     disabled: false,
   },
   {

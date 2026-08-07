@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { signup } from "@/app/auth/actions";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Notice } from "@/components/shared/Notice";
+import { ALLOW_SIGNUP } from "@/lib/access-mode";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -31,53 +32,64 @@ export default async function SignupPage({
     >
       <h1 className="text-2xl font-bold">Create account</h1>
       <p className="mt-1 text-sm text-slate">Free forever. Full signal history.</p>
-      {error ? (
-        <Notice tone="error" className="mt-6">
-          {error}
-        </Notice>
-      ) : null}
-      {sent ? (
+      {!ALLOW_SIGNUP ? (
         <Notice tone="success" className="mt-6">
-          Check your email — we sent a confirmation link.
+          Registration is currently closed — signals are free to view
+          without an account. Head to{" "}
+          <Link href="/signals" className="font-semibold underline">
+            Signals
+          </Link>{" "}
+          to see what the engine is finding.
         </Notice>
       ) : (
         <>
-          <form className="mt-8 flex flex-col gap-4">
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Email
-              <input
-                type="email"
-                name="email"
-                required
-                autoComplete="email"
-                placeholder="you@example.com"
-                className="input-field"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Password
-              <input
-                type="password"
-                name="password"
-                required
-                minLength={6}
-                autoComplete="new-password"
-                placeholder="At least 6 characters"
-                className="input-field"
-              />
-            </label>
-            <button formAction={signup} className="btn-primary mt-2">
-              Create account
-            </button>
-          </form>
-          <p className="mt-6 text-sm text-slate">
-            Already have an account?{" "}
-            <Link href="/login" className="font-semibold text-accent hover:underline">
-              Sign in
-            </Link>
-          </p>
+          {error ? (
+            <Notice tone="error" className="mt-6">
+              {error}
+            </Notice>
+          ) : null}
+          {sent ? (
+            <Notice tone="success" className="mt-6">
+              Check your email — we sent a confirmation link.
+            </Notice>
+          ) : (
+            <form className="mt-8 flex flex-col gap-4">
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                Email
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  className="input-field"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                Password
+                <input
+                  type="password"
+                  name="password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  placeholder="At least 6 characters"
+                  className="input-field"
+                />
+              </label>
+              <button formAction={signup} className="btn-primary mt-2">
+                Create account
+              </button>
+            </form>
+          )}
         </>
       )}
+      <p className="mt-6 text-sm text-slate">
+        Already have an account?{" "}
+        <Link href="/login" className="font-semibold text-accent hover:underline">
+          Sign in
+        </Link>
+      </p>
     </AuthShell>
   );
 }

@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { DebateBoard } from "@/components/war-room/DebateBoard";
 import { WarRoomStage } from "@/components/war-room/WarRoomStage";
 import { getDebates } from "@/lib/debates";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "War Room — Qauntify",
@@ -44,12 +42,6 @@ export default async function WarRoomPage({
 }: {
   searchParams: Promise<{ tab?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
   const { tab } = await searchParams;
   const currentTab = tab === "earlier" ? "earlier" : "war-room";
   const isStage = currentTab === "war-room";

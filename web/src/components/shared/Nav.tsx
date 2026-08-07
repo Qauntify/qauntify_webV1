@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Logo } from "@/components/shared/Logo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import { SHOW_LOGIN_LINK } from "@/lib/access-mode";
 import { isAdminEmail } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -34,7 +35,7 @@ export async function Nav() {
               Admin
             </Link>
           ) : null}
-          {!email ? (
+          {!email && SHOW_LOGIN_LINK ? (
             <Link href="/login" className="btn-primary-sm">
               Log in
             </Link>

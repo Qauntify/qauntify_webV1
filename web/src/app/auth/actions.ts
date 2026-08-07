@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { ALLOW_SIGNUP } from "@/lib/access-mode";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/supabase/admin";
 
@@ -35,6 +36,10 @@ export async function login(formData: FormData) {
 }
 
 export async function signup(formData: FormData) {
+  if (!ALLOW_SIGNUP) {
+    redirect(`/signup?error=${encodeURIComponent("Registration is currently closed.")}`);
+  }
+
   const { email, password } = credentials(formData);
   if (!email || !password) {
     redirect(`/signup?error=${encodeURIComponent("Enter an email and a password.")}`);

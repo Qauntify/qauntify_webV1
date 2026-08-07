@@ -48,17 +48,17 @@ export function Faq() {
       </section>
       <section className="section-block bg-accent">
         <div className="page-container py-14 text-center">
-          <h2 className="text-3xl font-bold text-white">
+          <h2 className="text-3xl font-bold text-card">
             See what the engine sees.
           </h2>
-          <p className="mx-auto mt-3 max-w-md text-sm text-white/80">
-            Free account. Full signal history. Outcome tracking included.
+          <p className="mx-auto mt-3 max-w-md text-sm text-card/80">
+            Free to view. No account needed. Outcome tracking included.
           </p>
           <Link
-            href="/signup"
-            className="mt-6 inline-block rounded-lg bg-white px-6 py-3 text-sm font-semibold text-accent hover:bg-white/90"
+            href="/signals"
+            className="mt-6 inline-block rounded-lg bg-card px-6 py-3 text-sm font-semibold text-accent hover:bg-card/90"
           >
-            Create free account
+            View signals
           </Link>
         </div>
       </section>

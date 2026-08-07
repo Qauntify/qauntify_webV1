@@ -26,7 +26,7 @@ export function StrategyTesting() {
   }, [open]);
 
   return (
-    <section id="strategy-testing" className="border-b border-line bg-[#fff]">
+    <section id="strategy-testing" className="border-b border-line bg-card">
       <div className="page-container py-5 md:py-6">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -43,7 +43,7 @@ export function StrategyTesting() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="group w-full overflow-hidden rounded-lg border border-line bg-[#f1f5f9] p-1 text-left transition-colors hover:border-ink/30"
+          className="group w-full overflow-hidden rounded-lg border border-line bg-paper p-1 text-left transition-colors hover:border-ink/30"
           aria-label="Enlarge strategy testing heatmap"
         >
           <div className="relative aspect-[2814/1372] w-full overflow-hidden rounded-md bg-ink">
@@ -61,14 +61,14 @@ export function StrategyTesting() {
 
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 p-2 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           onClick={() => setOpen(false)}
         >
           <div
-            className="relative flex max-h-[96vh] w-full max-w-[98vw] flex-col overflow-hidden rounded-lg border border-line bg-white shadow-xl"
+            className="relative flex max-h-[96vh] w-full max-w-[98vw] flex-col overflow-hidden rounded-lg border border-line bg-card shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-4 py-3">

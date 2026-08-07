@@ -4,7 +4,7 @@ import { Logo } from "@/components/shared/Logo";
 
 export function Footer() {
   return (
-    <footer className="border-t border-line bg-[#fff]">
+    <footer className="border-t border-line bg-card">
       <div className="page-container py-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>

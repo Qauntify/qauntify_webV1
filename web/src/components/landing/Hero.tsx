@@ -54,7 +54,7 @@ export function Hero({ stats }: { stats: Stats }) {
         <HowAiWorks compact />
       </div>
 
-      <div className="relative z-10 shrink-0 border-t border-line bg-[#f1f5f9]">
+      <div className="relative z-10 shrink-0 border-t border-line bg-paper">
         <div className="page-container grid grid-cols-3 divide-x divide-line">
           {statItems.map((item) => (
             <div
