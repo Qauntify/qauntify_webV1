@@ -2,6 +2,7 @@ import pytest
 
 from signals.models import BotSettings, CandidateSetup, Confirmation, make_signal
 from signals.storage import (
+    delete_rows_older_than,
     fetch_bot_settings,
     list_signals_missing_outcome_chart,
     save_debate,
@@ -57,6 +58,7 @@ class FakeSession:
     def __init__(self, status=201, payload=None):
         self._status = status
         self._payload = payload
+        self.last_method = None
         self.last_url = None
         self.last_headers = None
         self.last_json = None
@@ -72,6 +74,12 @@ class FakeSession:
         self.last_headers = headers
         self.last_json = json
         return FakeResponse(self._status, self._payload)
+
+    def delete(self, url, headers=None, timeout=None):
+        self.last_method = "DELETE"
+        self.last_url = url
+        self.last_headers = headers
+        return FakeResponse(self._status)
 
 
 def test_save_signal_posts_row_to_supabase():
@@ -596,3 +604,29 @@ def test_purge_mt5_candle_outliers_drops_far_closes():
     assert len(kept) == 2
     assert kept[0]["close"] == 4138.5
     assert kept[1]["close"] == 4139.2
+
+
+def test_delete_rows_older_than_uses_correct_cutoff_and_table():
+    from datetime import datetime, timedelta, timezone
+
+    session = FakeSession()
+    now = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
+
+    delete_rows_older_than("ai_events", "created_at", 90,
+                           "https://abc.supabase.co", "key",
+                           session=session, now=now)
+
+    assert session.last_method == "DELETE"
+    assert session.last_url.startswith("https://abc.supabase.co/rest/v1/ai_events?")
+    expected_cutoff = (now - timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert f"created_at=lt.{expected_cutoff}" in session.last_url
+    assert session.last_headers["apikey"] == "key"
+    assert session.last_headers["Authorization"] == "Bearer key"
+
+
+def test_delete_rows_older_than_raises_on_http_error():
+    session = FakeSession(status=500)
+    with pytest.raises(RuntimeError):
+        delete_rows_older_than("ai_events", "created_at", 90,
+                               "https://abc.supabase.co", "bad-key",
+                               session=session)

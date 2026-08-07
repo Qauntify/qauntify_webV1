@@ -54,3 +54,4 @@ against the live database, in both directions.
 | `20260726000200_signal_stats_function` | `get_signal_stats` RPC (security invoker) |
 | `20260727000000_align_bot_settings_strategy_check` | strategy constraint matched to the app |
 | `20260804000000_xau_scan_heartbeat` | scalper heartbeat + `xau_scan_status` view |
+| `20260807000000_signals_performance_indexes` | dedup/closed-trade/debate indexes, drop redundant anon policy |

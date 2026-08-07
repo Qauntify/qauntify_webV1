@@ -40,6 +40,7 @@ from signals.models import (
     take_profits_from_risk,
 )
 from signals.outcome_tracker import backfill_missing_outcome_charts, track_open_signals
+from signals.retention import run_retention_cleanup
 from signals.session_clock import describe_market_session
 from signals.strategies import detect_setup
 from signals.storage import (
@@ -1101,6 +1102,12 @@ def main(sessions=None):
             backfill_missing_outcome_charts(cfg, session=db_session)
         except Exception as exc:
             print(f"chart backfill failed ({type(exc).__name__}), continuing")
+
+        # Prunes unbounded log tables (ai_events/engine_runs/xau_scan_runs).
+        # Cheap even as a no-op: each table's date column is indexed, so a
+        # DELETE that matches nothing after the first cleanup is a fast
+        # index range scan, not a full scan -- fine to run every cycle.
+        run_retention_cleanup(cfg, session=db_session)
         try:
             with_retry(lambda: save_engine_run(
                 {
