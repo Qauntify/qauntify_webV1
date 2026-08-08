@@ -139,8 +139,12 @@ const BBMA_LANE =
 // Swing 1h must not list EA BBMA rows that still carry timeframe=1h.
 const EXCLUDE_BBMA_FROM_1H =
   "&or=(indicators->>source.is.null,indicators->>source.neq.mt5_ea)";
+// AI Signal lane: every SEA-LION-confirmed setup, across strategies —
+// excludes the raw, no-AI-gate BBMA EA feed (both its timeframe=bbma rows
+// and the legacy 1h rows tagged indicators.source=mt5_ea).
+const EXCLUDE_BBMA_LANE = `&timeframe=neq.bbma${EXCLUDE_BBMA_FROM_1H}`;
 
-export type SignalLane = "default" | "bbma";
+export type SignalLane = "default" | "bbma" | "ai";
 
 function sessionQuery(timeframe?: string, lane: SignalLane = "default"): string {
   if (lane === "bbma") return BBMA_LANE;
@@ -148,7 +152,7 @@ function sessionQuery(timeframe?: string, lane: SignalLane = "default"): string 
     return `&timeframe=eq.1h${EXCLUDE_BBMA_FROM_1H}`;
   }
   if (timeframe) return `&timeframe=eq.${timeframe}`;
-  return "";
+  return lane === "ai" ? EXCLUDE_BBMA_LANE : "";
 }
 
 async function fetchRows(
@@ -340,8 +344,9 @@ function statsFromSignals(signals: Signal[]): Stats {
   if (total === 0) return ZERO_STATS;
   const longs = signals.filter((s) => s.direction === "long").length;
   const shorts = total - longs;
-  const avgConfidence =
-    signals.reduce((sum, s) => sum + s.confidence, 0) / total;
+  const avgConfidence = Math.round(
+    signals.reduce((sum, s) => sum + s.confidence, 0) / total,
+  );
   const tpHits = signals.filter(
     (s) => s.status === "tp_hit" || s.status === "tp3_hit",
   ).length;
@@ -382,6 +387,10 @@ export async function getStats(
   if (lane === "bbma") {
     // RPC is timeframe-only; BBMA lane mixes bbma + legacy 1h mt5_ea rows.
     return statsFromSignals(await getSignals(500, accessToken, undefined, "bbma"));
+  }
+  if (lane === "ai") {
+    // RPC's p_timeframe filter can't express "every strategy except BBMA".
+    return statsFromSignals(await getSignals(500, accessToken, undefined, "ai"));
   }
   // Aggregated server-side by supabase/schema.sql's get_signal_stats() —
   // counting/averaging in Postgres instead of pulling every matching row

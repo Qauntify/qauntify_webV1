@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 
 import { SignalsBrowse } from "@/components/signals/SignalsBrowse";
 import { Nav } from "@/components/shared/Nav";
-import { parseSignalsBrowseTab } from "@/lib/signals-browse-tabs";
+import {
+  parseAiSignalStrategy,
+  parseSignalsBrowseTab,
+} from "@/lib/signals-browse-tabs";
 
 export const metadata: Metadata = {
   title: "Signals — Qauntify",
@@ -15,10 +18,11 @@ export const revalidate = 30;
 export default async function SignalsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; page?: string }>;
+  searchParams: Promise<{ tab?: string; strategy?: string; page?: string }>;
 }) {
-  const { tab, page: pageParam } = await searchParams;
+  const { tab, strategy, page: pageParam } = await searchParams;
   const currentTab = parseSignalsBrowseTab(tab);
+  const currentStrategy = parseAiSignalStrategy(strategy);
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
 
   return (
@@ -37,6 +41,7 @@ export default async function SignalsPage({
 
           <SignalsBrowse
             tab={currentTab}
+            strategy={currentStrategy}
             page={page}
             basePath="/signals"
             hideFilter

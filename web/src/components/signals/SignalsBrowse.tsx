@@ -1,5 +1,6 @@
 import { SignalsGrid } from "@/components/dashboard/SignalsGrid";
 import { StatsBar } from "@/components/dashboard/StatsBar";
+import { AiStrategyRail } from "@/components/signals/AiStrategyRail";
 import { Pagination } from "@/components/shared/Pagination";
 import { SignalsBrowseFilter } from "@/components/signals/SignalsBrowseFilter";
 import { SignalsSessionRail } from "@/components/signals/SignalsSessionRail";
@@ -10,47 +11,53 @@ import {
   getWarRoomSignalsPaginated,
   type SignalLane,
 } from "@/lib/signals";
-import type { SignalsBrowseTab } from "@/lib/signals-browse-tabs";
+import {
+  parseAiSignalStrategy,
+  type AiSignalStrategy,
+  type SignalsBrowseTab,
+} from "@/lib/signals-browse-tabs";
 
 const ALL_PAGE_SIZE = 20;
 
-export type { SignalsBrowseTab };
-export { parseSignalsBrowseTab } from "@/lib/signals-browse-tabs";
+export type { AiSignalStrategy, SignalsBrowseTab };
+export { parseAiSignalStrategy, parseSignalsBrowseTab } from "@/lib/signals-browse-tabs";
 
-const SESSIONS = [
-  {
-    id: "super-scalping" as const,
+const AI_STRATEGY_META: Record<
+  Exclude<AiSignalStrategy, "all">,
+  { title: string; subtitle: string; emptyHint: string; timeframe?: string }
+> = {
+  "war-room": {
+    title: "War Room",
+    subtitle: "Floor-decided setups — separate from strategy sessions",
+    emptyHint: "Floor-decided signals will show up here.",
+  },
+  "super-scalping": {
     title: "Super scalping",
     subtitle: "5m ICT — sweep, CHoCH, FVG retest",
-    timeframe: "5m",
-    lane: "default" as SignalLane,
     emptyHint: "Setups appear after each 5m close.",
+    timeframe: "5m",
   },
-  {
-    id: "scalping" as const,
+  scalping: {
     title: "Scalping",
     subtitle: "15m cloud rejection + CHoCH",
-    timeframe: "15m",
-    lane: "default" as SignalLane,
     emptyHint: "Setups appear after each 15m close.",
+    timeframe: "15m",
   },
-  {
-    id: "swing" as const,
+  swing: {
     title: "Swing",
     subtitle: "1h AI-confirmed setups",
-    timeframe: "1h",
-    lane: "default" as SignalLane,
     emptyHint: "Setups appear after each 1h close.",
+    timeframe: "1h",
   },
-  {
-    id: "bbma" as const,
-    title: "BBMA",
-    subtitle: "XAU H1 — live MT5 EA, no AI gate",
-    timeframe: "bbma",
-    lane: "bbma" as SignalLane,
-    emptyHint: "New setups publish on each H1 close from the EA.",
-  },
-];
+};
+
+const BBMA_SESSION = {
+  title: "BBMA",
+  subtitle: "XAU H1 — live MT5 EA, no AI gate",
+  timeframe: "bbma",
+  lane: "bbma" as SignalLane,
+  emptyHint: "New setups publish on each H1 close from the EA.",
+};
 
 async function SessionBlock({
   title,
@@ -102,27 +109,42 @@ async function SessionBlock({
 
 export async function SignalsBrowse({
   tab,
+  strategy = "all",
   page = 1,
   accessToken,
   basePath,
   hideFilter = false,
 }: {
   tab: SignalsBrowseTab;
+  strategy?: AiSignalStrategy;
   page?: number;
   accessToken?: string;
   basePath: string;
   hideFilter?: boolean;
 }) {
-  const isWarRoomTab = tab === "war-room";
   const isAllTab = tab === "all";
+  const isAiTab = tab === "ai";
+  const isAiWarRoom = isAiTab && strategy === "war-room";
+  const isAiStrategy = isAiTab && !isAiWarRoom;
+  // "all" strategies within AI Signal has no timeframe filter — only a
+  // specific strategy (super-scalping/scalping/swing) narrows it.
+  const aiStrategyTimeframe =
+    isAiStrategy && strategy !== "all" ? AI_STRATEGY_META[strategy].timeframe : undefined;
 
-  const [warRoomPage, allPage, allStats] = await Promise.all([
-    isWarRoomTab ? getWarRoomSignalsPaginated(page, accessToken) : null,
+  const [allPage, allStats, aiWarRoomPage, aiPage, aiStats] = await Promise.all([
     isAllTab
       ? getSignalsPaginated(page, accessToken, undefined, ALL_PAGE_SIZE)
       : null,
     isAllTab ? getStats(accessToken) : null,
+    isAiWarRoom ? getWarRoomSignalsPaginated(page, accessToken) : null,
+    isAiStrategy
+      ? getSignalsPaginated(page, accessToken, aiStrategyTimeframe, ALL_PAGE_SIZE, "ai")
+      : null,
+    isAiStrategy ? getStats(accessToken, aiStrategyTimeframe, "ai") : null,
   ]);
+
+  const aiPaginationParams: Record<string, string> =
+    strategy === "all" ? { tab: "ai" } : { tab: "ai", strategy };
 
   return (
     <div className="w-full space-y-8">
@@ -132,37 +154,39 @@ export async function SignalsBrowse({
         <SignalsBrowseFilter tab={tab} basePath={basePath} showLabel={false} compact />
       )}
 
-      {isWarRoomTab && warRoomPage ? (
+      {isAiTab ? <AiStrategyRail strategy={strategy} basePath={basePath} /> : null}
+
+      {isAiWarRoom && aiWarRoomPage ? (
         <section className="space-y-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold tracking-tight text-ink">War Room</h2>
               <p className="mt-1 text-sm text-slate">
-                Floor-decided setups — separate from strategy sessions
+                {AI_STRATEGY_META["war-room"].subtitle}
               </p>
             </div>
-            {warRoomPage.total > 0 ? (
-              <p className="text-sm text-slate">{warRoomPage.total} total</p>
+            {aiWarRoomPage.total > 0 ? (
+              <p className="text-sm text-slate">{aiWarRoomPage.total} total</p>
             ) : null}
           </div>
 
-          {warRoomPage.signals.length > 0 ? (
+          {aiWarRoomPage.signals.length > 0 ? (
             <>
-              <SignalsGrid signals={warRoomPage.signals} showWarRoomBadge />
+              <SignalsGrid signals={aiWarRoomPage.signals} showWarRoomBadge />
               <Pagination
-                page={warRoomPage.page}
-                totalPages={warRoomPage.totalPages}
-                total={warRoomPage.total}
-                pageSize={warRoomPage.pageSize}
+                page={aiWarRoomPage.page}
+                totalPages={aiWarRoomPage.totalPages}
+                total={aiWarRoomPage.total}
+                pageSize={aiWarRoomPage.pageSize}
                 basePath={basePath}
-                extraParams={{ tab: "war-room" }}
+                extraParams={aiPaginationParams}
               />
             </>
           ) : (
             <div className="rounded-xl border border-dashed border-line bg-card px-6 py-14 text-center">
               <p className="text-sm font-semibold text-ink">No War Room signals yet</p>
               <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate">
-                Floor-decided signals will show up here.
+                {AI_STRATEGY_META["war-room"].emptyHint}
               </p>
             </div>
           )}
@@ -191,14 +215,52 @@ export async function SignalsBrowse({
             </div>
           )}
         </section>
+      ) : isAiStrategy && aiPage && aiStats ? (
+        <section className="space-y-5">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-ink">
+              {strategy === "all" ? "AI Signal" : AI_STRATEGY_META[strategy].title}
+            </h2>
+            <p className="mt-1 text-sm text-slate">
+              {strategy === "all"
+                ? "Every setup SEA-LION confirmed — across strategies, no floor debate, no raw EA feed."
+                : AI_STRATEGY_META[strategy].subtitle}
+            </p>
+          </div>
+
+          <StatsBar stats={aiStats} />
+
+          {aiPage.signals.length > 0 ? (
+            <>
+              <SignalsGrid signals={aiPage.signals} />
+              <Pagination
+                page={aiPage.page}
+                totalPages={aiPage.totalPages}
+                total={aiPage.total}
+                pageSize={aiPage.pageSize}
+                basePath={basePath}
+                extraParams={aiPaginationParams}
+              />
+            </>
+          ) : (
+            <div className="rounded-xl border border-dashed border-line bg-card px-6 py-14 text-center">
+              <p className="text-sm font-semibold text-ink">No AI signals yet</p>
+              <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate">
+                {strategy === "all"
+                  ? "New setups will show up here once SEA-LION confirms one."
+                  : AI_STRATEGY_META[strategy].emptyHint}
+              </p>
+            </div>
+          )}
+        </section>
       ) : (
         <SessionBlock
           accessToken={accessToken}
-          title={SESSIONS.find((s) => s.id === tab)!.title}
-          subtitle={SESSIONS.find((s) => s.id === tab)!.subtitle}
-          timeframe={SESSIONS.find((s) => s.id === tab)!.timeframe}
-          lane={SESSIONS.find((s) => s.id === tab)!.lane}
-          emptyHint={SESSIONS.find((s) => s.id === tab)!.emptyHint}
+          title={BBMA_SESSION.title}
+          subtitle={BBMA_SESSION.subtitle}
+          timeframe={BBMA_SESSION.timeframe}
+          lane={BBMA_SESSION.lane}
+          emptyHint={BBMA_SESSION.emptyHint}
         />
       )}
     </div>
