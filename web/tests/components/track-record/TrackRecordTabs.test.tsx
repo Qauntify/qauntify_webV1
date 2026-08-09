@@ -38,19 +38,19 @@ describe("TrackRecordTabs", () => {
   it("defaults to Calendar as the first tab", () => {
     setup();
     expect(screen.queryByText("Overview")).toBeNull();
-    expect(screen.getByText("Calendar")).toBeDefined();
-    expect(screen.getByText("Breakdown")).toBeDefined();
-    expect(screen.getByText("Trades")).toBeDefined();
-    expect(screen.getByText(/Win \/ loss calendar/i)).toBeDefined();
-    expect(screen.getByText("2 W")).toBeDefined();
-    expect(screen.getByText("1 L")).toBeDefined();
-    expect(screen.queryByText(/Recent trades/i)).toBeNull();
+    expect(screen.getByText("ប្រតិទិន")).toBeDefined();
+    expect(screen.getByText("ការវិភាគ")).toBeDefined();
+    expect(screen.getByText("ការជួញដូរ")).toBeDefined();
+    expect(screen.getByText("ប្រតិទិន TP/SL")).toBeDefined();
+    expect(screen.getByText("2 TP")).toBeDefined();
+    expect(screen.getByText("1 SL")).toBeDefined();
+    expect(screen.queryByText("ការជួញដូរថ្មីៗ")).toBeNull();
   });
 
   it("switches to the Trades panel when the Trades tab is clicked", () => {
     setup();
-    fireEvent.click(screen.getByText("Trades"));
-    expect(screen.getByText(/Recent trades/i)).toBeDefined();
-    expect(screen.queryByText(/Win \/ loss calendar/i)).toBeNull();
+    fireEvent.click(screen.getByText("ការជួញដូរ"));
+    expect(screen.getByText("ការជួញដូរថ្មីៗ")).toBeDefined();
+    expect(screen.queryByText("ប្រតិទិន TP/SL")).toBeNull();
   });
 });

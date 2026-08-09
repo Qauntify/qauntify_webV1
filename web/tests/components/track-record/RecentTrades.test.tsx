@@ -30,6 +30,6 @@ describe("RecentTrades", () => {
 
   it("shows empty state when there are no trades", () => {
     render(<RecentTrades trades={[]} />);
-    expect(screen.getByText(/No closed trades yet/i)).toBeDefined();
+    expect(screen.getByText(/មិនទាន់មានការជួញដូរបិទទេ/i)).toBeDefined();
   });
 });
