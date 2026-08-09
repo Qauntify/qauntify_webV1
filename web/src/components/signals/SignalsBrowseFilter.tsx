@@ -23,7 +23,7 @@ export function SignalsBrowseFilter({
   tab,
   basePath,
   options = SIGNAL_FILTER_OPTIONS,
-  label = "Session",
+  label = "វគ្គ",
   showLabel = true,
   compact = false,
 }: {

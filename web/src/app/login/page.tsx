@@ -9,7 +9,7 @@ import { isAdminEmail } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Sign in — Qauntify",
+  title: "ចូលគណនី — Qauntify",
 };
 
 export default async function LoginPage({
@@ -33,11 +33,11 @@ export default async function LoginPage({
 
   return (
     <AuthShell
-      headline="Welcome back."
-      sub="Your full signal history and outcome tracking are waiting on the dashboard."
+      headline="ស្វាគមន៍មកវិញ។"
+      sub="ប្រវត្តិ signals ពេញលេញ និងការតាមដានលទ្ធផលកំពុងរង់ចាំនៅផ្ទាំងគ្រប់គ្រង។"
     >
-      <h1 className="text-2xl font-bold">Sign in</h1>
-      <p className="mt-1 text-sm text-slate">Open your trading dashboard.</p>
+      <h1 className="text-2xl font-bold">ចូលគណនី</h1>
+      <p className="mt-1 text-sm text-slate">បើកផ្ទាំងគ្រប់គ្រងការជួញដូររបស់បងប្អូន។</p>
       {error ? (
         <Notice tone="error" className="mt-6">
           {error}
@@ -45,7 +45,7 @@ export default async function LoginPage({
       ) : null}
       <form className="mt-8 flex flex-col gap-4">
         <label className="flex flex-col gap-1.5 text-sm font-medium">
-          Email
+          អ៊ីមែល
           <input
             type="email"
             name="email"
@@ -56,24 +56,24 @@ export default async function LoginPage({
           />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
-          Password
+          ពាក្យសម្ងាត់
           <input
             type="password"
             name="password"
             required
             autoComplete="current-password"
-            placeholder="Your password"
+            placeholder="ពាក្យសម្ងាត់របស់បងប្អូន"
             className="input-field"
           />
         </label>
         <button formAction={login} className="btn-primary mt-2">
-          Sign in
+          ចូលគណនី
         </button>
       </form>
       <p className="mt-6 text-sm text-slate">
-        No account?{" "}
+        មិនទាន់មានគណនី?{" "}
         <Link href="/signup" className="font-semibold text-accent hover:underline">
-          Create one free
+          បង្កើតឥតគិតថ្លៃ
         </Link>
       </p>
     </AuthShell>

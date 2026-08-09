@@ -13,11 +13,11 @@ export function SignalsPreview({ signals }: { signals: Signal[] }) {
               Live signals
             </p>
             <h2 className="mt-1 text-xl font-bold tracking-tight text-ink md:text-2xl">
-              Straight from the engine
+              មកពីម៉ាស៊ីនដោយផ្ទាល់
             </h2>
           </div>
           <Link href="/signals" className="text-sm font-semibold text-ink hover:text-slate">
-            View all →
+            មើលទាំងអស់ →
           </Link>
         </div>
 
@@ -29,8 +29,7 @@ export function SignalsPreview({ signals }: { signals: Signal[] }) {
           </div>
         ) : (
           <div className="mt-4 rounded-lg border border-dashed border-line bg-card p-6 text-center text-sm text-slate">
-            No signals yet — the engine publishes here the moment a setup is
-            confirmed.
+            មិនទាន់មាន signals — ម៉ាស៊ីននឹងផ្សាយនៅទីនេះភ្លាមៗនៅពេលការរៀបចំត្រូវបានបញ្ជាក់។
           </div>
         )}
       </div>

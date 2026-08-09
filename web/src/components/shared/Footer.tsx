@@ -10,9 +10,9 @@ export function Footer() {
           <div>
             <Logo />
             <p className="mt-1.5 max-w-sm text-sm text-slate">
-              AI-confirmed trading signals with entry, stop, targets, and
-              outcome tracking. Free for every trader — no account, no
-              paywall.
+              Trading signals ដែល AI បញ្ជាក់ ជាមួយចំណុចចូល បញ្ឈប់ខាត គោលដៅ
+              និងការតាមដានលទ្ធផល។ ឥតគិតថ្លៃសម្រាប់បងប្អូនជួញដូរគ្រប់រូប — គ្មានគណនី គ្មាន
+              ជញ្ជាំងបង់ប្រាក់។
             </p>
           </div>
           <nav className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
@@ -23,13 +23,13 @@ export function Footer() {
               War Room
             </Link>
             <Link href="/track-record" className="font-medium text-slate hover:text-ink">
-              Track Record
+              កំណត់ត្រាលទ្ធផល
             </Link>
           </nav>
         </div>
         <p className="mt-4 border-t border-line pt-3 text-xs leading-relaxed text-slate">
-          Signals are for educational and analysis purposes only. Not financial
-          advice. Trading involves risk. © {new Date().getFullYear()} Qauntify.
+          Signals គឺសម្រាប់គោលបំណងអប់រំ និងវិភាគតែប៉ុណ្ណោះ។ មិនមែនដំបូន្មានហិរញ្ញវត្ថុទេ។
+          ការជួញដូរមានហានិភ័យ។ © {new Date().getFullYear()} Qauntify។
         </p>
       </div>
     </footer>

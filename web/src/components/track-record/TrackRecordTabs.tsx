@@ -11,9 +11,9 @@ import type { BreakdownRow, ClosedTrade } from "@/lib/track-record";
 type TabId = "calendar" | "breakdown" | "trades";
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: "calendar", label: "Calendar" },
-  { id: "breakdown", label: "Breakdown" },
-  { id: "trades", label: "Trades" },
+  { id: "calendar", label: "ប្រតិទិន" },
+  { id: "breakdown", label: "ការវិភាគ" },
+  { id: "trades", label: "ការជួញដូរ" },
 ];
 
 type Props = {
@@ -35,7 +35,7 @@ export function TrackRecordTabs({
     <div className="space-y-8">
       <nav
         role="tablist"
-        aria-label="Track record sections"
+        aria-label="ផ្នែកកំណត់ត្រាលទ្ធផល"
         className="flex gap-1 overflow-x-auto border-b border-line [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {TABS.map((t) => {
@@ -66,12 +66,9 @@ export function TrackRecordTabs({
       {tab === "calendar" ? (
         <section className="space-y-4">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight text-ink">
-              Win / loss calendar
+            <h2 className="text-lg font-semibold tracking-tight text-ink text-center">
+              ប្រតិទិន TP/SL
             </h2>
-            <p className="mt-1 text-sm text-slate">
-              Closed signals by day. Full TP and TP1/TP2 wins count as wins.
-            </p>
           </div>
           <DailyPnLCalendar data={dailyPnL} description={null} />
         </section>
@@ -80,14 +77,14 @@ export function TrackRecordTabs({
       {tab === "breakdown" ? (
         <section className="space-y-5">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight text-ink">Breakdown</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-ink">ការវិភាគ</h2>
             <p className="mt-1 text-sm text-slate">
-              Win rate and net R by strategy and symbol
+              អត្រាឈ្នះ និង R សុទ្ធតាមយុទ្ធសាស្ត្រ និងនិមិត្តសញ្ញា
             </p>
           </div>
           <div className="grid gap-5 md:grid-cols-2">
-            <Breakdown title="By strategy" rows={byStrategy} />
-            <Breakdown title="By symbol" rows={bySymbol} />
+            <Breakdown title="តាមយុទ្ធសាស្ត្រ" rows={byStrategy} />
+            <Breakdown title="តាមនិមិត្តសញ្ញា" rows={bySymbol} />
           </div>
         </section>
       ) : null}
@@ -97,13 +94,13 @@ export function TrackRecordTabs({
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold tracking-tight text-ink">
-                Recent trades
+                ការជួញដូរថ្មីៗ
               </h2>
-              <p className="mt-1 text-sm text-slate">Latest closed outcomes</p>
+              <p className="mt-1 text-sm text-slate">លទ្ធផលបិទចុងក្រោយ</p>
             </div>
             {recent.length > 0 ? (
               <p className="text-sm text-slate">
-                {recent.length} trade{recent.length === 1 ? "" : "s"}
+                {recent.length} ការជួញដូរ
               </p>
             ) : null}
           </div>

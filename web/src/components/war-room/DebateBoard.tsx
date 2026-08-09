@@ -1,9 +1,9 @@
 import type { Debate } from "@/lib/debates";
 
 const VERDICT: Record<string, { label: string; cls: string }> = {
-  agree: { label: "AGREE", cls: "bg-long-soft text-long" },
-  reject: { label: "REJECT", cls: "bg-short-soft text-short" },
-  caution: { label: "CAUTION", cls: "bg-accent-soft text-accent" },
+  agree: { label: "យល់ព្រម", cls: "bg-long-soft text-long" },
+  reject: { label: "បដិសេធ", cls: "bg-short-soft text-short" },
+  caution: { label: "ប្រុងប្រយ័ត្ន", cls: "bg-accent-soft text-accent" },
 };
 
 function DebateCard({ debate }: { debate: Debate }) {
@@ -23,7 +23,7 @@ function DebateCard({ debate }: { debate: Debate }) {
             isLong ? "bg-long-soft text-long" : "bg-short-soft text-short"
           }`}
         >
-          {isLong ? "Long" : "Short"}
+          {isLong ? "ទិញ" : "លក់"}
         </span>
       </header>
 
@@ -49,7 +49,7 @@ function DebateCard({ debate }: { debate: Debate }) {
       </div>
 
       <footer className="mt-4 flex items-center justify-between border-t border-line pt-3">
-        <span className="text-xs text-slate">Manager verdict</span>
+        <span className="text-xs text-slate">សេចក្តីសម្រេចអ្នកគ្រប់គ្រង</span>
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs text-slate">
             {debate.managerConfidence}%
@@ -70,9 +70,9 @@ export function DebateBoard({ debates }: { debates: Debate[] }) {
     return (
       <div className="stat-tile py-12 text-center">
         <p className="text-3xl">🤖💬🧑‍💼</p>
-        <p className="mt-3 font-semibold text-ink">The war room is warming up.</p>
+        <p className="mt-3 font-semibold text-ink">War Room កំពុងឡើងកម្តៅ។</p>
         <p className="mt-1 text-sm text-slate">
-          Debates appear here as the AI confirms new signals.
+          ការពិភាក្សាបង្ហាញនៅទីនេះនៅពេល AI បញ្ជាក់ signal ថ្មី។
         </p>
       </div>
     );

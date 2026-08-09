@@ -5,7 +5,7 @@ export function Breakdown({ title, rows }: { title: string; rows: BreakdownRow[]
     <div className="rounded-xl border border-line bg-card p-5">
       <h3 className="text-sm font-semibold text-ink">{title}</h3>
       {rows.length === 0 ? (
-        <p className="mt-4 text-sm text-slate">No data yet.</p>
+        <p className="mt-4 text-sm text-slate">មិនទាន់មានទិន្នន័យទេ។</p>
       ) : (
         <ul className="mt-4 space-y-4">
           {rows.map((r) => (
@@ -32,7 +32,7 @@ export function Breakdown({ title, rows }: { title: string; rows: BreakdownRow[]
                   style={{ width: `${Math.min(100, Math.max(0, r.winRate))}%` }}
                 />
               </div>
-              <p className="mt-1 text-xs text-slate">{r.count} trades</p>
+              <p className="mt-1 text-xs text-slate">{r.count} ការជួញដូរ</p>
             </li>
           ))}
         </ul>

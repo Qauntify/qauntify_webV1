@@ -41,7 +41,7 @@ export async function DashboardShell({
             <ThemeToggle />
             <form action={signout}>
               <button type="submit" className="btn-ghost text-xs">
-                Sign out
+                ចាកចេញ
               </button>
             </form>
           </div>
@@ -67,7 +67,7 @@ export async function DashboardShell({
               War Room
             </Link>
             <Link href="/" className="btn-ghost text-sm">
-              Home
+              ទំព័រដើម
             </Link>
             </div>
           </div>

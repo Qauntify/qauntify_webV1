@@ -1,11 +1,11 @@
 import type { Stats } from "@/lib/signals";
 
 const STEPS = [
-  { id: "scan", label: "Scan" },
-  { id: "setup", label: "Setup" },
-  { id: "news", label: "News" },
-  { id: "ai", label: "AI confirm" },
-  { id: "publish", label: "Published" },
+  { id: "scan", label: "ស្កេន" },
+  { id: "setup", label: "ការរៀបចំ" },
+  { id: "news", label: "ព័ត៌មាន" },
+  { id: "ai", label: "AI បញ្ជាក់" },
+  { id: "publish", label: "បានផ្សាយ" },
 ] as const;
 
 function StatBar({
@@ -49,11 +49,11 @@ export function HowAiWorks({ stats }: { stats: Stats }) {
     >
       <div className="flex items-center justify-between px-4 py-3">
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
-          Engine loop
+          វដ្តម៉ាស៊ីន
         </p>
         <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-long">
           <span className="h-1.5 w-1.5 rounded-full bg-long" aria-hidden />
-          Live
+          ផ្ទាល់
         </span>
       </div>
 
@@ -78,7 +78,7 @@ export function HowAiWorks({ stats }: { stats: Stats }) {
 
       <div className="p-4">
         <p className="mb-3 font-mono text-[10px] font-semibold uppercase tracking-wide text-slate">
-          Track record so far
+          កំណត់ត្រាលទ្ធផលរហូតមកដល់ពេលនេះ
         </p>
         <div className="mb-4 flex items-baseline gap-1.5">
           <span className="font-mono text-2xl font-bold text-ink">
@@ -87,9 +87,9 @@ export function HowAiWorks({ stats }: { stats: Stats }) {
           <span className="text-xs text-slate">signals logged</span>
         </div>
         <div className="flex flex-col gap-3">
-          <StatBar label="Avg confidence" value={stats.avgConfidence} />
+          <StatBar label="ទំនុកចិត្តមធ្យម" value={stats.avgConfidence} />
           {stats.winRate !== null ? (
-            <StatBar label="Win rate" value={stats.winRate} tone="long" />
+            <StatBar label="អត្រាឈ្នះ" value={stats.winRate} tone="long" />
           ) : null}
         </div>
       </div>

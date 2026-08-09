@@ -1,13 +1,40 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
-
-import "./globals.css";
+import { JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import Script from "next/dist/client/script";
 
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-jakarta",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+import "./globals.css";
+
+const notoSansKhmer = localFont({
+  src: [
+    {
+      path: "../fonts/NotoSansKhmer-Regular.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../fonts/NotoSansKhmer-Medium.woff2",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../fonts/NotoSansKhmer-SemiBold.woff2",
+      weight: "600",
+      style: "normal",
+    },
+    {
+      path: "../fonts/NotoSansKhmer-Bold.woff2",
+      weight: "700",
+      style: "normal",
+    },
+    {
+      path: "../fonts/NotoSansKhmer-ExtraBold.woff2",
+      weight: "800",
+      style: "normal",
+    },
+  ],
+  variable: "--font-khmer",
+  display: "swap",
 });
 
 const jetbrains = JetBrains_Mono({
@@ -17,9 +44,9 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Qauntify — Smarter signals. Calmer trading.",
+  title: "Qauntify — Smart signals. Calmer trading.",
   description:
-    "Technical setups on crypto, gold, and forex — confirmed by AI, explained in plain language. Signals are for education and analysis — not financial advice.",
+    "ការរៀបចំបច្ចេកទេសលើ crypto មាស និង forex — បញ្ជាក់ដោយ AI ពន្យល់ជាភាសាសាមញ្ញ។ Signals សម្រាប់ការអប់រំ និងវិភាគ — មិនមែនជាដំបូន្មានហិរញ្ញវត្ថុ។",
 };
 
 export default function RootLayout({
@@ -29,9 +56,9 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="km"
       suppressHydrationWarning
-      className={`${jakarta.variable} ${jetbrains.variable} h-full antialiased`}
+      className={`${notoSansKhmer.variable} ${jetbrains.variable} h-full antialiased`}
     >
       <head>
         <Script

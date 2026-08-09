@@ -9,7 +9,7 @@ function DirectionBadge({ direction }: { direction: Signal["direction"] }) {
         isLong ? "bg-long-soft text-long" : "bg-short-soft text-short"
       }`}
     >
-      {isLong ? "Long" : "Short"}
+      {isLong ? "ទិញ" : "លក់"}
     </span>
   );
 }
@@ -25,7 +25,7 @@ function StatusBadge({
   if (status === "expired") {
     return (
       <span className="inline-flex items-center rounded-md bg-line px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-slate">
-        Expired
+        ផុតកំណត់
       </span>
     );
   }
@@ -33,20 +33,20 @@ function StatusBadge({
   if ((status === "tp1_hit" || status === "tp2_hit") && !closedAt) {
     return (
       <span className="inline-flex items-center rounded-md bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-accent">
-        {status === "tp1_hit" ? "TP1 hit" : "TP2 hit"}
+        {status === "tp1_hit" ? "ឈានដល់ TP1" : "ឈានដល់ TP2"}
       </span>
     );
   }
   const label =
     status === "tp3_hit"
-      ? "TP3 hit"
+      ? "ឈានដល់ TP3"
       : status === "tp2_hit"
-        ? "TP2 hit"
+        ? "ឈានដល់ TP2"
         : status === "tp1_hit"
-          ? "TP1 hit"
+          ? "ឈានដល់ TP1"
           : status === "tp_hit"
-            ? "TP hit"
-            : "SL hit";
+            ? "ឈានដល់ TP"
+            : "ឈានដល់ SL";
   const isWin = status !== "sl_hit";
   return (
     <span
@@ -61,7 +61,7 @@ function StatusBadge({
 
 function ConfidenceGauge({ value }: { value: number }) {
   return (
-    <div className="flex items-center gap-2" title={`Confidence ${value}/100`}>
+    <div className="flex items-center gap-2" title={`ទំនុកចិត្ត ${value}/100`}>
       <div className="h-1.5 w-20 overflow-hidden rounded-full bg-line">
         <div
           className="h-full rounded-full bg-ink transition-all duration-300 ease-out"
@@ -125,10 +125,10 @@ export function TradeTicket({
       </div>
 
       <div className="grid grid-cols-2 gap-3 px-4 py-3.5 sm:grid-cols-3 lg:grid-cols-5">
-        <PriceCell label="Entry" value={signal.entry} />
-        <PriceCell label="Stop loss" value={signal.stopLoss} tone="short" />
+        <PriceCell label="ចូល" value={signal.entry} />
+        <PriceCell label="បញ្ឈប់ខាត" value={signal.stopLoss} tone="short" />
         <PriceCell
-          label={signal.takeProfit2 != null || signal.takeProfit3 != null ? "TP1" : "Take profit"}
+          label={signal.takeProfit2 != null || signal.takeProfit3 != null ? "TP1" : "យកប្រាក់ចំណេញ"}
           value={signal.takeProfit}
           tone="long"
         />
@@ -153,8 +153,7 @@ export function TradeTicket({
         <div className="flex items-center gap-3">
           {signal.newsHeadlines.length > 0 && (
             <span>
-              {signal.newsHeadlines.length} headline
-              {signal.newsHeadlines.length === 1 ? "" : "s"} reviewed
+              បានពិនិត្យចំណងជើង {signal.newsHeadlines.length}
             </span>
           )}
           {adminSlot}

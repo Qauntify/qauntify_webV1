@@ -2,7 +2,7 @@ import type { EquityPoint } from "@/lib/track-record";
 
 export function EquityCurve({ points }: { points: EquityPoint[] }) {
   if (points.length < 2) {
-    return <div className="text-sm text-slate/60">Not enough closed trades yet to plot an equity curve.</div>;
+    return <div className="text-sm text-slate/60">មិនទាន់មានការជួញដូរបិទគ្រប់គ្រាន់ដើម្បីគូសខ្សែស្មើភាព។</div>;
   }
   const W = 720;
   const H = 160;
@@ -17,7 +17,7 @@ export function EquityCurve({ points }: { points: EquityPoint[] }) {
   const area = `${line} L${x(points.length - 1).toFixed(1)},${(H - pad).toFixed(1)} L${x(0).toFixed(1)},${(H - pad).toFixed(1)} Z`;
   const stroke = points[points.length - 1].r >= 0 ? "#34d399" : "#fb7185";
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Cumulative R equity curve">
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="ខ្សែស្មើភាព R សរុប">
       <defs>
         <linearGradient id="eq-grad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor={stroke} stopOpacity="0.25" />

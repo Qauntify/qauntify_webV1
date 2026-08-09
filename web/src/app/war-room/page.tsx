@@ -9,19 +9,19 @@ import { getDebates } from "@/lib/debates";
 export const metadata: Metadata = {
   title: "AI War Room — Qauntify",
   description:
-    "Structure and Momentum robots debate every confirmed signal — the Manager decides.",
+    "រ៉ូបូតរចនាសម្ព័ន្ធ និងសន្ទុះពិភាក្សាគ្រប់ signals ដែលបានបញ្ជាក់ — អ្នកគ្រប់គ្រងសម្រេច។",
 };
 
 export const revalidate = 20;
 
 const TABS = [
-  { id: "stage", label: "Live Stage", href: "/war-room" },
-  { id: "debates", label: "All Debates", href: "/war-room?tab=debates" },
+  { id: "stage", label: "ឆាកផ្ទាល់", href: "/war-room" },
+  { id: "debates", label: "ការពិភាក្សាទាំងអស់", href: "/war-room?tab=debates" },
 ] as const;
 
 function TabNav({ current }: { current: "stage" | "debates" }) {
   return (
-    <nav className="flex shrink-0 gap-2" aria-label="War Room sections">
+    <nav className="flex shrink-0 gap-2" aria-label="ផ្នែកបន្ទប់សង្គ្រាម">
       {TABS.map((t) => (
         <Link
           key={t.id}
@@ -78,15 +78,15 @@ export default async function WarRoom({
                 AI War Room
               </p>
               <h1 className="mt-0.5 truncate text-lg font-bold md:text-xl">
-                All Debates
+                ការពិភាក្សាទាំងអស់
               </h1>
             </div>
             <TabNav current="debates" />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
             <p className="mb-4 text-xs text-slate">
-              Every War Room transcript on file — newest first. Illustration
-              only, not financial advice.
+              គ្រប់ប្រតិចារិកបន្ទប់សង្គ្រាមដែលមាន — ថ្មីបំផុតមុន។ គ្រាន់តែជារូបភាព
+              មិនមែនជាដំបូន្មានហិរញ្ញវត្ថុ។
             </p>
             <DebateBoard debates={cardDebates} />
           </div>

@@ -8,31 +8,31 @@ import type { Debate } from "@/lib/debates";
 const AGENTS = [
   {
     id: "structure",
-    title: "Structure",
-    className: "Level Runner",
+    title: "រចនាសម្ព័ន្ធ",
+    className: "រត់កម្រិត",
     color: "#0d9488",
     seat: "wr-seat-0",
   },
   {
     id: "momentum",
-    title: "Momentum",
-    className: "Momentum Scout",
+    title: "សន្ទុះ",
+    className: "អ្នកស៊ើបការណ៍សន្ទុះ",
     color: "#ca8a04",
     seat: "wr-seat-1",
   },
   {
     id: "mgr",
-    title: "Manager",
-    className: "Floor Chief",
+    title: "អ្នកគ្រប់គ្រង",
+    className: "ប្រធានជាន់",
     color: "#1e3a5f",
     seat: "wr-seat-2",
   },
 ] as const;
 
 const VERDICT: Record<string, { label: string; color: string }> = {
-  agree: { label: "AGREE", color: "var(--long)" },
-  reject: { label: "REJECT", color: "var(--short)" },
-  caution: { label: "CAUTION", color: "#ca8a04" },
+  agree: { label: "យល់ព្រម", color: "var(--long)" },
+  reject: { label: "បដិសេធ", color: "var(--short)" },
+  caution: { label: "ប្រុងប្រយ័ត្ន", color: "#ca8a04" },
 };
 
 const WALK_MS = 900;
@@ -150,7 +150,7 @@ function Desk({
           <GameAvatar role={role} dimmed={!activeSeat} />
         ) : (
           <div className="wr-empty-chair" aria-hidden>
-            <span>away</span>
+            <span>អវត្តមាន</span>
           </div>
         )}
       </div>
@@ -255,7 +255,7 @@ export function WarRoomStage({
         <div className="flex items-center gap-2">
           <span className="wr-live-dot" />
           <span className="font-mono text-xs font-semibold uppercase tracking-widest text-teal-200/80">
-            Live Stage
+            ឆាកផ្ទាល់
           </span>
         </div>
         <div className="flex items-center gap-2 font-mono text-xs">
@@ -268,7 +268,7 @@ export function WarRoomStage({
               isLong ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
             }`}
           >
-            {isLong ? "LONG" : "SHORT"}
+            {isLong ? "ទិញ" : "លក់"}
           </span>
         </div>
       </div>
@@ -312,7 +312,7 @@ export function WarRoomStage({
           <div className="wr-podium-zone">
             <div className="wr-walk-path" aria-hidden />
             <div className="wr-podium">
-              <span className="wr-podium-label">PODIUM</span>
+              <span className="wr-podium-label">វេទិកា</span>
               {atPodium ? (
                 <div
                   key={`${runId}-${activeIndex}-${phase}`}
@@ -345,11 +345,11 @@ export function WarRoomStage({
                   style={{ color: AGENTS[activeIndex as 0 | 1 | 2].color }}
                 >
                   {walking
-                    ? `${msgs[activeIndex]?.agent ?? AGENTS[activeIndex as 0 | 1 | 2].title} walking to podium…`
+                    ? `${msgs[activeIndex]?.agent ?? AGENTS[activeIndex as 0 | 1 | 2].title} កំពុងដើរទៅវេទិកា…`
                     : msgs[activeIndex]?.agent ?? AGENTS[activeIndex as 0 | 1 | 2].title}
                 </p>
                 <span className="font-mono text-[10px] uppercase tracking-widest text-slate-400">
-                  Turn {Math.min(activeIndex + 1, msgs.length)} / {msgs.length}
+                  វគ្គ {Math.min(activeIndex + 1, msgs.length)} / {msgs.length}
                 </span>
               </div>
               {walking || thinking ? (
@@ -361,7 +361,7 @@ export function WarRoomStage({
                   <span className="wr-dot" />
                   <span className="wr-dot" />
                   <span className="ml-1 font-mono text-xs text-slate-400">
-                    {walking ? "crossing the floor…" : "preparing call…"}
+                    {walking ? "កំពុងឆ្លងជាន់…" : "កំពុងរៀបចំការសម្រេច…"}
                   </span>
                 </p>
               ) : (
@@ -379,7 +379,7 @@ export function WarRoomStage({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  Floor Chief — final call
+                  ប្រធានជាន់ — សេចក្តីសម្រេចចុងក្រោយ
                 </p>
                 <p
                   className={`leading-relaxed text-slate-100 ${
@@ -397,7 +397,7 @@ export function WarRoomStage({
                   {verdict.label}
                 </span>
                 <span className="mt-1 block font-mono text-xs text-slate-400">
-                  {debate.managerConfidence}% confident
+                  {debate.managerConfidence}% ទំនុកចិត្ត
                 </span>
               </div>
             </div>
@@ -418,7 +418,7 @@ export function WarRoomStage({
               onClick={() => setRunId((r) => r + 1)}
               className="shrink-0 rounded-full border border-white/15 px-3 py-1 font-mono text-xs text-slate-300 transition-colors hover:border-teal-400 hover:text-teal-300"
             >
-              Replay
+              ចាក់ឡើងវិញ
             </button>
           </div>
         </div>

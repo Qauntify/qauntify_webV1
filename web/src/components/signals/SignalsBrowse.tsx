@@ -28,35 +28,35 @@ const AI_STRATEGY_META: Record<
 > = {
   "war-room": {
     title: "War Room",
-    subtitle: "Floor-decided setups — separate from strategy sessions",
-    emptyHint: "Floor-decided signals will show up here.",
+    subtitle: "ការរៀបចំសម្រេចដោយជាន់ — ដាច់ដោយឡែកពីវគ្គយុទ្ធសាស្ត្រ",
+    emptyHint: "Signals សម្រេចដោយជាន់នឹងបង្ហាញនៅទីនេះ។",
   },
   "super-scalping": {
     title: "Super scalping",
     subtitle: "5m ICT — sweep, CHoCH, FVG retest",
-    emptyHint: "Setups appear after each 5m close.",
+    emptyHint: "ការរៀបចំបង្ហាញបន្ទាប់ពីបិទ 5m នីមួយៗ។",
     timeframe: "5m",
   },
   scalping: {
     title: "Scalping",
     subtitle: "15m cloud rejection + CHoCH",
-    emptyHint: "Setups appear after each 15m close.",
+    emptyHint: "ការរៀបចំបង្ហាញបន្ទាប់ពីបិទ 15m នីមួយៗ។",
     timeframe: "15m",
   },
   swing: {
     title: "Swing",
-    subtitle: "1h AI-confirmed setups",
-    emptyHint: "Setups appear after each 1h close.",
+    subtitle: "ការរៀបចំ 1h បញ្ជាក់ដោយ AI",
+    emptyHint: "ការរៀបចំបង្ហាញបន្ទាប់ពីបិទ 1h នីមួយៗ។",
     timeframe: "1h",
   },
 };
 
 const BBMA_SESSION = {
   title: "BBMA",
-  subtitle: "XAU H1 — live MT5 EA, no AI gate",
+  subtitle: "XAU H1 — MT5 EA ផ្ទាល់ គ្មានច្រក AI",
   timeframe: "bbma",
   lane: "bbma" as SignalLane,
-  emptyHint: "New setups publish on each H1 close from the EA.",
+  emptyHint: "ការរៀបចំថ្មីបោះពុម្ពនៅពេល H1 បិទពី EA។",
 };
 
 async function SessionBlock({
@@ -88,7 +88,7 @@ async function SessionBlock({
         </div>
         {signals.length > 0 ? (
           <p className="text-sm text-slate">
-            {signals.length} signal{signals.length === 1 ? "" : "s"}
+            {signals.length} signals
           </p>
         ) : null}
       </div>
@@ -99,7 +99,7 @@ async function SessionBlock({
         <SignalsGrid signals={signals} />
       ) : (
         <div className="rounded-xl border border-dashed border-line bg-card px-6 py-14 text-center">
-          <p className="text-sm font-semibold text-ink">No {title.toLowerCase()} signals yet</p>
+          <p className="text-sm font-semibold text-ink">មិនទាន់មាន signals {title} ទេ</p>
           <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate">{emptyHint}</p>
         </div>
       )}
@@ -166,7 +166,7 @@ export async function SignalsBrowse({
               </p>
             </div>
             {aiWarRoomPage.total > 0 ? (
-              <p className="text-sm text-slate">{aiWarRoomPage.total} total</p>
+              <p className="text-sm text-slate">សរុប {aiWarRoomPage.total}</p>
             ) : null}
           </div>
 
@@ -184,7 +184,7 @@ export async function SignalsBrowse({
             </>
           ) : (
             <div className="rounded-xl border border-dashed border-line bg-card px-6 py-14 text-center">
-              <p className="text-sm font-semibold text-ink">No War Room signals yet</p>
+              <p className="text-sm font-semibold text-ink">មិនទាន់មាន War Room signals ទេ</p>
               <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate">
                 {AI_STRATEGY_META["war-room"].emptyHint}
               </p>
@@ -208,9 +208,9 @@ export async function SignalsBrowse({
             </>
           ) : (
             <div className="rounded-xl border border-dashed border-line bg-card px-6 py-14 text-center">
-              <p className="text-sm font-semibold text-ink">No signals yet</p>
+              <p className="text-sm font-semibold text-ink">មិនទាន់មាន signals ទេ</p>
               <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate">
-                New setups will show up here as sessions fire.
+                ការរៀបចំថ្មីនឹងបង្ហាញនៅទីនេះនៅពេលវគ្គដំណើរការ។
               </p>
             </div>
           )}
@@ -223,7 +223,7 @@ export async function SignalsBrowse({
             </h2>
             <p className="mt-1 text-sm text-slate">
               {strategy === "all"
-                ? "Every setup SEA-LION confirmed — across strategies, no floor debate, no raw EA feed."
+                ? "គ្រប់ការរៀបចំដែល SEA-LION បញ្ជាក់ — ឆ្លងយុទ្ធសាស្ត្រ គ្មានការពិភាក្សាជាន់ គ្មាន feed EA ឆៅ។"
                 : AI_STRATEGY_META[strategy].subtitle}
             </p>
           </div>
@@ -244,10 +244,10 @@ export async function SignalsBrowse({
             </>
           ) : (
             <div className="rounded-xl border border-dashed border-line bg-card px-6 py-14 text-center">
-              <p className="text-sm font-semibold text-ink">No AI signals yet</p>
+              <p className="text-sm font-semibold text-ink">មិនទាន់មាន AI signals ទេ</p>
               <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate">
                 {strategy === "all"
-                  ? "New setups will show up here once SEA-LION confirms one."
+                  ? "ការរៀបចំថ្មីនឹងបង្ហាញនៅទីនេះនៅពេល SEA-LION បញ្ជាក់មួយ។"
                   : AI_STRATEGY_META[strategy].emptyHint}
               </p>
             </div>

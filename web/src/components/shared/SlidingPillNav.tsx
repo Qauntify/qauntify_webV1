@@ -66,7 +66,7 @@ export function SlidingPillNav({
           return (
             <span
               key={opt.id}
-              title="Coming soon"
+              title="មកដល់ឆាប់ៗ"
               aria-disabled="true"
               className={`relative z-10 flex shrink-0 cursor-not-allowed items-center whitespace-nowrap rounded-full px-4 ${padY} text-xs font-semibold text-slate opacity-40`}
             >

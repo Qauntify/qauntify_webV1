@@ -13,13 +13,13 @@ export const metadata: Metadata = {
 export const revalidate = 20;
 
 const TABS = [
-  { id: "war-room", label: "Live Stage", href: "/dashboard/war-room" },
-  { id: "earlier", label: "All Debates", href: "/dashboard/war-room?tab=earlier" },
+  { id: "war-room", label: "ឆាកផ្ទាល់", href: "/dashboard/war-room" },
+  { id: "earlier", label: "ការពិភាក្សាទាំងអស់", href: "/dashboard/war-room?tab=earlier" },
 ] as const;
 
 function TabNav({ current }: { current: "war-room" | "earlier" }) {
   return (
-    <nav className="flex gap-2" aria-label="War Room sections">
+    <nav className="flex gap-2" aria-label="ផ្នែកបន្ទប់សង្គ្រាម">
       {TABS.map((t) => (
         <Link
           key={t.id}
@@ -55,7 +55,7 @@ export default async function WarRoomPage({
       subtitle={
         isStage
           ? undefined
-          : "Trading Floor — Structure and Momentum brief the Manager"
+          : "ជាន់ជួញដូរ — រចនាសម្ព័ន្ធ និងសន្ទុះរាយការណ៍អ្នកគ្រប់គ្រង"
       }
       fullBleed={isStage}
     >
@@ -79,7 +79,7 @@ export default async function WarRoomPage({
           <div className="lg:hidden">
             <h1 className="text-xl font-bold">AI War Room</h1>
             <p className="text-sm text-slate">
-              Trading Floor — Structure and Momentum brief the Manager.
+              ជាន់ជួញដូរ — រចនាសម្ព័ន្ធ និងសន្ទុះរាយការណ៍អ្នកគ្រប់គ្រង។
             </p>
           </div>
 
@@ -88,7 +88,7 @@ export default async function WarRoomPage({
           <DebateBoard debates={rest} />
 
           <p className="text-xs text-slate">
-            Illustration of the AI&apos;s reasoning — not financial advice.
+            រូបភាពនៃហេតុផល AI — មិនមែនជាដំបូន្មានហិរញ្ញវត្ថុ។
           </p>
         </div>
       )}

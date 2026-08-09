@@ -28,11 +28,11 @@ function indicatorRows(signal: Signal): { label: string; value: string }[] {
     if (ind.ceDirection) rows.push({ label: "CE dir", value: ind.ceDirection });
     const lwma = fmtNum(ind.lwma200, 4);
     if (lwma) rows.push({ label: "LWMA 200", value: lwma });
-    if (ind.zone) rows.push({ label: "Zone", value: ind.zone });
-    return rows.length > 0 ? rows : [{ label: "Strategy", value: "CE + LWMA" }];
+    if (ind.zone) rows.push({ label: "តំបន់", value: ind.zone });
+    return rows.length > 0 ? rows : [{ label: "យុទ្ធសាស្ត្រ", value: "CE + LWMA" }];
   }
   if (ind.strategy === "ict_smc" || ind.structure) {
-    if (ind.structure) rows.push({ label: "Structure", value: ind.structure });
+    if (ind.structure) rows.push({ label: "រចនាសម្ព័ន្ធ", value: ind.structure });
     const sweep = fmtNum(ind.sweepLevel, 2);
     if (sweep) rows.push({ label: "Sweep", value: sweep });
     const choch = fmtNum(ind.chochLevel, 2);
@@ -41,26 +41,26 @@ function indicatorRows(signal: Signal): { label: string; value: string }[] {
     if (atr) rows.push({ label: "ATR", value: atr });
     const adx = fmtNum(ind.adx, 1);
     if (adx) rows.push({ label: "ADX", value: adx });
-    if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
-    return rows.length > 0 ? rows : [{ label: "Strategy", value: "ICT / SMC" }];
+    if (ind.htfTrend) rows.push({ label: "និន្នាការ HTF", value: ind.htfTrend });
+    return rows.length > 0 ? rows : [{ label: "យុទ្ធសាស្ត្រ", value: "ICT / SMC" }];
   }
   if (ind.strategy === "sr_zone" || ind.zoneLow !== undefined) {
-    if (ind.side) rows.push({ label: "Side", value: ind.side });
+    if (ind.side) rows.push({ label: "ភាគី", value: ind.side });
     const lo = fmtNum(ind.zoneLow, 2);
     const hi = fmtNum(ind.zoneHigh, 2);
-    if (lo && hi) rows.push({ label: "Zone", value: `${lo}–${hi}` });
+    if (lo && hi) rows.push({ label: "តំបន់", value: `${lo}–${hi}` });
     if (ind.touches !== undefined) {
-      rows.push({ label: "Touches", value: String(ind.touches) });
+      rows.push({ label: "ការប៉ះ", value: String(ind.touches) });
     }
     const atr = fmtNum(ind.atr, 4);
     if (atr) rows.push({ label: "ATR", value: atr });
     const adx = fmtNum(ind.adx, 1);
     if (adx) rows.push({ label: "ADX", value: adx });
-    if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
-    return rows.length > 0 ? rows : [{ label: "Strategy", value: "S/R bounce" }];
+    if (ind.htfTrend) rows.push({ label: "និន្នាការ HTF", value: ind.htfTrend });
+    return rows.length > 0 ? rows : [{ label: "យុទ្ធសាស្ត្រ", value: "S/R bounce" }];
   }
   if (ind.strategy === "cloud_mss" || ind.cloudLow !== undefined) {
-    if (ind.side) rows.push({ label: "Side", value: ind.side });
+    if (ind.side) rows.push({ label: "ភាគី", value: ind.side });
     if (ind.ceTrend) rows.push({ label: "CE trend", value: ind.ceTrend });
     const lo = fmtNum(ind.cloudLow, 2);
     const hi = fmtNum(ind.cloudHigh, 2);
@@ -73,12 +73,12 @@ function indicatorRows(signal: Signal): { label: string; value: string }[] {
     if (atr) rows.push({ label: "ATR", value: atr });
     const adx = fmtNum(ind.adx, 1);
     if (adx) rows.push({ label: "ADX", value: adx });
-    if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
-    return rows.length > 0 ? rows : [{ label: "Strategy", value: "Cloud + MSS" }];
+    if (ind.htfTrend) rows.push({ label: "និន្នាការ HTF", value: ind.htfTrend });
+    return rows.length > 0 ? rows : [{ label: "យុទ្ធសាស្ត្រ", value: "Cloud + MSS" }];
   }
   if (ind.strategy === "bbma_extreme" || ind.strategy === "bbma_reentry" || ind.bbUpper !== undefined) {
-    if (ind.side) rows.push({ label: "Side", value: ind.side });
-    if (ind.trigger) rows.push({ label: "Trigger", value: ind.trigger });
+    if (ind.side) rows.push({ label: "ភាគី", value: ind.side });
+    if (ind.trigger) rows.push({ label: "កេះ", value: ind.trigger });
     const upper = fmtNum(ind.bbUpper, 2);
     const lower = fmtNum(ind.bbLower, 2);
     if (upper && lower) rows.push({ label: "BB band", value: `${lower}–${upper}` });
@@ -89,8 +89,8 @@ function indicatorRows(signal: Signal): { label: string; value: string }[] {
     if (atr) rows.push({ label: "ATR", value: atr });
     const adx = fmtNum(ind.adx, 1);
     if (adx) rows.push({ label: "ADX", value: adx });
-    if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
-    return rows.length > 0 ? rows : [{ label: "Strategy", value: "BBMA" }];
+    if (ind.htfTrend) rows.push({ label: "និន្នាការ HTF", value: ind.htfTrend });
+    return rows.length > 0 ? rows : [{ label: "យុទ្ធសាស្ត្រ", value: "BBMA" }];
   }
   const ema9 = fmtNum(ind.ema9, 2);
   const ema21 = fmtNum(ind.ema21, 2);
@@ -102,8 +102,8 @@ function indicatorRows(signal: Signal): { label: string; value: string }[] {
   if (macd) rows.push({ label: "MACD hist", value: macd });
   const adx = fmtNum(ind.adx, 1);
   if (adx) rows.push({ label: "ADX", value: adx });
-  if (ind.htfTrend) rows.push({ label: "HTF trend", value: ind.htfTrend });
-  return rows.length > 0 ? rows : [{ label: "Indicators", value: "—" }];
+  if (ind.htfTrend) rows.push({ label: "និន្នាការ HTF", value: ind.htfTrend });
+  return rows.length > 0 ? rows : [{ label: "សូចនាករ", value: "—" }];
 }
 
 function DirectionPill({ direction }: { direction: Signal["direction"] }) {
@@ -114,7 +114,7 @@ function DirectionPill({ direction }: { direction: Signal["direction"] }) {
         isLong ? "bg-long-soft text-long" : "bg-short-soft text-short"
       }`}
     >
-      {isLong ? "Long" : "Short"}
+      {isLong ? "ទិញ" : "លក់"}
     </span>
   );
 }
@@ -129,34 +129,34 @@ function StatusPill({
   if (status === "open") {
     return (
       <span className="inline-flex items-center rounded-md bg-line px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide text-slate">
-        Open
+        កំពុងបើក
       </span>
     );
   }
   if (status === "expired") {
     return (
       <span className="inline-flex items-center rounded-md bg-line px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-slate">
-        Expired
+        ផុតកំណត់
       </span>
     );
   }
   if ((status === "tp1_hit" || status === "tp2_hit") && !closedAt) {
     return (
       <span className="inline-flex items-center rounded-md bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-accent">
-        {status === "tp1_hit" ? "TP1 hit" : "TP2 hit"}
+        {status === "tp1_hit" ? "TP1 ប៉ះ" : "TP2 ប៉ះ"}
       </span>
     );
   }
   const label =
     status === "tp3_hit"
-      ? "TP3 hit"
+      ? "TP3 ប៉ះ"
       : status === "tp2_hit"
-        ? "TP2 hit"
+        ? "TP2 ប៉ះ"
         : status === "tp1_hit"
-          ? "TP1 hit"
+          ? "TP1 ប៉ះ"
           : status === "tp_hit"
-            ? "TP hit"
-            : "SL hit";
+            ? "TP ប៉ះ"
+            : "SL ប៉ះ";
   const isWin = status !== "sl_hit";
   return (
     <span
@@ -239,20 +239,20 @@ export function SignalCard({
           </div>
         </div>
         <div className="flex flex-col items-end justify-center pt-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1.5">Confidence</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1.5">ទំនុកចិត្ត</p>
           <ConfidenceBar value={signal.confidence} compact />
         </div>
       </div>
 
       <div className="relative grid grid-cols-3 gap-3 border-t border-line/50 px-6 py-4 bg-slate/5">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">Entry</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">ចូល</p>
           <p className="font-mono text-sm font-bold text-ink">
             {formatPrice(signal.entry)}
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">Stop Loss</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">បញ្ឈប់ខាត</p>
           <p className="font-mono text-sm font-bold text-short drop-shadow-sm">
             {formatPrice(signal.stopLoss)}
           </p>
@@ -276,7 +276,7 @@ export function SignalCard({
           <div className="z-10">{adminSlot}</div>
         ) : onSelect ? (
           <span className="flex items-center gap-1 text-xs font-semibold text-accent opacity-0 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0 group-hover:opacity-100">
-            View details 
+            មើលព័ត៌មានលម្អិត{" "}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
           </span>
         ) : null}
@@ -340,7 +340,7 @@ function SignalDetailModal({
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
       <button
         type="button"
-        aria-label="Close dialog"
+        aria-label="បិទប្រអប់"
         className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
         onClick={onClose}
       />
@@ -365,14 +365,14 @@ function SignalDetailModal({
               <StatusPill status={signal.status} closedAt={signal.closedAt} />
             </div>
             <p className="mt-1 text-sm text-slate">
-              Opened {formatDateTime(signal.createdAt)}
+              បើក {formatDateTime(signal.createdAt)}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="btn-ghost shrink-0 rounded-lg p-2"
-            aria-label="Close"
+            aria-label="បិទ"
           >
             <CloseIcon />
           </button>
@@ -381,28 +381,28 @@ function SignalDetailModal({
         <div className="overflow-y-auto px-5 py-5">
           <div className="mb-5">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate">
-              Confidence
+              ទំនុកចិត្ត
             </p>
             <ConfidenceBar value={signal.confidence} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <DetailRow label="Entry" value={formatPrice(signal.entry)} />
-            <DetailRow label="Stop loss" value={formatPrice(signal.stopLoss)} tone="short" />
-            <DetailRow label="Take profit 1" value={formatPrice(signal.takeProfit)} tone="long" />
+            <DetailRow label="ចូល" value={formatPrice(signal.entry)} />
+            <DetailRow label="បញ្ឈប់ខាត" value={formatPrice(signal.stopLoss)} tone="short" />
+            <DetailRow label="គោលដៅ 1" value={formatPrice(signal.takeProfit)} tone="long" />
             {signal.takeProfit2 != null ? (
-              <DetailRow label="Take profit 2" value={formatPrice(signal.takeProfit2)} tone="long" />
+              <DetailRow label="គោលដៅ 2" value={formatPrice(signal.takeProfit2)} tone="long" />
             ) : null}
             {signal.takeProfit3 != null ? (
-              <DetailRow label="Take profit 3" value={formatPrice(signal.takeProfit3)} tone="long" />
+              <DetailRow label="គោលដៅ 3" value={formatPrice(signal.takeProfit3)} tone="long" />
             ) : null}
-            <DetailRow label="Risk / reward" value={riskReward(signal)} tone="accent" />
+            <DetailRow label="ហានិភ័យ / រង្វាន់" value={riskReward(signal)} tone="accent" />
           </div>
 
           {signal.chartUrl && (
             <div className="mt-4">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">
-                Setup chart
+                គំនូសតាងការរៀបចំ
               </p>
               <img
                 src={signal.chartUrl}
@@ -416,7 +416,7 @@ function SignalDetailModal({
           {signal.outcomeChartUrl && (
             <div className="mt-4">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">
-                Outcome
+                លទ្ធផល
               </p>
               <img
                 src={signal.outcomeChartUrl}
@@ -429,7 +429,7 @@ function SignalDetailModal({
 
           <div className="mt-5 rounded-lg border border-line bg-accent-soft/30 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-slate">
-              AI rationale
+              ហេតុផល AI
             </p>
             <p className="mt-2 text-sm leading-relaxed text-ink">{signal.rationale}</p>
           </div>
@@ -438,7 +438,7 @@ function SignalDetailModal({
 
           <div className="mt-5">
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate">
-              Indicators
+              សូចនាករ
             </p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {indicatorRows(signal).map((row) => (
@@ -450,7 +450,7 @@ function SignalDetailModal({
           {signal.newsHeadlines.length > 0 ? (
             <div className="mt-5">
               <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate">
-                News reviewed ({signal.newsHeadlines.length})
+                ព័ត៌មានបានពិនិត្យ ({signal.newsHeadlines.length})
               </p>
               <ul className="space-y-2">
                 {signal.newsHeadlines.map((headline) => (

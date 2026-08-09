@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 const links = [
   { href: "/signals", label: "Signals" },
   { href: "/war-room", label: "War Room" },
-  { href: "/track-record", label: "Track Record" },
+  { href: "/track-record", label: "កំណត់ត្រាលទ្ធផល" },
 ];
 
 export async function Nav() {
@@ -22,7 +22,7 @@ export async function Nav() {
       <div
         className="warn-marquee border-b border-amber-600/40 bg-amber-500/10 py-2"
         role="region"
-        aria-label="Risk disclaimer"
+        aria-label="ការព្រមានអំពីហានិភ័យ"
       >
         <div className="warn-marquee-track">
           {[0, 1].map((copy) => (
@@ -32,9 +32,9 @@ export async function Nav() {
               aria-hidden={copy === 1}
             >
               <span aria-hidden>⚠</span>
-              Qauntify is under active development. Signals are shared for
-              educational and research purposes only — this is not
-              financial advice, and trading involves risk of loss.
+              Qauntify កំពុងអភិវឌ្ឍន៍យ៉ាងសកម្ម។ Signals ត្រូវបានចែករំលែកសម្រាប់
+              គោលបំណងអប់រំ និងស្រាវជ្រាវតែប៉ុណ្ណោះ — នេះមិនមែនជា
+              ដំបូន្មានហិរញ្ញវត្ថុទេ ហើយការជួញដូរមានហានិភ័យនៃការខាតបង់។
             </span>
           ))}
         </div>
@@ -58,7 +58,7 @@ export async function Nav() {
             ) : null}
             {!email && SHOW_LOGIN_LINK ? (
               <Link href="/login" className="btn-primary-sm">
-                Log in
+                ចូលគណនី
               </Link>
             ) : null}
           </div>

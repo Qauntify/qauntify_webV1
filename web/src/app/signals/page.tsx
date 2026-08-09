@@ -10,7 +10,7 @@ import {
 export const metadata: Metadata = {
   title: "Signals — Qauntify",
   description:
-    "Live trading setups by session — entry, stop, targets, and outcomes.",
+    "ការរៀបចំជួញដូរផ្ទាល់តាមវគ្គ — ចូល បញ្ឈប់ គោលដៅ និងលទ្ធផល។",
 };
 
 export const revalidate = 30;
@@ -35,7 +35,7 @@ export default async function SignalsPage({
               Signals
             </h1>
             <p className="mt-2 max-w-2xl text-base text-slate">
-              AI-confirmed and live EA setups — entry, stop, targets, and outcomes.
+              ការរៀបចំដែល AI បញ្ជាក់ និង EA ផ្ទាល់ — ចូល បញ្ឈប់ គោលដៅ និងលទ្ធផល។
             </p>
           </div>
 

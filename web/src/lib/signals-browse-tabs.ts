@@ -35,29 +35,29 @@ export function parseAiSignalStrategy(
 }
 
 export const SIGNAL_FILTER_OPTIONS: SignalFilterOption[] = [
-  { id: "all", label: "All", hint: "Every session", code: "ALL" },
-  { id: "ai", label: "AI Signal", hint: "SEA-LION confirmed", code: "AI" },
-  { id: "bbma", label: "BBMA", hint: "XAU live EA", code: "BBMA" },
-  { id: "ict", label: "ICT", hint: "Coming soon", code: "ICT", disabled: true },
-  { id: "smc", label: "SMC", hint: "Coming soon", code: "SMC", disabled: true },
+  { id: "all", label: "ទាំងអស់", hint: "គ្រប់វគ្គ", code: "ALL" },
+  { id: "ai", label: "AI Signal", hint: "បញ្ជាក់ដោយ SEA-LION", code: "AI" },
+  { id: "bbma", label: "BBMA", hint: "XAU EA ផ្ទាល់", code: "BBMA" },
+  { id: "ict", label: "ICT", hint: "មកដល់ឆាប់ៗ", code: "ICT", disabled: true },
+  { id: "smc", label: "SMC", hint: "មកដល់ឆាប់ៗ", code: "SMC", disabled: true },
   {
     id: "supply-demand",
     label: "Supply Demand",
-    hint: "Coming soon",
+    hint: "មកដល់ឆាប់ៗ",
     code: "S/D",
     disabled: true,
   },
-  { id: "crt", label: "CRT", hint: "Coming soon", code: "CRT", disabled: true },
-  { id: "msnr", label: "MSNR", hint: "Coming soon", code: "MSNR", disabled: true },
+  { id: "crt", label: "CRT", hint: "មកដល់ឆាប់ៗ", code: "CRT", disabled: true },
+  { id: "msnr", label: "MSNR", hint: "មកដល់ឆាប់ៗ", code: "MSNR", disabled: true },
 ];
 
 /** Sub-strategy pills shown inside the AI Signal tab. */
 export const AI_SIGNAL_STRATEGY_OPTIONS: SignalFilterOption[] = [
-  { id: "all", label: "All", hint: "Every AI strategy", code: "ALL" },
-  { id: "war-room", label: "War Room", hint: "Floor debate", code: "WR" },
+  { id: "all", label: "ទាំងអស់", hint: "គ្រប់យុទ្ធសាស្ត្រ AI", code: "ALL" },
+  { id: "war-room", label: "War Room", hint: "ការពិភាក្សាជាន់", code: "WR" },
   { id: "super-scalping", label: "Super scalp", hint: "5m ICT FVG", code: "5M" },
   { id: "scalping", label: "Scalping", hint: "15m cloud + MSS", code: "15M" },
-  { id: "swing", label: "Swing", hint: "1h AI confirm", code: "1H" },
+  { id: "swing", label: "Swing", hint: "1h បញ្ជាក់ដោយ AI", code: "1H" },
 ];
 
 export const ADMIN_SIGNAL_FILTER_OPTIONS: SignalFilterOption[] = [

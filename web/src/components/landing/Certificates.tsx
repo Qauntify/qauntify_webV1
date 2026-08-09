@@ -15,42 +15,42 @@ const CERTIFICATES: Certificate[] = [
   {
     id: "hola-phase1-jun2",
     src: "/certificate/certificate 1.jpeg",
-    title: "Phase 1 passed",
+    title: "បានជាប់ដំណាក់កាលទី 1",
     issuer: "Hola Prime",
     kind: "image",
   },
   {
     id: "hola-phase1-jun8",
     src: "/certificate/certificate 2.jpeg",
-    title: "Phase 1 passed",
+    title: "បានជាប់ដំណាក់កាលទី 1",
     issuer: "Hola Prime",
     kind: "image",
   },
   {
     id: "hola-phase1-jun16",
     src: "/certificate/certificate 3.jpeg",
-    title: "Phase 1 passed",
+    title: "បានជាប់ដំណាក់កាលទី 1",
     issuer: "Hola Prime",
     kind: "image",
   },
   {
     id: "hola-phase1-4",
     src: "/certificate/certificate 4.jpeg",
-    title: "Challenge certificate",
+    title: "វិញ្ញាបនបត្រប្រកួតប្រជែង",
     issuer: "Hola Prime",
     kind: "image",
   },
   {
     id: "hola-funded",
     src: "/certificate/certificate 5.jpeg",
-    title: "Funded trader",
+    title: "អ្នកជួញដូរដែលទទួលមូលនិធិ",
     issuer: "Hola Prime",
     kind: "image",
   },
   {
     id: "alpha-futures",
     src: "/certificate/Alpha_Future_Eval_Certificate.png",
-    title: "Evaluation passed",
+    title: "បានជាប់ការវាយតម្លៃ",
     issuer: "Alpha Futures",
     kind: "image",
   },
@@ -71,7 +71,7 @@ const CERTIFICATES: Certificate[] = [
   {
     id: "virakyuth-pdf",
     src: "/certificate/Certificate for  Virakyuth Srun.pdf",
-    title: "Certificate of completion",
+    title: "វិញ្ញាបនបត្របញ្ចប់",
     issuer: "Virakyuth Srun",
     kind: "pdf",
   },
@@ -111,7 +111,7 @@ export function Certificates() {
           <p className="mt-1.5 text-sm font-semibold text-ink">{cert.title}</p>
           <p className="mt-0.5 text-xs text-slate">{cert.issuer}</p>
         </div>
-        <p className="mt-3 text-xs font-semibold text-ink">Open →</p>
+        <p className="mt-3 text-xs font-semibold text-ink">បើក →</p>
       </a>
     ) : (
       <button
@@ -119,7 +119,7 @@ export function Certificates() {
         onClick={interactive ? () => setActive(cert) : undefined}
         tabIndex={interactive ? undefined : -1}
         className="w-[180px] rounded-md border border-line bg-card p-1.5 text-left transition-colors hover:border-ink/30 sm:w-[200px]"
-        aria-label={`View ${cert.issuer} — ${cert.title}`}
+        aria-label={`មើល ${cert.issuer} — ${cert.title}`}
       >
         <div className="relative aspect-[4/3] overflow-hidden rounded bg-line">
           <Image
@@ -160,18 +160,18 @@ export function Certificates() {
       <div className="page-container flex items-end justify-between gap-4 py-10 md:py-14">
         <div>
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
-            Proof
+            ភស្តុតាង
           </p>
           <h2 className="mt-1 text-xl font-bold tracking-tight text-ink md:text-2xl">
-            Prop certificates. Real passes.
+            វិញ្ញាបនបត្រ Prop។ ជាប់ពិតៗ។
           </h2>
         </div>
         <p className="hidden max-w-xs text-right text-xs text-slate sm:block">
-          Funded and evaluation certificates from live prop challenges.
+          វិញ្ញាបនបត្រមូលនិធិ និងការវាយតម្លៃពីការប្រកួតប្រជែង prop ផ្ទាល់។
         </p>
       </div>
 
-      <div className="cert-marquee pb-5 md:pb-6" role="region" aria-label="Certificates">
+      <div className="cert-marquee pb-5 md:pb-6" role="region" aria-label="វិញ្ញាបនបត្រ">
         {track}
       </div>
 
@@ -199,7 +199,7 @@ export function Certificates() {
                 onClick={() => setActive(null)}
                 className="btn-secondary px-3 py-1.5 text-sm"
               >
-                Close
+                បិទ
               </button>
             </div>
             <div className="relative aspect-[4/3] w-full bg-paper">

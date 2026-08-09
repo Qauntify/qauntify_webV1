@@ -20,15 +20,15 @@ export function AuthShell({
             <div className="rounded-lg border border-white/15 bg-white/5 p-4">
               <div className="flex items-center justify-between text-xs font-medium">
                 <span className="rounded border border-long/40 bg-long/15 px-2 py-0.5 text-long">
-                  LONG · BTCUSD
+                  ទិញ · BTCUSD
                 </span>
                 <span className="font-mono">82%</span>
               </div>
               <p className="mt-3 font-mono text-xs text-white/90">
-                Entry 108,240 · SL 106,900 · TP 110,920
+                ចូល 108,240 · SL 106,900 · TP 110,920
               </p>
               <p className="mt-2 text-xs text-white/60">
-                Momentum aligns with the news — EMA cross held on the closed bar.
+                សន្ទុះស្របនឹងព័ត៌មាន — EMA cross នៅតែរក្សានៅរបារបិទ។
               </p>
             </div>
             <h2 className="mt-10 text-2xl font-bold">{headline}</h2>

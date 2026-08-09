@@ -56,15 +56,16 @@
   --color-long-soft: var(--long-soft);
   --color-short: var(--short);
   --color-short-soft: var(--short-soft);
-  --font-display: var(--font-jakarta);
-  --font-sans: var(--font-jakarta);
+  --font-display: var(--font-khmer);
+  --font-sans: var(--font-khmer);
   --font-mono: var(--font-jetbrains);
 }
 
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-jakarta), system-ui, sans-serif;
+  font-family: var(--font-khmer), "Noto Sans Khmer", system-ui, sans-serif;
+  line-height: 1.7;
   overflow-x: hidden;
 }
 

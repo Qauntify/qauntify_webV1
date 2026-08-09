@@ -6,11 +6,11 @@ export function StatsBand({ stats }: { stats: Stats }) {
     { value: stats.total, label: "Signals logged" },
     {
       value: stats.total > 0 ? `${stats.avgConfidence}%` : "—",
-      label: "Avg confidence",
+      label: "ទំនុកចិត្តមធ្យម",
     },
     {
       value: stats.winRate !== null ? `${stats.winRate}%` : "—",
-      label: "Win rate",
+      label: "អត្រាឈ្នះ",
       tone: stats.winRate !== null && stats.winRate >= 50 ? "long" : undefined,
     },
   ];

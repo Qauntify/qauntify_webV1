@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
 import { getDebateForSignal, type Debate } from "@/lib/debates";
 
 const VERDICT: Record<string, { label: string; cls: string }> = {
-  agree: { label: "AGREE", cls: "bg-long-soft text-long" },
-  reject: { label: "REJECT", cls: "bg-short-soft text-short" },
-  caution: { label: "CAUTION", cls: "bg-accent-soft text-accent" },
+  agree: { label: "យល់ព្រម", cls: "bg-long-soft text-long" },
+  reject: { label: "បដិសេធ", cls: "bg-short-soft text-short" },
+  caution: { label: "ប្រុងប្រយ័ត្ន", cls: "bg-accent-soft text-accent" },
 };
 
 function DebateBody({ debate }: { debate: Debate }) {
@@ -29,7 +29,7 @@ function DebateBody({ debate }: { debate: Debate }) {
         </div>
       ))}
       <div className="flex items-center justify-between border-t border-line pt-3">
-        <span className="text-xs text-slate">Manager verdict</span>
+        <span className="text-xs text-slate">សេចក្តីសម្រេចអ្នកគ្រប់គ្រង</span>
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs text-slate">
             {debate.managerConfidence}%
@@ -78,18 +78,18 @@ export function SignalWarRoomSection({ signalId }: { signalId: string }) {
         </p>
         {debate ? (
           <span className="font-mono text-[10px] uppercase tracking-wide text-accent">
-            Debate on file
+            មានការពិភាក្សា
           </span>
         ) : null}
       </div>
       {debate === undefined ? (
-        <p className="text-sm text-slate">Loading debate…</p>
+        <p className="text-sm text-slate">កំពុងផ្ទុកការពិភាក្សា…</p>
       ) : debate ? (
         <DebateBody debate={debate} />
       ) : (
         <p className="text-sm leading-relaxed text-slate">
-          No Floor debate on file. War Room transcripts are recorded when the
-          Trading Floor publishes a signal — not for Super Scalp / Scalp / Swing.
+          គ្មានការពិភាក្សាជាន់នៅក្នុងឯកសារ។ ប្រតិចារិក War Room ត្រូវបានកត់ត្រានៅពេល
+          ជាន់ជួញដូរបោះពុម្ព signal — មិនសម្រាប់ Super Scalp / Scalp / Swing។
         </p>
       )}
     </div>

@@ -8,7 +8,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = {
-  title: "Dashboard — Qauntify",
+  title: "ផ្ទាំងគ្រប់គ្រង — Qauntify",
 };
 
 export const revalidate = 30;
@@ -38,7 +38,7 @@ export default async function Dashboard({
   return (
     <DashboardShell
       title="Signals"
-      subtitle="AI-confirmed and live EA setups"
+      subtitle="ការរៀបចំដែល AI បញ្ជាក់ និង EA ផ្ទាល់"
     >
       <div className="w-full space-y-6">
         {admin === "denied" && user ? (
@@ -51,7 +51,7 @@ export default async function Dashboard({
         <div className="lg:hidden">
           <h1 className="text-2xl font-bold tracking-tight text-ink">Signals</h1>
           <p className="mt-1 text-sm text-slate">
-            AI-confirmed and live EA setups
+            ការរៀបចំដែល AI បញ្ជាក់ និង EA ផ្ទាល់
           </p>
         </div>
 

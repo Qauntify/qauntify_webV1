@@ -32,7 +32,7 @@ function ClosedTradeCard({ trade }: { trade: ClosedTrade }) {
         </div>
       ) : (
         <div className="flex aspect-[16/9] items-center justify-center border-b border-line bg-paper">
-          <span className="text-xs text-slate">No chart</span>
+          <span className="text-xs text-slate">គ្មានគំនូសតាង</span>
         </div>
       )}
 
@@ -47,7 +47,7 @@ function ClosedTradeCard({ trade }: { trade: ClosedTrade }) {
                 isLong ? "bg-long-soft text-long" : "bg-short-soft text-short"
               }`}
             >
-              {trade.direction}
+              {isLong ? "ទិញ" : "លក់"}
             </span>
           </div>
           <p className="mt-1.5 truncate text-sm text-slate">
@@ -74,19 +74,19 @@ function ClosedTradeCard({ trade }: { trade: ClosedTrade }) {
 
       <div className="relative grid grid-cols-3 gap-3 border-t border-line px-5 py-4 pl-6">
         <div>
-          <p className="text-xs text-slate">Entry</p>
+          <p className="text-xs text-slate">ចូល</p>
           <p className="mt-0.5 font-mono text-sm font-semibold text-ink">
             {formatPrice(trade.entry)}
           </p>
         </div>
         <div>
-          <p className="text-xs text-slate">Stop</p>
+          <p className="text-xs text-slate">បញ្ឈប់</p>
           <p className="mt-0.5 font-mono text-sm font-semibold text-short">
             {formatPrice(trade.stopLoss)}
           </p>
         </div>
         <div>
-          <p className="text-xs text-slate">Targets</p>
+          <p className="text-xs text-slate">គោលដៅ</p>
           <p className="mt-0.5 font-mono text-sm font-semibold text-long">
             {trade.targets.map((p) => formatPrice(p)).join(" / ") || "—"}
           </p>
@@ -95,7 +95,7 @@ function ClosedTradeCard({ trade }: { trade: ClosedTrade }) {
 
       <div className="relative border-t border-line px-5 py-3 pl-6">
         <span className="text-xs text-slate">
-          Closed {relativeTime(trade.closedAt)}
+          បិទ {relativeTime(trade.closedAt)}
         </span>
       </div>
     </>
@@ -139,9 +139,9 @@ export function RecentTrades({ trades }: { trades: ClosedTrade[] }) {
   if (trades.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-line bg-card px-6 py-14 text-center">
-        <p className="text-sm font-semibold text-ink">No closed trades yet</p>
+        <p className="text-sm font-semibold text-ink">មិនទាន់មានការជួញដូរបិទទេ</p>
         <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate">
-          Outcomes will show up here as trades close.
+          លទ្ធផលនឹងបង្ហាញនៅទីនេះនៅពេលការជួញដូរបិទ។
         </p>
       </div>
     );

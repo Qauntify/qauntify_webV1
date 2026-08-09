@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.redirect(
     new URL(
       `/login?error=${encodeURIComponent(
-        "Confirmation link is invalid or expired. Try signing in — your email may already be confirmed.",
+        "តំណភ្ជាប់បញ្ជាក់មិនត្រឹមត្រូវ ឬផុតកំណត់។ សូមព្យាយាមចូលគណនី — អ៊ីមែលរបស់បងប្អូនប្រហែលបានបញ្ជាក់រួចហើយ។",
       )}`,
       request.url,
     ),

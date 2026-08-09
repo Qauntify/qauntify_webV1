@@ -4,19 +4,19 @@ export function StatsBar({ stats }: { stats: Stats }) {
   const items = [
     { label: "Total signals", value: String(stats.total) },
     {
-      label: "Avg confidence",
+      label: "ទំនុកចិត្តមធ្យម",
       value: stats.total > 0 ? `${stats.avgConfidence}%` : "—",
     },
-    { label: "Long / short", value: `${stats.longs}L / ${stats.shorts}S` },
+    { label: "ទិញ / លក់", value: `${stats.longs}L / ${stats.shorts}S` },
     {
-      label: "Win rate",
+      label: "អត្រាឈ្នះ",
       value:
         stats.winRate !== null
           ? `${stats.winRate}%`
           : "—",
       detail:
         stats.winRate !== null
-          ? `${stats.tpHits} full / ${stats.partialWins} partial / ${stats.slHits}L`
+          ? `${stats.tpHits} ពេញ / ${stats.partialWins} ផ្នែក / ${stats.slHits}L`
           : undefined,
     },
   ];

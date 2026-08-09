@@ -16,7 +16,7 @@ export function AiStrategyRail({
 }) {
   return (
     <SlidingPillNav
-      ariaLabel="AI strategy"
+      ariaLabel="យុទ្ធសាស្ត្រ AI"
       activeId={strategy}
       options={AI_SIGNAL_STRATEGY_OPTIONS}
       hrefFor={(id) =>

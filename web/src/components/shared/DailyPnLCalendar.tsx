@@ -4,11 +4,11 @@ import { useMemo, useState } from "react";
 
 import type { DailyPnL } from "@/lib/signals";
 
-const DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAYS_OF_WEEK = ["ច", "អ", "ព", "ព្រ", "សុ", "ស", "អា"];
 
 const DEFAULT_DESCRIPTION =
-  "Closed LLM signals by day — includes full TP hits and TP1/TP2 wins " +
-  "(even if price later tagged the stop). Green = more wins than losses.";
+  "LLM signals ដែលបានបិទតាមថ្ងៃ — រួមទាំងការឈានដល់ TP ពេញលេញ និងការឈ្នះ TP1/TP2 " +
+  "(ទោះបីតម្លៃក្រោយមកប៉ះបញ្ឈប់ខាតក៏ដោយ)។ បៃតង = ឈ្នះច្រើនជាងចាញ់។";
 
 type Props = {
   data: DailyPnL[];
@@ -70,7 +70,7 @@ export function DailyPnLCalendar({
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const monthName = currentDate.toLocaleString("default", { month: "long" });
+  const monthName = currentDate.toLocaleString("km-KH", { month: "long" });
 
   const calendarGrid = useMemo(() => {
     const firstDayOfMonth = new Date(year, month, 1);
@@ -148,7 +148,7 @@ export function DailyPnLCalendar({
             type="button"
             onClick={prevMonth}
             className="p-1 text-slate transition-colors hover:text-ink"
-            aria-label="Previous Month"
+            aria-label="ខែមុន"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
@@ -163,7 +163,7 @@ export function DailyPnLCalendar({
               type="button"
               onClick={goToToday}
               className="text-slate transition-colors hover:text-ink"
-              title="Go to Today"
+              title="ទៅថ្ងៃនេះ"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
             </button>
@@ -175,7 +175,7 @@ export function DailyPnLCalendar({
             type="button"
             onClick={nextMonth}
             className="p-1 text-slate transition-colors hover:text-ink"
-            aria-label="Next Month"
+            aria-label="ខែបន្ទាប់"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
@@ -225,16 +225,16 @@ export function DailyPnLCalendar({
                     {day.totalTrades > 0 ? (
                       <>
                         <span className={`${compact ? "text-xs" : "text-sm"} font-bold ${textColor}`}>
-                          {day.wins} W
+                          {day.wins} TP
                         </span>
                         <span className={`${compact ? "text-xs" : "text-sm"} font-bold ${textColor}`}>
-                          {day.losses} L
+                          {day.losses} SL
                         </span>
                       </>
                     ) : (
                       <>
-                        <span className={`${compact ? "text-xs" : "text-sm"} font-semibold text-ink`}>0 W</span>
-                        <span className={`${compact ? "text-xs" : "text-sm"} font-semibold text-ink`}>0 L</span>
+                        <span className={`${compact ? "text-xs" : "text-sm"} font-semibold text-ink`}>0 TP</span>
+                        <span className={`${compact ? "text-xs" : "text-sm"} font-semibold text-ink`}>0 SL</span>
                       </>
                     )}
                   </div>

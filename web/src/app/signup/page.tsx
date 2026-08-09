@@ -9,7 +9,7 @@ import { ALLOW_SIGNUP } from "@/lib/access-mode";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Create account — Qauntify",
+  title: "បង្កើតគណនី — Qauntify",
 };
 
 export default async function SignupPage({
@@ -27,19 +27,19 @@ export default async function SignupPage({
 
   return (
     <AuthShell
-      headline="Start tracking signals."
-      sub="AI-confirmed setups with entry, stop loss, take profit, and outcome tracking."
+      headline="ចាប់ផ្តើមតាមដាន signals។"
+      sub="ការរៀបចំដែល AI បញ្ជាក់ ជាមួយចូល បញ្ឈប់ខាត យកចំណេញ និងការតាមដានលទ្ធផល។"
     >
-      <h1 className="text-2xl font-bold">Create account</h1>
-      <p className="mt-1 text-sm text-slate">Free forever. Full signal history.</p>
+      <h1 className="text-2xl font-bold">បង្កើតគណនី</h1>
+      <p className="mt-1 text-sm text-slate">ឥតគិតថ្លៃជារៀងរហូត។ ប្រវត្តិ signals ពេញលេញ។</p>
       {!ALLOW_SIGNUP ? (
         <Notice tone="success" className="mt-6">
-          Registration is currently closed — signals are free to view
-          without an account. Head to{" "}
+          ការចុះឈ្មោះបច្ចុប្បន្នបានបិទ — signals អាចមើលឥតគិតថ្លៃ
+          ដោយមិនចាំបាច់មានគណនី។ ទៅកាន់{" "}
           <Link href="/signals" className="font-semibold underline">
             Signals
           </Link>{" "}
-          to see what the engine is finding.
+          ដើម្បីមើលអ្វីដែលម៉ាស៊ីនកំពុងរកឃើញ។
         </Notice>
       ) : (
         <>
@@ -50,12 +50,12 @@ export default async function SignupPage({
           ) : null}
           {sent ? (
             <Notice tone="success" className="mt-6">
-              Check your email — we sent a confirmation link.
+              ពិនិត្យអ៊ីមែលរបស់បងប្អូន — យើងបានផ្ញើតំណភ្ជាប់បញ្ជាក់។
             </Notice>
           ) : (
             <form className="mt-8 flex flex-col gap-4">
               <label className="flex flex-col gap-1.5 text-sm font-medium">
-                Email
+                អ៊ីមែល
                 <input
                   type="email"
                   name="email"
@@ -66,28 +66,28 @@ export default async function SignupPage({
                 />
               </label>
               <label className="flex flex-col gap-1.5 text-sm font-medium">
-                Password
+                ពាក្យសម្ងាត់
                 <input
                   type="password"
                   name="password"
                   required
                   minLength={6}
                   autoComplete="new-password"
-                  placeholder="At least 6 characters"
+                  placeholder="យ៉ាងហោចណាស់ ៦ តួអក្សរ"
                   className="input-field"
                 />
               </label>
               <button formAction={signup} className="btn-primary mt-2">
-                Create account
+                បង្កើតគណនី
               </button>
             </form>
           )}
         </>
       )}
       <p className="mt-6 text-sm text-slate">
-        Already have an account?{" "}
+        មានគណនីរួចហើយ?{" "}
         <Link href="/login" className="font-semibold text-accent hover:underline">
-          Sign in
+          ចូលគណនី
         </Link>
       </p>
     </AuthShell>

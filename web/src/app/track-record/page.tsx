@@ -9,8 +9,8 @@ import { relativeTime } from "@/lib/relative-time";
 export const revalidate = 60;
 
 export const metadata = {
-  title: "Track Record — Qauntify",
-  description: "Every signal, wins and losses. Real, auto-updated performance.",
+  title: "កំណត់ត្រាលទ្ធផល — Qauntify",
+  description: "គ្រប់ signals ឈ្នះនិងចាញ់។ លទ្ធផលពិត ធ្វើបច្ចុប្បន្នភាពស្វ័យប្រវត្តិ។",
 };
 
 export default async function TrackRecordPage() {
@@ -29,24 +29,24 @@ export default async function TrackRecordPage() {
           <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-ink md:text-4xl">
-                Track Record
+                កំណត់ត្រាលទ្ធផល
               </h1>
               <p className="mt-2 max-w-2xl text-base text-slate">
-                Every closed signal — wins and losses. Nothing cherry-picked.
+                គ្រប់ signals ដែលបានបិទ — ឈ្នះនិងចាញ់។ គ្មានការជ្រើសរើសលទ្ធផលល្អតែមួយ។
               </p>
             </div>
             {tr.summary.updatedAt ? (
               <p className="text-sm text-slate">
-                Updated {relativeTime(tr.summary.updatedAt)}
+                ធ្វើបច្ចុប្បន្នភាព {relativeTime(tr.summary.updatedAt)}
               </p>
             ) : null}
           </div>
 
           {empty ? (
             <div className="rounded-xl border border-dashed border-line bg-card px-6 py-14 text-center">
-              <p className="text-sm font-semibold text-ink">No closed trades yet</p>
+              <p className="text-sm font-semibold text-ink">មិនទាន់មានការជួញដូរបិទទេ</p>
               <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate">
-                Your track record fills in as trades close. Check back soon.
+                កំណត់ត្រាលទ្ធផលនឹងបំពេញនៅពេលការជួញដូរបិទ។ សូមត្រឡប់មកម្តងទៀតឆាប់ៗ។
               </p>
             </div>
           ) : (

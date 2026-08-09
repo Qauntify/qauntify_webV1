@@ -32,7 +32,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label={isDark ? "ប្តូរទៅរបៀបភ្លឺ" : "ប្តូរទៅរបៀបងងឹត"}
       className="flex h-8 w-8 items-center justify-center rounded-md border border-line text-slate transition-colors hover:border-accent hover:text-accent"
     >
       {isDark === null ? <span className="h-4 w-4" /> : isDark ? <SunIcon /> : <MoonIcon />}
