@@ -55,6 +55,48 @@ function num(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Candle open_time is epoch ms in Python; MT5 wants unix seconds. */
+function timeSec(value: unknown): number | null {
+  const n = num(value);
+  if (n == null || n <= 0) return null;
+  return n > 1e12 ? Math.floor(n / 1000) : Math.floor(n);
+}
+
+/** Flatten signal indicators into MT5-friendly annotation numbers. */
+export function buildChartAnnotations(
+  indicators: Record<string, unknown> | null | undefined,
+): Record<string, number> {
+  if (!indicators || typeof indicators !== "object") return {};
+  const out: Record<string, number> = {};
+  const pairs: Array<[string, unknown]> = [
+    ["fvg_top", indicators.fvg_top],
+    ["fvg_bottom", indicators.fvg_bottom],
+    ["fvg_start", indicators.fvg_start_time ?? indicators.fvg_time],
+    ["sweep_level", indicators.sweep_level],
+    ["sweep_low", indicators.sweep_low],
+    ["sweep_high", indicators.sweep_high],
+    ["sweep_time", indicators.sweep_time],
+    ["choch_level", indicators.choch_level],
+    ["choch_time", indicators.choch_time],
+    ["cloud_high", indicators.cloud_high],
+    ["cloud_low", indicators.cloud_low],
+    ["zone_high", indicators.zone_high],
+    ["zone_low", indicators.zone_low],
+    ["ce_trail", indicators.ce_trail],
+    ["retest_time", indicators.retest_time],
+  ];
+  for (const [key, raw] of pairs) {
+    if (key.endsWith("_time") || key === "fvg_start") {
+      const t = timeSec(raw);
+      if (t != null) out[key] = t;
+    } else {
+      const v = num(raw);
+      if (v != null) out[key] = v;
+    }
+  }
+  return out;
+}
+
 export function parseMt5SignalBody(raw: unknown): Mt5SignalPayload | { error: string } {
   if (!raw || typeof raw !== "object") return { error: "invalid body" };
   const body = raw as Record<string, unknown>;

@@ -912,6 +912,9 @@ export type PendingSetupChart = {
   entry: number;
   stop_loss: number;
   take_profit: number;
+  take_profit_2: number | null;
+  take_profit_3: number | null;
+  indicators: Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -945,7 +948,8 @@ export async function listPendingSetupCharts(
         `&status=in.(open,tp1_hit,tp2_hit)` +
         `&created_at=gte.${encodeURIComponent(since)}` +
         `&${tfFilter}` +
-        `&select=id,symbol,timeframe,direction,entry,stop_loss,take_profit,created_at` +
+        `&select=id,symbol,timeframe,direction,entry,stop_loss,take_profit,` +
+        `take_profit_2,take_profit_3,indicators,created_at` +
         `&order=created_at.asc&limit=${limit}`,
       { headers: headers(cfg.serviceKey), ...READ_CACHE },
     );

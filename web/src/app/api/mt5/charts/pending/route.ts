@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { buildChartAnnotations } from "@/lib/mt5-signal";
 import { listPendingSetupCharts } from "@/lib/supabase/admin";
 import { authorizedBySecret } from "@/lib/webhook-guard";
 
@@ -36,10 +37,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Storage unavailable" }, { status: 503 });
   }
 
-  const pending = rows.map((r) => ({
-    ...r,
-    period_minutes: PERIOD_MINUTES[r.timeframe] ?? null,
-  }));
+  const pending = rows.map((r) => {
+    const annotations = buildChartAnnotations(r.indicators);
+    return {
+      id: r.id,
+      symbol: r.symbol,
+      timeframe: r.timeframe,
+      direction: r.direction,
+      entry: r.entry,
+      stop_loss: r.stop_loss,
+      take_profit: r.take_profit,
+      take_profit_2: r.take_profit_2,
+      take_profit_3: r.take_profit_3,
+      period_minutes: PERIOD_MINUTES[r.timeframe] ?? null,
+      // Flat fields for MQL5 (no nested JSON objects).
+      ...annotations,
+      created_at: r.created_at,
+    };
+  });
 
   return NextResponse.json({ ok: true, pending });
 }
