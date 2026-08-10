@@ -9,12 +9,12 @@ import sharp from "sharp";
 const KEEP_RIGHT_FRACTION = 0.24;
 const OUT_SIZE = 720;
 /** How many pixels to expand each candle column left/right. */
-const CANDLE_FAT_RADIUS = 5;
+const CANDLE_FAT_RADIUS = 4;
 
 function isCandlePixel(r: number, g: number, b: number): boolean {
-  // MT5 bull/bear bodies on black — bright green or red-ish strokes.
-  if (g > 90 && g >= r + 25 && g >= b + 25) return true;
-  if (r > 90 && r >= g + 25 && r >= b + 25) return true;
+  // MT5 bull candles are often pure (0,255,0); also catch teal/red strokes.
+  if (g > 70 && g >= r + 15 && g >= b + 15) return true;
+  if (r > 70 && r >= g + 15 && r >= b + 15) return true;
   return false;
 }
 
