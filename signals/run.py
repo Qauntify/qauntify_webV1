@@ -971,7 +971,7 @@ def main(sessions=None):
         print(f"Using {len(keys)} SEA-LION API key(s) across "
               f"{len(settings.symbols)} symbol(s) in {len(trading_sessions)} "
               f"session(s) ({session_label}), "
-              f"swing_strategy={settings.signal_strategy}, "
+              f"swing=msnr, "
               f"scalp=cloud_mss, super_scalp=ict_fvg.")
 
         def scan_one(item):

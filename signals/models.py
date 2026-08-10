@@ -103,7 +103,7 @@ class NoSignalReport:
 
 # Every strategy the router can dispatch to.
 SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone",
-                     "bbma_extreme", "bbma_reentry", "cloud_mss")
+                     "bbma_extreme", "bbma_reentry", "cloud_mss", "msnr")
 
 # The subset the admin page may store in bot_settings.signal_strategy, which
 # only controls the SWING session — the scalp sessions pin their own strategy
@@ -116,6 +116,8 @@ SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone",
 #   - fetch_bot_settings below
 # tests/core/test_strategy_choices.py pins them together. Validating against
 # the full list instead let Python accept a value the database would reject.
+# Swing now pins `msnr`, so the admin toggle is unused for live 1h delivery —
+# keep the selectable set for paper/legacy settings writes.
 ADMIN_SELECTABLE_STRATEGIES = ("ema_cross", "ict_smc", "sr_zone",
                                "bbma_reentry", "bbma_extreme")
 
@@ -167,11 +169,7 @@ class TradingSession:
 
 # Sessions the main engine scans, in order, every run.
 # Super scalp = 5m ICT+FVG (tight R); scalp = 15m cloud rejection + CHoCH;
-# swing = admin strategy.
-#
-# The 15m slot ran sr_zone until 2026-07-28, when it was retired at -0.415R
-# per trade over 8.87 years. It is scanned again here carrying cloud_mss,
-# whose own measurement gates whether it stays (docs/r-model-correction.md).
+# swing = 1h MSNR (Malaysian body-zone S/R, pinned).
 TRADING_SESSIONS = (
     TradingSession(
         name="super_scalp", timeframe="5m", max_open_days=1,
@@ -183,7 +181,7 @@ TRADING_SESSIONS = (
     ),
     TradingSession(
         name="swing", timeframe="1h", max_open_days=14,
-        confluence_timeframe="4h",
+        confluence_timeframe="4h", strategy="msnr",
     ),
 )
 

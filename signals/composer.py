@@ -98,6 +98,11 @@ def _no_setup_reason(strategy: str, timeframe: str) -> str:
             f"Band {'extreme touch' if strategy == 'bbma_extreme' else 're-entry trigger'} "
             f"confirmed by the MA5/MA10 stack on the {chart})."
         )
+    if strategy == "msnr":
+        return (
+            f"The rules engine found no valid MSNR setup (no fresh body-zone "
+            f"rejection or RBS/SBR break-retest on the {chart})."
+        )
     return (
         f"The rules engine found no valid trade setup (no EMA 9/21 crossover "
         f"with aligned RSI and MACD filters on the last few {timeframe or 'hourly'} "
@@ -238,6 +243,26 @@ def _format_indicators(strategy: str, indicators: dict) -> str:
                 else:
                     parts.append(f"{label}={value}")
         return ", ".join(parts) if parts else "no BBMA reading"
+    if active == "msnr":
+        parts = []
+        for key, label in (
+            ("side", "side"),
+            ("entry_mode", "entry mode"),
+            ("zone_low", "zone low"),
+            ("zone_high", "zone high"),
+            ("zone_fresh", "fresh"),
+            ("zone_touches", "touches"),
+            ("atr", "ATR"),
+            ("adx", "ADX"),
+            ("htf_trend", "HTF trend"),
+        ):
+            if key in indicators:
+                value = indicators[key]
+                if isinstance(value, float):
+                    parts.append(f"{label}={value:.4f}")
+                else:
+                    parts.append(f"{label}={value}")
+        return ", ".join(parts) if parts else "no MSNR reading"
     if "ema9" not in indicators:
         # Defence in depth: an unrecognised strategy must not crash the
         # confirmation prompt (that fails closed and silently auto-rejects
@@ -316,6 +341,13 @@ def build_messages(setup: CandidateSetup,
         strategy_line = (
             "- Strategy: BBMA Re-entry (CSM/CSAK trigger back inside the "
             "Bollinger Band toward the MA5/MA10 stack)\n"
+        )
+    elif active == "msnr":
+        mode = ind.get("entry_mode") or "rejection/RBS/SBR"
+        side = ind.get("side") or "zone"
+        strategy_line = (
+            f"- Strategy: MSNR Malaysian S/R ({side}; {mode}; body zones, "
+            f"fresh preferred; 4H storyline gate)\n"
         )
     else:
         strategy_line = (

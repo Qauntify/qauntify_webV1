@@ -118,4 +118,30 @@ PLAYBOOK_CHUNKS = (
             "fighting the cross."
         ),
     },
+    {
+        "strategy": "msnr",
+        "title": "1h MSNR confirm gate",
+        "body": (
+            "Swing msnr (Malaysian body-zone S/R): zones are candle bodies "
+            "(open/close), not wick tips. Prefer fresh zones. Entry modes: "
+            "(1) rejection wick at support/resistance closing back out of the "
+            "zone, or (2) RBS/SBR — break then retest of flipped resistance/"
+            "support. Respect 4H storyline: up→longs only, down→shorts only, "
+            "None→either edge. Stop beyond the zone + ATR buffer; targets "
+            "1R/2R/3R. Confirm when zone quality, entry mode, and HTF agree. "
+            "When borderline but technically valid, lean confirm with moderate "
+            "confidence."
+        ),
+    },
+    {
+        "strategy": "msnr",
+        "title": "1h MSNR reject cues",
+        "body": (
+            "Reject msnr when the wick never reaches the body zone, when the "
+            "close stays inside the zone (no rejection), when HTF 4h fights "
+            "the proposed side, when an RBS/SBR retest fails (close back "
+            "through the flipped zone), when the zone is chewed up by many "
+            "body touches, or when stop distance is extreme vs ATR."
+        ),
+    },
 )

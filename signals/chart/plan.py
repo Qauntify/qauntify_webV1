@@ -80,6 +80,30 @@ def _sr_zone(candles, signal):
     return [zone(ind["zone_high"], ind["zone_low"], None, label, "sr")]
 
 
+def _msnr(candles, signal):
+    """MSNR body zone + entry-mode markers (rejection / RBS / SBR)."""
+    ind = signal.indicators
+    side = ind.get("side", "zone")
+    mode = ind.get("entry_mode", "rejection")
+    fresh = ind.get("zone_fresh")
+    tag = "fresh " if fresh else ""
+    label = f"MSNR {tag}{side} ({mode})"
+    role = "discount" if side in ("support", "rbs") else "premium"
+    out = []
+    if ind.get("zone_high") is not None and ind.get("zone_low") is not None:
+        out.append(zone(ind["zone_high"], ind["zone_low"], None, label, role))
+    if ind.get("break_time") is not None:
+        mid = (float(ind["zone_high"]) + float(ind["zone_low"])) / 2.0
+        out.append(marker(ind["break_time"], mid, "Break", "choch", 1))
+    if ind.get("retest_time") is not None:
+        out.append(marker(ind["retest_time"], signal.entry,
+                          "Retest → entry", "entry", 2))
+    elif ind.get("reject_time") is not None:
+        out.append(marker(ind["reject_time"], signal.entry,
+                          "Rejection → entry", "entry", 1))
+    return out
+
+
 def _ema_cross(candles, signal):
     closes = [c.close for c in candles]
     ema9, ema21 = ema(closes, 9), ema(closes, 21)
@@ -219,6 +243,7 @@ _BUILDERS = {
     "ict_fvg": _ict_fvg,
     "ict_smc": _ict_smc,
     "sr_zone": _sr_zone,
+    "msnr": _msnr,
     "ema_cross": _ema_cross,
     "ce_lwma": _ce_lwma,
     "cloud_mss": _cloud_mss,

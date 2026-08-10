@@ -6,6 +6,7 @@ from signals.strategies.cloud_mss import detect_setup as detect_cloud_mss
 from signals.strategies.ema_cross import detect_setup as detect_ema_setup
 from signals.strategies.ict_fvg import detect_setup as detect_ict_fvg_setup
 from signals.strategies.ict_smc import detect_setup as detect_ict_setup
+from signals.strategies.msnr import detect_setup as detect_msnr_setup
 from signals.strategies.sr_zone import detect_setup as detect_sr_setup
 
 
@@ -42,6 +43,10 @@ def detect_setup(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
         return detect_cloud_mss(
             symbol, candles, atr14, h1_candles=h1_candles,
             adx14=adx14, htf_trend=htf_trend,
+        )
+    if strategy == "msnr":
+        return detect_msnr_setup(
+            symbol, candles, atr14, adx14=adx14, htf_trend=htf_trend,
         )
     if strategy == "sr_zone":
         return detect_sr_setup(

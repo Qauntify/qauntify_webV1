@@ -39,7 +39,11 @@ def test_session_pinned_strategies_are_not_offered_to_the_admin():
     # which is legitimate — it is the others that must not leak in.
     assert "ict_fvg" in pinned
     assert "ict_fvg" not in ADMIN_SELECTABLE_STRATEGIES
+    assert "msnr" in pinned
+    assert "msnr" not in ADMIN_SELECTABLE_STRATEGIES
     assert "ce_lwma" not in ADMIN_SELECTABLE_STRATEGIES
+    assert "cloud_mss" in pinned
+    assert "cloud_mss" not in ADMIN_SELECTABLE_STRATEGIES
 
 
 def test_admin_dropdown_matches_python():
