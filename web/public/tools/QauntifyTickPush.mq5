@@ -27,8 +27,8 @@ input bool   UploadPendingCharts = true;
 input int    ChartPollSec      = 20;    // how often to ask for pending setups
 input int    ChartWidth        = 1280;
 input int    ChartHeight       = 720;
-input int    ChartBarsVisible  = 55;   // zoom: how many bars in the screenshot
-input int    ChartScale        = 2;    // 0=most zoomed-in candles … 5=zoomed-out
+input int    ChartBarsVisible  = 48;   // target bars in view (hint for scale)
+input int    ChartScale        = 0;    // 0=most zoomed-in (widest candles) … 5=zoomed-out
 
 double   lastSentMid    = 0.0;
 uint     lastSentTick   = 0;
