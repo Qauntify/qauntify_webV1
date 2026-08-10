@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.11"
+#property version   "1.12"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -27,6 +27,8 @@ input bool   UploadPendingCharts = true;
 input int    ChartPollSec      = 20;    // how often to ask for pending setups
 input int    ChartWidth        = 1280;
 input int    ChartHeight       = 720;
+input int    ChartBarsVisible  = 55;   // zoom: how many bars in the screenshot
+input int    ChartScale        = 2;    // 0=most zoomed-in candles … 5=zoomed-out
 
 double   lastSentMid    = 0.0;
 uint     lastSentTick   = 0;
@@ -210,11 +212,32 @@ void ChartPinsClear()
      }
   }
 
+void ChartPinsClearId(const long chartId)
+  {
+   int total = ObjectsTotal(chartId, 0, -1);
+   for(int i = total - 1; i >= 0; i--)
+     {
+      string name = ObjectName(chartId, i, 0, -1);
+      if(StringFind(name, "QTP_") == 0)
+         ObjectDelete(chartId, name);
+     }
+  }
+
+datetime SnapBarTime(const ENUM_TIMEFRAMES tf, const datetime t)
+  {
+   if(t <= 0) return 0;
+   int sh = iBarShift(_Symbol, tf, t, false);
+   if(sh < 0) return t;
+   datetime bt = iTime(_Symbol, tf, sh);
+   return bt > 0 ? bt : t;
+  }
+
 void DrawHLine(const long chartId, const string name, const datetime t0,
                const datetime t1, const double price, const color clr,
                const int style, const int width)
   {
    ObjectDelete(chartId, name);
+   if(price <= 0.0 || t1 <= t0) return;
    if(!ObjectCreate(chartId, name, OBJ_TREND, 0, t0, price, t1, price)) return;
    ObjectSetInteger(chartId, name, OBJPROP_COLOR, clr);
    ObjectSetInteger(chartId, name, OBJPROP_STYLE, style);
@@ -222,64 +245,103 @@ void DrawHLine(const long chartId, const string name, const datetime t0,
    ObjectSetInteger(chartId, name, OBJPROP_RAY_RIGHT, false);
    ObjectSetInteger(chartId, name, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(chartId, name, OBJPROP_BACK, false);
+   ObjectSetInteger(chartId, name, OBJPROP_HIDDEN, true);
   }
 
 void DrawLabel(const long chartId, const string name, const datetime t,
-               const double price, const string text, const color clr)
+               const double price, const string text, const color clr,
+               const ENUM_ANCHOR_POINT anchor = ANCHOR_LEFT_LOWER)
   {
    ObjectDelete(chartId, name);
+   if(price <= 0.0 || t <= 0) return;
    if(!ObjectCreate(chartId, name, OBJ_TEXT, 0, t, price)) return;
-   ObjectSetString(chartId, name, OBJPROP_TEXT, text);
+   ObjectSetString(chartId, name, OBJPROP_TEXT, " " + text + " ");
    ObjectSetInteger(chartId, name, OBJPROP_COLOR, clr);
-   ObjectSetInteger(chartId, name, OBJPROP_FONTSIZE, 9);
+   ObjectSetInteger(chartId, name, OBJPROP_FONTSIZE, 10);
    ObjectSetString(chartId, name, OBJPROP_FONT, "Arial Bold");
+   ObjectSetInteger(chartId, name, OBJPROP_ANCHOR, anchor);
    ObjectSetInteger(chartId, name, OBJPROP_SELECTABLE, false);
-  }
-
-void DrawFvg(const long chartId, const datetime tStart, const datetime tEnd,
-             const double top, const double bottom)
-  {
-   string name = "QTP_fvg";
-   ObjectDelete(chartId, name);
-   if(top <= bottom) return;
-   if(!ObjectCreate(chartId, name, OBJ_RECTANGLE, 0, tStart, top, tEnd, bottom))
-      return;
-   ObjectSetInteger(chartId, name, OBJPROP_COLOR, clrDodgerBlue);
-   ObjectSetInteger(chartId, name, OBJPROP_STYLE, STYLE_SOLID);
-   ObjectSetInteger(chartId, name, OBJPROP_WIDTH, 1);
-   ObjectSetInteger(chartId, name, OBJPROP_FILL, true);
-   ObjectSetInteger(chartId, name, OBJPROP_BACK, true);
-   ObjectSetInteger(chartId, name, OBJPROP_SELECTABLE, false);
-   // Soft blue fill
-   ObjectSetInteger(chartId, name, OBJPROP_BGCOLOR, clrDarkSlateBlue);
-   DrawLabel(chartId, "QTP_fvg_lbl", tStart, top, "FVG", clrDodgerBlue);
+   ObjectSetInteger(chartId, name, OBJPROP_HIDDEN, true);
+   ObjectSetInteger(chartId, name, OBJPROP_BACK, false);
   }
 
 void DrawZone(const long chartId, const string tag, const datetime t0,
               const datetime t1, const double high, const double low,
-              const color clr, const string label)
+              const color border, const color fill, const string label)
   {
    string name = "QTP_" + tag;
    ObjectDelete(chartId, name);
-   if(high <= low) return;
+   if(high <= low || t1 <= t0) return;
    if(!ObjectCreate(chartId, name, OBJ_RECTANGLE, 0, t0, high, t1, low)) return;
-   ObjectSetInteger(chartId, name, OBJPROP_COLOR, clr);
+   ObjectSetInteger(chartId, name, OBJPROP_COLOR, border);
+   ObjectSetInteger(chartId, name, OBJPROP_STYLE, STYLE_DASH);
+   ObjectSetInteger(chartId, name, OBJPROP_WIDTH, 2);
    ObjectSetInteger(chartId, name, OBJPROP_FILL, true);
    ObjectSetInteger(chartId, name, OBJPROP_BACK, true);
-   ObjectSetInteger(chartId, name, OBJPROP_BGCOLOR, clr);
+   ObjectSetInteger(chartId, name, OBJPROP_BGCOLOR, fill);
    ObjectSetInteger(chartId, name, OBJPROP_SELECTABLE, false);
-   DrawLabel(chartId, name + "_lbl", t0, high, label, clr);
+   ObjectSetInteger(chartId, name, OBJPROP_HIDDEN, true);
+   DrawLabel(chartId, name + "_lbl", t0, high, label, border, ANCHOR_LEFT_LOWER);
   }
 
 void DrawArrow(const long chartId, const string name, const datetime t,
                const double price, const bool up, const color clr)
   {
    ObjectDelete(chartId, name);
-   ENUM_OBJECT kind = up ? OBJ_ARROW_BUY : OBJ_ARROW_SELL;
+   if(price <= 0.0 || t <= 0) return;
+   ENUM_OBJECT kind = up ? OBJ_ARROW_UP : OBJ_ARROW_DOWN;
    if(!ObjectCreate(chartId, name, kind, 0, t, price)) return;
    ObjectSetInteger(chartId, name, OBJPROP_COLOR, clr);
-   ObjectSetInteger(chartId, name, OBJPROP_WIDTH, 2);
+   ObjectSetInteger(chartId, name, OBJPROP_WIDTH, 3);
+   ObjectSetInteger(chartId, name, OBJPROP_ANCHOR,
+                    up ? ANCHOR_TOP : ANCHOR_BOTTOM);
    ObjectSetInteger(chartId, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(chartId, name, OBJPROP_HIDDEN, true);
+  }
+
+void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
+                 const double &prices[], const int priceCount)
+  {
+   int wantBars = ChartBarsVisible;
+   if(wantBars < 30) wantBars = 30;
+   if(wantBars > 120) wantBars = 120;
+   int scale = ChartScale;
+   if(scale < 0) scale = 0;
+   if(scale > 5) scale = 5;
+
+   ChartSetInteger(chartId, CHART_AUTOSCROLL, false);
+   ChartSetInteger(chartId, CHART_SHIFT, true);
+   ChartSetInteger(chartId, CHART_SHOW_GRID, true);
+   ChartSetInteger(chartId, CHART_SHOW_VOLUMES, CHART_VOLUME_HIDE);
+   ChartSetInteger(chartId, CHART_MODE, CHART_CANDLES);
+   ChartSetInteger(chartId, CHART_SCALE, scale);
+   ChartNavigate(chartId, CHART_END, 0);
+
+   // Lock price axis tightly around setup levels so Entry/SL/TP dominate.
+   if(priceCount > 0)
+     {
+      double lo = prices[0];
+      double hi = prices[0];
+      for(int i = 1; i < priceCount; i++)
+        {
+         if(prices[i] <= 0.0) continue;
+         if(prices[i] < lo) lo = prices[i];
+         if(prices[i] > hi) hi = prices[i];
+        }
+      double span = hi - lo;
+      if(span <= 0.0) span = MathMax(hi * 0.001, _Point * 50);
+      double pad = span * 0.22;
+      ChartSetInteger(chartId, CHART_SCALEFIX, true);
+      ChartSetDouble(chartId, CHART_FIXED_MIN, lo - pad);
+      ChartSetDouble(chartId, CHART_FIXED_MAX, hi + pad);
+     }
+
+   // Nudge so ~ChartBarsVisible candles fit (scale already set).
+   int total = Bars(_Symbol, tf);
+   if(total > wantBars)
+      ChartNavigate(chartId, CHART_END, 0);
+
+   ChartRedraw(chartId);
   }
 
 bool ProcessOnePending(const string block)
@@ -295,7 +357,6 @@ bool ProcessOnePending(const string block)
    string direction = ExtractJsonString(block, "direction");
    bool isBuy = (direction != "short");
 
-   // Annotation numbers are flat on the pending object (unix seconds / prices).
    double fvgTop = ExtractJsonNumber(block, "fvg_top");
    double fvgBot = ExtractJsonNumber(block, "fvg_bottom");
    datetime fvgStart = (datetime)ExtractJsonNumber(block, "fvg_start");
@@ -325,81 +386,136 @@ bool ProcessOnePending(const string block)
       Print("QauntifyTickPush: ChartOpen failed ", GetLastError());
       return false;
      }
-   Sleep(1200);
+   Sleep(1500);
+   ChartPinsClearId(chartId);
 
-   datetime t0 = iTime(_Symbol, want, 40);
-   datetime t1 = iTime(_Symbol, want, 0) + PeriodSeconds(want) * 10;
-   if(t0 == 0) t0 = TimeCurrent() - PeriodSeconds(want) * 40;
-   if(t1 == 0) t1 = TimeCurrent() + PeriodSeconds(want) * 10;
+   // Snap event times onto real bars (broker time), else markers float wrongly.
+   fvgStart = SnapBarTime(want, fvgStart);
+   sweepTime = SnapBarTime(want, sweepTime);
+   chochTime = SnapBarTime(want, chochTime);
+   retestTime = SnapBarTime(want, retestTime);
 
-   // Structure first (behind), then trade levels.
-   if(fvgTop > 0 && fvgBot > 0)
-     {
-      datetime fs = fvgStart > 0 ? fvgStart : t0;
-      DrawFvg(chartId, fs, t1, fvgTop, fvgBot);
-     }
-   if(cloudHigh > 0 && cloudLow > 0)
-      DrawZone(chartId, "cloud", t0, t1, cloudHigh, cloudLow, clrDarkOliveGreen, "Cloud");
-   if(zoneHigh > 0 && zoneLow > 0)
-      DrawZone(chartId, "sr", t0, t1, zoneHigh, zoneLow, clrIndigo, "S/R");
+   datetime tNow = iTime(_Symbol, want, 0);
+   if(tNow == 0) tNow = TimeCurrent();
+   datetime tRight = tNow + PeriodSeconds(want) * 6;
 
-   if(sweepLevel > 0)
+   // Left edge of drawings: earliest structure event, else ~45 bars back.
+   datetime tLeft = iTime(_Symbol, want, 45);
+   if(tLeft == 0) tLeft = tNow - PeriodSeconds(want) * 45;
+   if(sweepTime > 0 && sweepTime < tLeft) tLeft = sweepTime - PeriodSeconds(want) * 2;
+   if(chochTime > 0 && chochTime < tLeft) tLeft = chochTime - PeriodSeconds(want) * 2;
+   if(fvgStart > 0 && fvgStart < tLeft) tLeft = fvgStart - PeriodSeconds(want);
+   if(retestTime > 0 && retestTime < tLeft) tLeft = retestTime - PeriodSeconds(want);
+
+   // Bright fills (dark olive was invisible on black charts).
+   color colFvgBorder = C'20,184,166';      // teal
+   color colFvgFill   = C'13,148,136';
+   color colCloudBorder = C'45,212,191';   // bright aqua
+   color colCloudFill   = C'15,118,110';
+   color colSrBorder = C'56,189,248';
+   color colSrFill   = C'3,105,161';
+   color colLiq = C'245,158,11';           // amber
+   color colChoch = C'167,139,250';        // violet
+   color colEntry = C'226,232,240';
+   color colSl = C'251,113,133';
+   color colTp = C'52,211,153';
+   color colRetest = C'163,230,53';
+
+   if(cloudHigh > 0.0 && cloudLow > 0.0 && cloudHigh > cloudLow)
+      DrawZone(chartId, "cloud", tLeft, tRight, cloudHigh, cloudLow,
+               colCloudBorder, colCloudFill, "Cloud");
+   if(zoneHigh > 0.0 && zoneLow > 0.0 && zoneHigh > zoneLow)
+      DrawZone(chartId, "sr", tLeft, tRight, zoneHigh, zoneLow,
+               colSrBorder, colSrFill, "S/R");
+   if(fvgTop > 0.0 && fvgBot > 0.0 && fvgTop > fvgBot)
      {
-      DrawHLine(chartId, "QTP_sweep", t0, t1, sweepLevel, clrGold, STYLE_DOT, 1);
-      DrawLabel(chartId, "QTP_sweep_lbl", t0, sweepLevel, "Liquidity", clrGold);
+      datetime fs = fvgStart > 0 ? fvgStart : tLeft;
+      DrawZone(chartId, "fvg", fs, tRight, fvgTop, fvgBot,
+               colFvgBorder, colFvgFill, "FVG");
      }
-   if(chochLevel > 0)
+
+   datetime sweepFrom = sweepTime > 0 ? sweepTime : tLeft;
+   if(sweepLevel > 0.0)
      {
-      DrawHLine(chartId, "QTP_choch", t0, t1, chochLevel, clrMagenta, STYLE_DASH, 1);
-      DrawLabel(chartId, "QTP_choch_lbl", t0, chochLevel, "CHoCH", clrMagenta);
+      DrawHLine(chartId, "QTP_sweep", sweepFrom, tRight, sweepLevel, colLiq, STYLE_DOT, 2);
+      DrawLabel(chartId, "QTP_sweep_lbl", sweepFrom, sweepLevel, "Liquidity", colLiq);
      }
-   if(ceTrail > 0)
+   datetime chochFrom = chochTime > 0 ? chochTime : tLeft;
+   if(chochLevel > 0.0)
      {
-      DrawHLine(chartId, "QTP_ce", t0, t1, ceTrail, clrSilver, STYLE_DASHDOT, 1);
-      DrawLabel(chartId, "QTP_ce_lbl", t0, ceTrail, "CE trail", clrSilver);
+      DrawHLine(chartId, "QTP_choch", chochFrom, tRight, chochLevel, colChoch, STYLE_DASH, 2);
+      DrawLabel(chartId, "QTP_choch_lbl", chochFrom, chochLevel, "CHoCH", colChoch);
+     }
+   if(ceTrail > 0.0)
+     {
+      DrawHLine(chartId, "QTP_ce", tLeft, tRight, ceTrail, clrSilver, STYLE_DASHDOT, 1);
+      DrawLabel(chartId, "QTP_ce_lbl", tLeft, ceTrail, "CE", clrSilver);
      }
 
    if(sweepTime > 0)
      {
       double sweepPx = isBuy
-                       ? (sweepLow > 0 ? sweepLow : sweepLevel)
-                       : (sweepHigh > 0 ? sweepHigh : sweepLevel);
-      if(sweepPx > 0)
+                       ? (sweepLow > 0.0 ? sweepLow : sweepLevel)
+                       : (sweepHigh > 0.0 ? sweepHigh : sweepLevel);
+      if(sweepPx > 0.0)
         {
-         DrawArrow(chartId, "QTP_sweep_arr", sweepTime, sweepPx, isBuy, clrGold);
-         DrawLabel(chartId, "QTP_sweep_mk", sweepTime, sweepPx, "Sweep", clrGold);
+         DrawArrow(chartId, "QTP_sweep_arr", sweepTime, sweepPx, !isBuy, colLiq);
+         DrawLabel(chartId, "QTP_sweep_mk", sweepTime, sweepPx, "Sweep", colLiq,
+                   isBuy ? ANCHOR_LEFT_UPPER : ANCHOR_LEFT_LOWER);
         }
      }
-   if(chochTime > 0 && chochLevel > 0)
+   if(chochTime > 0 && chochLevel > 0.0)
      {
-      DrawArrow(chartId, "QTP_choch_arr", chochTime, chochLevel, isBuy, clrMagenta);
-      DrawLabel(chartId, "QTP_choch_mk", chochTime, chochLevel, "CHoCH", clrMagenta);
+      DrawArrow(chartId, "QTP_choch_arr", chochTime, chochLevel, isBuy, colChoch);
+      DrawLabel(chartId, "QTP_choch_mk", chochTime, chochLevel, "CHoCH", colChoch,
+                isBuy ? ANCHOR_LEFT_LOWER : ANCHOR_LEFT_UPPER);
      }
-   if(retestTime > 0 && entry > 0)
+   if(retestTime > 0 && entry > 0.0)
      {
-      DrawArrow(chartId, "QTP_retest", retestTime, entry, isBuy, clrLime);
-      DrawLabel(chartId, "QTP_retest_lbl", retestTime, entry, "Retest", clrLime);
-     }
-
-   DrawHLine(chartId, "QTP_en", t0, t1, entry, clrDodgerBlue, STYLE_SOLID, 2);
-   DrawLabel(chartId, "QTP_en_lbl", t1, entry, "Entry", clrDodgerBlue);
-   DrawHLine(chartId, "QTP_sl", t0, t1, stop, clrOrangeRed, STYLE_DASH, 1);
-   DrawLabel(chartId, "QTP_sl_lbl", t1, stop, "SL", clrOrangeRed);
-   DrawHLine(chartId, "QTP_tp1", t0, t1, tp1, clrMediumSeaGreen, STYLE_DASH, 1);
-   DrawLabel(chartId, "QTP_tp1_lbl", t1, tp1, "TP1", clrMediumSeaGreen);
-   if(tp2 > 0)
-     {
-      DrawHLine(chartId, "QTP_tp2", t0, t1, tp2, clrMediumSeaGreen, STYLE_DOT, 1);
-      DrawLabel(chartId, "QTP_tp2_lbl", t1, tp2, "TP2", clrMediumSeaGreen);
-     }
-   if(tp3 > 0)
-     {
-      DrawHLine(chartId, "QTP_tp3", t0, t1, tp3, clrMediumSeaGreen, STYLE_DOT, 1);
-      DrawLabel(chartId, "QTP_tp3_lbl", t1, tp3, "TP3", clrMediumSeaGreen);
+      DrawArrow(chartId, "QTP_retest", retestTime, entry, isBuy, colRetest);
+      DrawLabel(chartId, "QTP_retest_lbl", retestTime, entry, "Entry", colRetest,
+                isBuy ? ANCHOR_LEFT_LOWER : ANCHOR_LEFT_UPPER);
      }
 
-   ChartRedraw(chartId);
-   Sleep(500);
+   DrawHLine(chartId, "QTP_en", tLeft, tRight, entry, colEntry, STYLE_SOLID, 3);
+   DrawLabel(chartId, "QTP_en_lbl", tRight, entry, "Entry", colEntry, ANCHOR_LEFT);
+   DrawHLine(chartId, "QTP_sl", tLeft, tRight, stop, colSl, STYLE_DASH, 2);
+   DrawLabel(chartId, "QTP_sl_lbl", tRight, stop, "SL", colSl, ANCHOR_LEFT);
+   DrawHLine(chartId, "QTP_tp1", tLeft, tRight, tp1, colTp, STYLE_DASH, 2);
+   DrawLabel(chartId, "QTP_tp1_lbl", tRight, tp1, "TP1", colTp, ANCHOR_LEFT);
+   if(tp2 > 0.0)
+     {
+      DrawHLine(chartId, "QTP_tp2", tLeft, tRight, tp2, colTp, STYLE_DOT, 2);
+      DrawLabel(chartId, "QTP_tp2_lbl", tRight, tp2, "TP2", colTp, ANCHOR_LEFT);
+     }
+   if(tp3 > 0.0)
+     {
+      DrawHLine(chartId, "QTP_tp3", tLeft, tRight, tp3, colTp, STYLE_DOT, 2);
+      DrawLabel(chartId, "QTP_tp3_lbl", tRight, tp3, "TP3", colTp, ANCHOR_LEFT);
+     }
+
+   double prices[];
+   ArrayResize(prices, 0);
+   double cand[];
+   ArrayResize(cand, 16);
+   int n = 0;
+   cand[n++] = entry; cand[n++] = stop; cand[n++] = tp1;
+   if(tp2 > 0.0) cand[n++] = tp2;
+   if(tp3 > 0.0) cand[n++] = tp3;
+   if(fvgTop > 0.0) cand[n++] = fvgTop;
+   if(fvgBot > 0.0) cand[n++] = fvgBot;
+   if(cloudHigh > 0.0) cand[n++] = cloudHigh;
+   if(cloudLow > 0.0) cand[n++] = cloudLow;
+   if(zoneHigh > 0.0) cand[n++] = zoneHigh;
+   if(zoneLow > 0.0) cand[n++] = zoneLow;
+   if(sweepLevel > 0.0) cand[n++] = sweepLevel;
+   if(chochLevel > 0.0) cand[n++] = chochLevel;
+   if(ceTrail > 0.0) cand[n++] = ceTrail;
+   ArrayResize(prices, n);
+   for(int i = 0; i < n; i++) prices[i] = cand[i];
+
+   ZoomToSetup(chartId, want, prices, n);
+   Sleep(600);
 
    string fileName = "qtp_chart_" + id + ".png";
    int w = ChartWidth > 640 ? ChartWidth : 1280;
