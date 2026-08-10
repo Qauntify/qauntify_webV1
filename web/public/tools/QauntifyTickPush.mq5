@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.12"
+#property version   "1.13"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -302,45 +302,49 @@ void DrawArrow(const long chartId, const string name, const datetime t,
 void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
                  const double &prices[], const int priceCount)
   {
-   int wantBars = ChartBarsVisible;
-   if(wantBars < 30) wantBars = 30;
-   if(wantBars > 120) wantBars = 120;
    int scale = ChartScale;
    if(scale < 0) scale = 0;
    if(scale > 5) scale = 5;
 
    ChartSetInteger(chartId, CHART_AUTOSCROLL, false);
    ChartSetInteger(chartId, CHART_SHIFT, true);
+   ChartSetInteger(chartId, CHART_SHIFT_SIZE, 8);
    ChartSetInteger(chartId, CHART_SHOW_GRID, true);
    ChartSetInteger(chartId, CHART_SHOW_VOLUMES, CHART_VOLUME_HIDE);
    ChartSetInteger(chartId, CHART_MODE, CHART_CANDLES);
+   ChartSetInteger(chartId, CHART_FOREGROUND, false);
+   // Force maximum candle width first, then optionally step out.
    ChartSetInteger(chartId, CHART_SCALE, scale);
    ChartNavigate(chartId, CHART_END, 0);
 
    // Lock price axis tightly around setup levels so Entry/SL/TP dominate.
    if(priceCount > 0)
      {
-      double lo = prices[0];
-      double hi = prices[0];
-      for(int i = 1; i < priceCount; i++)
+      double lo = 0.0;
+      double hi = 0.0;
+      bool any = false;
+      for(int i = 0; i < priceCount; i++)
         {
          if(prices[i] <= 0.0) continue;
+         if(!any) { lo = hi = prices[i]; any = true; continue; }
          if(prices[i] < lo) lo = prices[i];
          if(prices[i] > hi) hi = prices[i];
         }
-      double span = hi - lo;
-      if(span <= 0.0) span = MathMax(hi * 0.001, _Point * 50);
-      double pad = span * 0.22;
-      ChartSetInteger(chartId, CHART_SCALEFIX, true);
-      ChartSetDouble(chartId, CHART_FIXED_MIN, lo - pad);
-      ChartSetDouble(chartId, CHART_FIXED_MAX, hi + pad);
+      if(any)
+        {
+         double span = hi - lo;
+         if(span <= 0.0) span = MathMax(hi * 0.0008, _Point * 80);
+         // Tighter pad = more zoom on the trade levels.
+         double pad = MathMax(span * 0.18, span * 0.05 + _Point * 20);
+         ChartSetInteger(chartId, CHART_SCALEFIX, true);
+         ChartSetInteger(chartId, CHART_SCALEFIX_11, false);
+         ChartSetDouble(chartId, CHART_FIXED_MIN, lo - pad);
+         ChartSetDouble(chartId, CHART_FIXED_MAX, hi + pad);
+        }
      }
 
-   // Nudge so ~ChartBarsVisible candles fit (scale already set).
-   int total = Bars(_Symbol, tf);
-   if(total > wantBars)
-      ChartNavigate(chartId, CHART_END, 0);
-
+   ChartRedraw(chartId);
+   Sleep(200);
    ChartRedraw(chartId);
   }
 
