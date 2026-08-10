@@ -6,8 +6,10 @@
  */
 import sharp from "sharp";
 
-/** Fraction of image width to keep (from the right edge, includes price axis). */
-const KEEP_RIGHT_FRACTION = 0.40;
+/** Fraction of image width to keep (from the right edge, includes price axis).
+ * Lower = fewer bars after upscale = fatter candles. ~0.28 keeps the setup
+ * (sweep→entry) while making M1 bodies readable. */
+const KEEP_RIGHT_FRACTION = 0.28;
 const OUT_SIZE = 720;
 
 export async function tightFrameSetupPng(png: Buffer): Promise<Buffer> {
