@@ -606,6 +606,36 @@ def test_purge_mt5_candle_outliers_drops_far_closes():
     assert kept[1]["close"] == 4139.2
 
 
+def test_purge_mt5_candle_outliers_keeps_fast_gold_moves_by_default():
+    """Default drift must tolerate a >$15 1m gold step (news / TP rush)."""
+    from signals.storage import purge_mt5_candle_outliers
+
+    rows = []
+    px = 5050.0
+    for i in range(20):
+        nxt = px - 18.0  # >$15/bar — the old flat cap shredded this path
+        rows.append({
+            "open_time": i, "open": px, "high": px + 1, "low": nxt - 1,
+            "close": nxt, "volume": 1,
+        })
+        px = nxt
+    kept = purge_mt5_candle_outliers(rows, rows[-1]["close"])
+    assert len(kept) == len(rows)
+
+
+def test_purge_mt5_candle_outliers_still_drops_junk_seed_by_default():
+    from signals.storage import purge_mt5_candle_outliers
+
+    rows = [
+        {"open_time": 1, "open": 4120, "high": 4121, "low": 4119, "close": 4120.0, "volume": 1},
+        {"open_time": 2, "open": 4120, "high": 4121, "low": 4119, "close": 4120.5, "volume": 1},
+        {"open_time": 3, "open": 5048, "high": 5050, "low": 5046, "close": 5049.0, "volume": 1},
+        {"open_time": 4, "open": 5049, "high": 5051, "low": 5048, "close": 5050.0, "volume": 1},
+    ]
+    kept = purge_mt5_candle_outliers(rows, 5050.0)
+    assert [r["close"] for r in kept] == [5049.0, 5050.0]
+
+
 def test_delete_rows_older_than_uses_correct_cutoff_and_table():
     from datetime import datetime, timedelta, timezone
 

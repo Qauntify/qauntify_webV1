@@ -27,6 +27,23 @@ def test_merge_dedupes_sorts_and_finds_entry_time():
     assert entry_time == 2  # last snapshot candle
 
 
+def test_merge_drops_orphaned_snapshot_across_time_hole():
+    """Setup snapshot + later window with missing middle bars must not paint a gap."""
+    chart_data = {"candles": [
+        {"t": 0, "o": 5050, "h": 5051, "l": 5049, "c": 5050},
+        {"t": 60_000, "o": 5050, "h": 5052, "l": 5048, "c": 5049},
+    ]}
+    # Hole: next kept bars start minutes later near TP prices.
+    window = [
+        _c(600_000, 4980, 4982, 4978, 4979),
+        _c(660_000, 4979, 4980, 4970, 4971),
+        _c(720_000, 4971, 4972, 4965, 4966),
+    ]
+    merged, entry_time = merge_outcome_candles(chart_data, window)
+    assert [c.open_time for c in merged] == [600_000, 660_000, 720_000]
+    assert entry_time == 600_000
+
+
 def test_merge_without_snapshot_falls_back_to_window():
     window = [_c(10, 1, 2, 0, 1), _c(11, 1, 2, 0, 1)]
     merged, entry_time = merge_outcome_candles(None, window)

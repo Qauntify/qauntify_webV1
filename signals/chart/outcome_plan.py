@@ -25,6 +25,35 @@ def _snapshot_candles(chart_data):
                    close=c["c"], volume=0.0) for c in snap]
 
 
+def _contiguous_suffix(candles: list[Candle]) -> list[Candle]:
+    """Keep only the newest unbroken time chain.
+
+    Outcome charts merge the setup snapshot with a later fetch. If the MT5
+    buffer lost middle bars (purge / cold ring), that merge puts a price hole
+    on the plot — drop orphaned older clusters instead of drawing the gap.
+    """
+    if len(candles) < 2:
+        return list(candles)
+    deltas = [
+        candles[i].open_time - candles[i - 1].open_time
+        for i in range(1, len(candles))
+        if candles[i].open_time > candles[i - 1].open_time
+    ]
+    if not deltas:
+        return list(candles)
+    deltas.sort()
+    typical = deltas[len(deltas) // 2]
+    # Allow one missed bar; anything wider is a real hole.
+    max_gap = max(typical * 2.5, typical + 1)
+    out = [candles[-1]]
+    for c in reversed(candles[:-1]):
+        gap = out[0].open_time - c.open_time
+        if gap <= 0 or gap > max_gap:
+            break
+        out.insert(0, c)
+    return out
+
+
 def merge_outcome_candles(chart_data, window):
     """Merge the stored setup snapshot with the price-path `window`.
 
@@ -38,6 +67,11 @@ def merge_outcome_candles(chart_data, window):
         by_time[c.open_time] = c
     merged = [by_time[t] for t in sorted(by_time)]
     entry_time = setup[-1].open_time if setup else (window[0].open_time if window else None)
+    merged = _contiguous_suffix(merged)
+    if entry_time is not None and merged and entry_time < merged[0].open_time:
+        # Snapshot was trimmed away by a hole — pin entry to the first kept bar
+        # so the vertical divider still lands on the visible path.
+        entry_time = merged[0].open_time
     return merged, entry_time
 
 

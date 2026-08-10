@@ -464,12 +464,16 @@ def mt5_rows_to_candles(rows: list):
 
 
 def purge_mt5_candle_outliers(rows: list, ref_price: float | None = None,
-                              *, max_drift: float = 15.0) -> list:
+                              *, max_drift: float | None = None) -> list:
     """Drop discontinuous junk clusters (e.g. old ~4120 test seed).
 
     Walks newest→oldest. Keeps a bar when its close is within `max_drift` of
     the previous kept close (chained), so gradual live moves survive while a
     sudden jump to an old seed cluster is cut off.
+
+    Default drift is price-relative: gold 1m often moves well past a flat $15
+    step during news — a tight cap was shredding live history and leaving
+    holes on outcome charts when the setup snapshot was merged back in.
     """
     if not rows:
         return []
@@ -479,6 +483,9 @@ def purge_mt5_candle_outliers(rows: list, ref_price: float | None = None,
         ref = float(ref_price) if ref_price is not None else float(ordered[-1]["close"])
     except (TypeError, ValueError, KeyError):
         return ordered
+    # ~1.5% of price, floored at $80 — still far below a ~$900 junk-seed jump.
+    if max_drift is None:
+        max_drift = max(80.0, abs(ref) * 0.015)
     for row in reversed(ordered):
         try:
             close = float(row["close"])
