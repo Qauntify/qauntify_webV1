@@ -18,6 +18,8 @@ export type Mt5ChartPayload = {
   signalId: string;
   kind: Mt5ChartKind;
   png: Buffer;
+  /** TickPush sets this — crop/zoom the PNG server-side for fat candles. */
+  tightFrame: boolean;
 };
 
 export type Mt5SignalBody = {
@@ -262,5 +264,12 @@ export function parseMt5ChartBody(
   }
   if (!isPng(png)) return { error: "image must be a PNG" };
 
-  return { signalId, kind: kindRaw, png };
+  const tightRaw = body.tight_frame ?? body.tightFrame;
+  const tightFrame =
+    tightRaw === true ||
+    tightRaw === 1 ||
+    tightRaw === "1" ||
+    tightRaw === "true";
+
+  return { signalId, kind: kindRaw, png, tightFrame };
 }

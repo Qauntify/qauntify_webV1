@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { tightFrameSetupPng } from "@/lib/mt5-chart-frame";
 import { parseMt5ChartBody } from "@/lib/mt5-signal";
 import {
   formatSignalAlert,
@@ -40,9 +41,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Signal not found" }, { status: 404 });
   }
 
+  let png = parsed.png;
+  if (parsed.kind === "setup" && parsed.tightFrame) {
+    try {
+      png = await tightFrameSetupPng(png);
+    } catch (err) {
+      console.error("[mt5/chart] tight frame failed, using original", err);
+    }
+  }
+
   const url = await uploadSignalChartPng(
     parsed.signalId,
-    parsed.png,
+    png,
     parsed.kind,
   );
   if (!url) {

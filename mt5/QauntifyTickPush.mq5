@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.19"
+#property version   "1.20"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -769,6 +769,10 @@ bool ProcessOnePending(const string block)
    n = sn;
 
    ZoomToSetup(chartId, want, prices, n);
+   // Re-assert max zoom on the OBJ_CHART host (CHART_SCALE is a no-op there).
+   ObjectSetInteger(0, shotObj, OBJPROP_CHART_SCALE, 0);
+   ChartNavigate(chartId, CHART_END, 0);
+   ChartRedraw(chartId);
    Sleep(600);
 
    string fileName = "qtp_chart_" + id + ".png";
@@ -823,7 +827,7 @@ bool ProcessOnePending(const string block)
      }
    string b64 = CharArrayToString(encoded, 0, WHOLE_ARRAY, CP_UTF8);
    string body = "{\"signal_id\":\"" + id +
-                 "\",\"kind\":\"setup\",\"image_base64\":\"" + b64 + "\"}";
+                 "\",\"kind\":\"setup\",\"tight_frame\":true,\"image_base64\":\"" + b64 + "\"}";
    string resp = "";
    lastChartHttp = HttpPost(ChartUploadUrl, body, resp);
    if(lastChartHttp == 200)
