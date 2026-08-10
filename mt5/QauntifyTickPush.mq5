@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.22"
+#property version   "1.23"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -25,10 +25,10 @@ input double MinPriceMove      = 0.0;
 input int    BackfillBars      = 2000;  // closed M1 bars sent on init (chunked)
 input bool   UploadPendingCharts = true;
 input int    ChartPollSec      = 20;    // how often to ask for pending setups
-input int    ChartWidth        = 1280;  // terminal-style screenshot width
+input int    ChartWidth        = 1280;  // screenshot / embedded chart width
 input int    ChartHeight       = 720;
 input int    ChartBarsVisible  = 60;    // left pad for annotation lines
-input int    ChartScale        = 2;     // 0=max zoom … 5=wide — 2 matches normal MT5
+input int    ChartScale        = 0;     // 0=widest candles (terminal zoom-in)
 
 double   lastSentMid    = 0.0;
 uint     lastSentTick   = 0;
@@ -421,10 +421,9 @@ void ChartClearAllObjects(const long chartId)
      }
   }
 
-void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
-                 const double &prices[], const int priceCount)
+void ApplyTerminalLook(const long chartId)
   {
-   // Match a normal MT5 terminal chart (like the live XAUUSD window).
+   // Same vibe as the live XAUUSD window: black, white bodies, lime wicks/volume.
    ChartSetInteger(chartId, CHART_AUTOSCROLL, true);
    ChartSetInteger(chartId, CHART_SHIFT, true);
    ChartSetDouble(chartId, CHART_SHIFT_SIZE, 10.0);
@@ -443,6 +442,12 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
    ChartSetInteger(chartId, CHART_COLOR_CHART_DOWN, clrLime);
    ChartSetInteger(chartId, CHART_COLOR_VOLUME, clrLime);
    ChartSetInteger(chartId, CHART_SCALE, ChartScale);
+  }
+
+void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
+                 const double &prices[], const int priceCount)
+  {
+   ApplyTerminalLook(chartId);
    ChartNavigate(chartId, CHART_END, 0);
    ChartRedraw(chartId);
    Sleep(150);
@@ -477,6 +482,7 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
         }
      }
 
+   ChartSetInteger(chartId, CHART_SCALE, ChartScale);
    ChartRedraw(chartId);
    Sleep(400);
    ChartRedraw(chartId);
@@ -484,36 +490,59 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
 
 string OpenShotChart(const ENUM_TIMEFRAMES tf, long &chartId)
   {
-   // Real ChartOpen window — same look as the terminal, not a tiny OBJ_CHART.
-   chartId = ChartOpen(_Symbol, tf);
-   if(chartId <= 0)
+   // Fixed-pixel OBJ_CHART = controlled bar count (ChartOpen on a maximized
+   // VPS window still paints days of M1 hairlines even at scale 0).
+   string name = "QTP_SHOT_CHART";
+   ObjectDelete(0, name);
+   if(!ObjectCreate(0, name, OBJ_CHART, 0, 0, 0))
      {
-      Print("QauntifyTickPush: ChartOpen failed ", GetLastError());
+      Print("QauntifyTickPush: OBJ_CHART create failed ", GetLastError());
+      chartId = -1;
       return "";
      }
-   ChartSetInteger(chartId, CHART_BRING_TO_TOP, true);
-   int waits = 0;
-   while(Bars(_Symbol, tf) < 80 && waits < 50)
+   int ox = ChartWidth;
+   if(ox < 900) ox = 1280;
+   if(ox > 1600) ox = 1600;
+   int oy = ChartHeight;
+   if(oy < 560) oy = 720;
+   if(oy > 1000) oy = 900;
+   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, 8);
+   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, 8);
+   ObjectSetInteger(0, name, OBJPROP_XSIZE, ox);
+   ObjectSetInteger(0, name, OBJPROP_YSIZE, oy);
+   ObjectSetInteger(0, name, OBJPROP_BACK, false);
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+   ObjectSetString(0, name, OBJPROP_SYMBOL, _Symbol);
+   ObjectSetInteger(0, name, OBJPROP_PERIOD, tf);
+   ObjectSetInteger(0, name, OBJPROP_DATE_SCALE, true);
+   ObjectSetInteger(0, name, OBJPROP_PRICE_SCALE, true);
+   ObjectSetInteger(0, name, OBJPROP_CHART_SCALE, ChartScale);
+   ChartRedraw(0);
+   Sleep(900);
+   chartId = ObjectGetInteger(0, name, OBJPROP_CHART_ID);
+   if(chartId <= 0)
      {
-      Sleep(100);
-      waits++;
+      Print("QauntifyTickPush: OBJPROP_CHART_ID missing");
+      ObjectDelete(0, name);
+      return "";
      }
    StripForeignIndicators(chartId);
    ChartClearAllObjects(chartId);
-   ChartSetInteger(chartId, CHART_MODE, (long)CHART_CANDLES);
-   ChartSetInteger(chartId, CHART_SHOW_GRID, false);
-   ChartSetInteger(chartId, CHART_SHOW_VOLUMES, (long)CHART_VOLUME_TICK);
-   ChartSetInteger(chartId, CHART_SCALE, ChartScale);
+   ApplyTerminalLook(chartId);
+   ObjectSetInteger(0, name, OBJPROP_CHART_SCALE, ChartScale);
    ChartNavigate(chartId, CHART_END, 0);
    ChartRedraw(chartId);
    Sleep(500);
-   return "chartopen";
+   return name;
   }
 
-void CloseShotChart(const string marker, const long chartId)
+void CloseShotChart(const string objName, const long chartId)
   {
-   if(chartId > 0 && marker == "chartopen")
-      ChartClose(chartId);
+   if(StringLen(objName) > 0)
+      ObjectDelete(0, objName);
+   ChartRedraw(0);
   }
 
 // Brace-matched object extract so long CSV string fields stay intact.
@@ -761,19 +790,25 @@ bool ProcessOnePending(const string block)
    n = sn;
 
    ZoomToSetup(chartId, want, prices, n);
+   // Re-assert zoom on OBJ_CHART host + sub-chart (scale can reset after draw).
+   ObjectSetInteger(0, shotObj, OBJPROP_CHART_SCALE, ChartScale);
    ChartSetInteger(chartId, CHART_SCALE, ChartScale);
    ChartNavigate(chartId, CHART_END, 0);
    ChartRedraw(chartId);
-   Sleep(700);
+   Sleep(400);
+   ObjectSetInteger(0, shotObj, OBJPROP_CHART_SCALE, ChartScale);
+   ChartSetInteger(chartId, CHART_SCALE, ChartScale);
+   ChartRedraw(chartId);
+   Sleep(500);
 
    string fileName = "qtp_chart_" + id + ".png";
-   // Full terminal-style frame — upload as-is (no server crop/dilate).
+   // Match embedded chart size — upload as-is (no server crop/dilate).
    int w = ChartWidth;
-   if(w < 800) w = 1280;
-   if(w > 1920) w = 1920;
+   if(w < 900) w = 1280;
+   if(w > 1600) w = 1600;
    int h = ChartHeight;
-   if(h < 480) h = 720;
-   if(h > 1080) h = 1080;
+   if(h < 560) h = 720;
+   if(h > 1000) h = 900;
    bool shot = ChartScreenShot(chartId, fileName, w, h, ALIGN_RIGHT);
    CloseShotChart(shotObj, chartId);
    if(!shot)
