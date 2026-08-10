@@ -424,8 +424,16 @@ void ChartClearAllObjects(const long chartId)
 void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
                  const double &prices[], const int priceCount)
   {
-   // Always max zoom-in for setup shots — ignore a stale ChartScale input of 3–5.
-   int scale = 0;
+   // Float a small chart window so scale-0 actually yields ~30 fat candles.
+   // On a maximized VPS screen, scale 0 still shows 200+ bars — then
+   // ChartScreenShot squishes them all into the PNG (thin scribble).
+   ChartSetInteger(chartId, CHART_IS_DOCKED, false);
+   ChartSetInteger(chartId, CHART_FLOAT_LEFT, 40);
+   ChartSetInteger(chartId, CHART_FLOAT_TOP, 40);
+   ChartSetInteger(chartId, CHART_FLOAT_RIGHT, 40 + 720);
+   ChartSetInteger(chartId, CHART_FLOAT_BOTTOM, 40 + 720);
+   ChartRedraw(chartId);
+   Sleep(200);
 
    ChartSetInteger(chartId, CHART_AUTOSCROLL, false);
    ChartSetInteger(chartId, CHART_SHIFT, true);
@@ -441,7 +449,6 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
    ChartSetInteger(chartId, CHART_SHOW_ASK_LINE, false);
    ChartSetInteger(chartId, CHART_BRING_TO_TOP, true);
 
-   // Hard cap: ~30 bars so the setup (sweep→entry) fills the frame.
    int wantBars = ChartBarsVisible;
    if(wantBars < 20) wantBars = 20;
    if(wantBars > 36) wantBars = 36;
@@ -452,15 +459,15 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
       ChartSetInteger(chartId, CHART_SCALE, 0);
       ChartNavigate(chartId, CHART_END, 0);
       ChartRedraw(chartId);
-      Sleep(100);
+      Sleep(120);
       visible = ChartGetInteger(chartId, CHART_WIDTH_IN_BARS);
-      if(visible > 0 && visible <= wantBars + 4)
+      if(visible > 0 && visible <= wantBars + 6)
          break;
      }
-   Print("QauntifyTickPush: zoom visible_bars=", visible, " want~", wantBars);
+   Print("QauntifyTickPush: zoom visible_bars=", visible,
+         " want~", wantBars,
+         " win_px=", ChartGetInteger(chartId, CHART_WIDTH_IN_PIXELS));
 
-   // Tight Y lock around entry/SL/structure only (TP2/TP3 excluded from bounds
-   // so they don't pull the camera out).
    if(priceCount > 0)
      {
       double lo = 0.0;
@@ -477,7 +484,6 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
         {
          double span = hi - lo;
          if(span <= 0.0) span = MathMax(hi * 0.0005, _Point * 50);
-         // Small pad = heavy price zoom on the setup.
          double pad = MathMax(span * 0.10, _Point * 25);
          ChartSetInteger(chartId, CHART_SCALEFIX, true);
          ChartSetInteger(chartId, CHART_SCALEFIX_11, false);
@@ -585,8 +591,11 @@ bool ProcessOnePending(const string block)
    if(tNow == 0) tNow = TimeCurrent();
    datetime tRight = tNow + PeriodSeconds(want) * 4;
 
-   int barsBack = ChartBarsVisible > 20 ? ChartBarsVisible : 48;
-   if(barsBack > 120) barsBack = 120;
+   int barsBack = ChartBarsVisible;
+   if(barsBack < 20) barsBack = 20;
+   if(barsBack > 36) barsBack = 36;
+   // Pad a little left of the visible window for early sweep labels.
+   barsBack += 8;
    datetime tLeft = iTime(_Symbol, want, barsBack);
    if(tLeft == 0) tLeft = tNow - PeriodSeconds(want) * barsBack;
 
