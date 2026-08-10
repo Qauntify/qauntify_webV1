@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.24"
+#property version   "1.25"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -25,13 +25,10 @@ input double MinPriceMove      = 0.0;
 input int    BackfillBars      = 2000;  // closed M1 bars sent on init (chunked)
 input bool   UploadPendingCharts = true;
 input int    ChartPollSec      = 20;    // how often to ask for pending setups
-input int    ChartWidth        = 560;   // embed width — keep modest so scale-0 candles stay fat
+input int    ChartWidth        = 1280;  // terminal-style screenshot width
 input int    ChartHeight       = 720;
-input int    ChartBarsVisible  = 48;    // target visible bars in the shot
-input int    ChartScale        = 0;     // 0=widest candles (terminal zoom-in)
-
-int g_shotW = 0;
-int g_shotH = 0;
+input int    ChartBarsVisible  = 60;    // left pad for annotation lines
+input int    ChartScale        = 2;     // normal MT5 zoom (0=max in … 5=out)
 
 double   lastSentMid    = 0.0;
 uint     lastSentTick   = 0;
@@ -493,95 +490,33 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
 
 string OpenShotChart(const ENUM_TIMEFRAMES tf, long &chartId)
   {
-   // Fixed-pixel OBJ_CHART. Width controls bar count at scale 0 — a 1280px
-   // embed still packed ~400 M1 hairlines on the VPS.
-   string name = "QTP_SHOT_CHART";
-   ObjectDelete(0, name);
-   if(!ObjectCreate(0, name, OBJ_CHART, 0, 0, 0))
-     {
-      Print("QauntifyTickPush: OBJ_CHART create failed ", GetLastError());
-      chartId = -1;
-      return "";
-     }
-   int ox = ChartWidth;
-   if(ox < 360) ox = 360;
-   if(ox > 720) ox = 560;
-   int oy = ChartHeight;
-   if(oy < 560) oy = 720;
-   if(oy > 900) oy = 720;
-   g_shotW = ox;
-   g_shotH = oy;
-   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, 8);
-   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, 8);
-   ObjectSetInteger(0, name, OBJPROP_XSIZE, ox);
-   ObjectSetInteger(0, name, OBJPROP_YSIZE, oy);
-   ObjectSetInteger(0, name, OBJPROP_BACK, false);
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-   ObjectSetString(0, name, OBJPROP_SYMBOL, _Symbol);
-   ObjectSetInteger(0, name, OBJPROP_PERIOD, tf);
-   ObjectSetInteger(0, name, OBJPROP_DATE_SCALE, true);
-   ObjectSetInteger(0, name, OBJPROP_PRICE_SCALE, true);
-   ObjectSetInteger(0, name, OBJPROP_CHART_SCALE, 0);
-   ChartRedraw(0);
-   Sleep(900);
-   chartId = ObjectGetInteger(0, name, OBJPROP_CHART_ID);
+   // Real ChartOpen — normal MT5 terminal look (as-is screenshot).
+   chartId = ChartOpen(_Symbol, tf);
    if(chartId <= 0)
      {
-      Print("QauntifyTickPush: OBJPROP_CHART_ID missing");
-      ObjectDelete(0, name);
+      Print("QauntifyTickPush: ChartOpen failed ", GetLastError());
       return "";
+     }
+   ChartSetInteger(chartId, CHART_BRING_TO_TOP, true);
+   int waits = 0;
+   while(Bars(_Symbol, tf) < 80 && waits < 50)
+     {
+      Sleep(100);
+      waits++;
      }
    StripForeignIndicators(chartId);
    ChartClearAllObjects(chartId);
    ApplyTerminalLook(chartId);
-   ObjectSetInteger(0, name, OBJPROP_CHART_SCALE, 0);
-   ChartSetInteger(chartId, CHART_SCALE, 0);
    ChartNavigate(chartId, CHART_END, 0);
    ChartRedraw(chartId);
    Sleep(500);
-   return name;
+   return "chartopen";
   }
 
-// Shrink the embed until WIDTH_IN_BARS is near the target (fat native candles).
-void FitShotZoom(const string objName, const long chartId)
+void CloseShotChart(const string marker, const long chartId)
   {
-   int target = ChartBarsVisible;
-   if(target < 30) target = 30;
-   if(target > 70) target = 70;
-   int w = (int)ObjectGetInteger(0, objName, OBJPROP_XSIZE);
-   for(int attempt = 0; attempt < 8; attempt++)
-     {
-      ObjectSetInteger(0, objName, OBJPROP_CHART_SCALE, 0);
-      ChartSetInteger(chartId, CHART_SCALE, 0);
-      ChartNavigate(chartId, CHART_END, 0);
-      ChartRedraw(chartId);
-      Sleep(280);
-      long vis = ChartGetInteger(chartId, CHART_WIDTH_IN_BARS);
-      long px = ChartGetInteger(chartId, CHART_WIDTH_IN_PIXELS);
-      Print("QauntifyTickPush: fit vis=", vis, " px=", px, " objW=", w,
-            " target<=", target);
-      if(vis > 0 && vis <= target)
-        {
-         g_shotW = w;
-         g_shotH = (int)ObjectGetInteger(0, objName, OBJPROP_YSIZE);
-         return;
-        }
-      w = (int)MathMax(320, w * 0.72);
-      ObjectSetInteger(0, objName, OBJPROP_XSIZE, w);
-      ChartRedraw(0);
-      Sleep(350);
-     }
-   g_shotW = (int)ObjectGetInteger(0, objName, OBJPROP_XSIZE);
-   g_shotH = (int)ObjectGetInteger(0, objName, OBJPROP_YSIZE);
-  }
-
-void CloseShotChart(const string objName, const long chartId)
-  {
-   if(StringLen(objName) > 0)
-      ObjectDelete(0, objName);
-   ChartRedraw(0);
+   if(chartId > 0 && marker == "chartopen")
+      ChartClose(chartId);
   }
 
 // Brace-matched object extract so long CSV string fields stay intact.
@@ -829,19 +764,19 @@ bool ProcessOnePending(const string block)
    n = sn;
 
    ZoomToSetup(chartId, want, prices, n);
-   FitShotZoom(shotObj, chartId);
-   ObjectSetInteger(0, shotObj, OBJPROP_CHART_SCALE, 0);
-   ChartSetInteger(chartId, CHART_SCALE, 0);
+   ChartSetInteger(chartId, CHART_SCALE, ChartScale);
    ChartNavigate(chartId, CHART_END, 0);
    ChartRedraw(chartId);
-   Sleep(500);
+   Sleep(700);
 
    string fileName = "qtp_chart_" + id + ".png";
-   // Screenshot at the fitted embed size (fat native candles), server soft-upscales.
-   int w = g_shotW;
-   if(w < 320) w = 560;
-   int h = g_shotH;
+   // Full terminal-style frame — upload as-is.
+   int w = ChartWidth;
+   if(w < 800) w = 1280;
+   if(w > 1920) w = 1920;
+   int h = ChartHeight;
    if(h < 480) h = 720;
+   if(h > 1080) h = 1080;
    bool shot = ChartScreenShot(chartId, fileName, w, h, ALIGN_RIGHT);
    CloseShotChart(shotObj, chartId);
    if(!shot)
@@ -885,9 +820,8 @@ bool ProcessOnePending(const string block)
       return false;
      }
    string b64 = CharArrayToString(encoded, 0, WHOLE_ARRAY, CP_UTF8);
-   // tight_frame=true → soft lanczos upscale only (no crop/dilate).
    string body = "{\"signal_id\":\"" + id +
-                 "\",\"kind\":\"setup\",\"tight_frame\":true,\"image_base64\":\"" + b64 + "\"}";
+                 "\",\"kind\":\"setup\",\"tight_frame\":false,\"image_base64\":\"" + b64 + "\"}";
    string resp = "";
    lastChartHttp = HttpPost(ChartUploadUrl, body, resp);
    if(lastChartHttp == 200)
