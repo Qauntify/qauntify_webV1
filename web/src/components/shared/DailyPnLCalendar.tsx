@@ -6,6 +6,23 @@ import type { DailyPnL } from "@/lib/signals";
 
 const DAYS_OF_WEEK = ["ច", "អ", "ព", "ព្រ", "សុ", "ស", "អា"];
 
+/** Fixed names — avoid toLocaleString("km-KH") which can SSR as Khmer
+ * and hydrate as English when the browser lacks km locale data. */
+const MONTHS_KM = [
+  "មករា",
+  "កុម្ភៈ",
+  "មីនា",
+  "មេសា",
+  "ឧសភា",
+  "មិថុនា",
+  "កក្កដា",
+  "សីហា",
+  "កញ្ញា",
+  "តុលា",
+  "វិច្ឆិកា",
+  "ធ្នូ",
+] as const;
+
 const DEFAULT_DESCRIPTION =
   "LLM signals ដែលបានបិទតាមថ្ងៃ — រួមទាំងការឈានដល់ TP ពេញលេញ និងការឈ្នះ TP1/TP2 " +
   "(ទោះបីតម្លៃក្រោយមកប៉ះបញ្ឈប់ខាតក៏ដោយ)។ បៃតង = ឈ្នះច្រើនជាងចាញ់។";
@@ -70,7 +87,7 @@ export function DailyPnLCalendar({
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const monthName = currentDate.toLocaleString("km-KH", { month: "long" });
+  const monthName = MONTHS_KM[month];
 
   const calendarGrid = useMemo(() => {
     const firstDayOfMonth = new Date(year, month, 1);

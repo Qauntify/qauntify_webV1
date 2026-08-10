@@ -773,6 +773,262 @@ export async function insertLiveSignal(
   }
 }
 
+const SIGNAL_CHART_BUCKET = "signal-charts";
+
+/** True when a signals row with this id exists (service-role). */
+export async function signalExists(id: string): Promise<boolean | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/signals?id=eq.${encodeURIComponent(id)}&select=id&limit=1`,
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
+    );
+    if (!response.ok) return null;
+    const rows = (await response.json()) as unknown[];
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    return null;
+  }
+}
+
+/** Upload a PNG to the public signal-charts bucket; return its public URL.
+ * Mirrors signals/chart/upload.py (`suffix` → `{id}{suffix}.png`). */
+export async function uploadSignalChartPng(
+  signalId: string,
+  png: Buffer,
+  kind: "setup" | "outcome" = "setup",
+): Promise<string | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  const suffix = kind === "outcome" ? "-outcome" : "";
+  const path = `${signalId}${suffix}.png`;
+  try {
+    const response = await fetch(
+      `${cfg.url}/storage/v1/object/${SIGNAL_CHART_BUCKET}/${path}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: cfg.serviceKey,
+          Authorization: `Bearer ${cfg.serviceKey}`,
+          "Content-Type": "image/png",
+          "x-upsert": "true",
+        },
+        body: new Uint8Array(png),
+      },
+    );
+    if (!response.ok && response.status !== 200 && response.status !== 201) {
+      return null;
+    }
+    return `${cfg.url}/storage/v1/object/public/${SIGNAL_CHART_BUCKET}/${path}`;
+  } catch {
+    return null;
+  }
+}
+
+/** PATCH chart_url or outcome_chart_url on one signal row. */
+export async function setSignalChartUrl(
+  signalId: string,
+  url: string,
+  kind: "setup" | "outcome" = "setup",
+): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+  const field = kind === "outcome" ? "outcome_chart_url" : "chart_url";
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/signals?id=eq.${encodeURIComponent(signalId)}`,
+      {
+        method: "PATCH",
+        headers: { ...headers(cfg.serviceKey), Prefer: "return=minimal" },
+        body: JSON.stringify({ [field]: url }),
+      },
+    );
+    return response.ok || response.status === 204;
+  } catch {
+    return false;
+  }
+}
+
+const TOOLS_BUCKET = "tools";
+
+export type ToolInsert = {
+  id: string;
+  title_km: string;
+  description_km: string;
+  category: string;
+  file_url: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  external_url: string | null;
+  sort_order: number;
+  published: boolean;
+};
+
+type ToolRow = {
+  id: string;
+  title_km: string;
+  description_km: string;
+  category: string;
+  file_url: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  external_url: string | null;
+  sort_order: number;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+const TOOL_SELECT =
+  "id,title_km,description_km,category,file_url,file_name,mime_type,file_size,external_url,sort_order,published,created_at,updated_at";
+
+/** All tools for admin (includes unpublished). */
+export async function listAllTools(): Promise<ToolRow[]> {
+  const cfg = config();
+  if (!cfg) return [];
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/tools?select=${TOOL_SELECT}` +
+        "&order=sort_order.asc,created_at.desc",
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
+    );
+    if (!response.ok) return [];
+    const rows = (await response.json()) as ToolRow[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getToolById(id: string): Promise<ToolRow | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/tools?id=eq.${encodeURIComponent(id)}&select=${TOOL_SELECT}&limit=1`,
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
+    );
+    if (!response.ok) return null;
+    const rows = (await response.json()) as ToolRow[];
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function insertTool(row: ToolInsert): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+  const now = new Date().toISOString();
+  try {
+    const response = await fetch(`${cfg.url}/rest/v1/tools`, {
+      method: "POST",
+      headers: { ...headers(cfg.serviceKey), Prefer: "return=minimal" },
+      body: JSON.stringify({ ...row, created_at: now, updated_at: now }),
+    });
+    return response.ok || response.status === 201;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateToolPublished(
+  id: string,
+  published: boolean,
+): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/tools?id=eq.${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        headers: { ...headers(cfg.serviceKey), Prefer: "return=minimal" },
+        body: JSON.stringify({
+          published,
+          updated_at: new Date().toISOString(),
+        }),
+      },
+    );
+    return response.ok || response.status === 204;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteToolRow(id: string): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/tools?id=eq.${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        headers: headers(cfg.serviceKey),
+      },
+    );
+    return response.ok || response.status === 204;
+  } catch {
+    return false;
+  }
+}
+
+/** Upload a tool file to the public tools bucket. */
+export async function uploadToolFile(
+  toolId: string,
+  fileName: string,
+  bytes: Buffer,
+  mimeType: string,
+): Promise<string | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+  const path = `${toolId}/${safeName || "download"}`;
+  try {
+    const response = await fetch(
+      `${cfg.url}/storage/v1/object/${TOOLS_BUCKET}/${path}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: cfg.serviceKey,
+          Authorization: `Bearer ${cfg.serviceKey}`,
+          "Content-Type": mimeType || "application/octet-stream",
+          "x-upsert": "true",
+        },
+        body: new Uint8Array(bytes),
+      },
+    );
+    if (!response.ok && response.status !== 200 && response.status !== 201) {
+      return null;
+    }
+    return `${cfg.url}/storage/v1/object/public/${TOOLS_BUCKET}/${path}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort delete of a stored tool file from its public URL. */
+export async function deleteToolStorageObject(fileUrl: string): Promise<void> {
+  const cfg = config();
+  if (!cfg || !fileUrl.includes(`/${TOOLS_BUCKET}/`)) return;
+  const marker = `/object/public/${TOOLS_BUCKET}/`;
+  const idx = fileUrl.indexOf(marker);
+  if (idx < 0) return;
+  const path = fileUrl.slice(idx + marker.length);
+  if (!path) return;
+  try {
+    await fetch(`${cfg.url}/storage/v1/object/${TOOLS_BUCKET}/${path}`, {
+      method: "DELETE",
+      headers: headers(cfg.serviceKey),
+    });
+  } catch {
+    // soft-fail
+  }
+}
+
 /** TS mirror of signals/storage.py:update_signal_outcome's conditional-claim
  * mode: PATCH only applies if the row is still in `expectedStatus`, so the
  * slow Python cron and this instant path can't both win the same event. */

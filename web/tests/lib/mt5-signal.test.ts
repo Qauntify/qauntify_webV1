@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMt5SignalBody } from "@/lib/mt5-signal";
+import { parseMt5ChartBody, parseMt5SignalBody } from "@/lib/mt5-signal";
 import { formatSignalAlert } from "@/lib/outcome-alert";
 
 const valid = {
@@ -46,6 +46,55 @@ describe("parseMt5SignalBody", () => {
       indicators: { strategy: "ema_cross" },
     });
     expect("error" in out).toBe(true);
+  });
+});
+
+describe("parseMt5ChartBody", () => {
+  // Minimal valid 1x1 PNG
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const signalId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+
+  it("accepts a setup PNG upload", () => {
+    const out = parseMt5ChartBody({
+      signal_id: signalId,
+      kind: "setup",
+      image_base64: png.toString("base64"),
+    });
+    expect("error" in out).toBe(false);
+    if ("error" in out) return;
+    expect(out.signalId).toBe(signalId);
+    expect(out.kind).toBe("setup");
+    expect(out.png.equals(png)).toBe(true);
+  });
+
+  it("accepts data-URL and outcome kind", () => {
+    const out = parseMt5ChartBody({
+      signal_id: signalId,
+      kind: "outcome",
+      image_base64: `data:image/png;base64,${png.toString("base64")}`,
+    });
+    expect("error" in out).toBe(false);
+    if ("error" in out) return;
+    expect(out.kind).toBe("outcome");
+  });
+
+  it("rejects non-uuid signal_id", () => {
+    const out = parseMt5ChartBody({
+      signal_id: "not-a-uuid",
+      image_base64: png.toString("base64"),
+    });
+    expect(out).toEqual(expect.objectContaining({ error: expect.any(String) }));
+  });
+
+  it("rejects non-PNG bytes", () => {
+    const out = parseMt5ChartBody({
+      signal_id: signalId,
+      image_base64: Buffer.from("not-a-png").toString("base64"),
+    });
+    expect(out).toEqual(expect.objectContaining({ error: expect.any(String) }));
   });
 });
 

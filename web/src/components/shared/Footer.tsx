@@ -25,6 +25,9 @@ export function Footer() {
             <Link href="/track-record" className="font-medium text-slate hover:text-ink">
               កំណត់ត្រាលទ្ធផល
             </Link>
+            <Link href="/tools" className="font-medium text-slate hover:text-ink">
+              ឧបករណ៍
+            </Link>
           </nav>
         </div>
         <p className="mt-4 border-t border-line pt-3 text-xs leading-relaxed text-slate">

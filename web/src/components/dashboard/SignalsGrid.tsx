@@ -200,6 +200,7 @@ export function SignalCard({
   // Pure SL only — closed TP1/TP2 wins are not losses.
   const isSlHit = signal.status === "sl_hit";
   const Component = onSelect ? "button" : "div";
+  const chartSrc = signal.outcomeChartUrl || signal.chartUrl;
 
   return (
     <Component
@@ -212,6 +213,21 @@ export function SignalCard({
       <div
         className={`absolute bottom-0 left-0 top-0 w-1 ${isLong ? "bg-long" : "bg-short"}`}
       />
+
+      {chartSrc ? (
+        <div className="relative aspect-[16/9] overflow-hidden border-b border-line bg-paper">
+          <img
+            src={chartSrc}
+            alt={`${signal.symbol} ${formatTimeframe(signal.timeframe)} ${signal.direction} chart`}
+            loading="lazy"
+            className="h-full w-full object-cover"
+          />
+        </div>
+      ) : (
+        <div className="flex aspect-[16/9] items-center justify-center border-b border-line bg-paper">
+          <span className="text-xs text-slate">គ្មានគំនូសតាង</span>
+        </div>
+      )}
 
       <div className="relative flex items-start justify-between gap-3 p-5 pb-4 pl-6">
         <div>

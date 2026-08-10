@@ -32,11 +32,36 @@ describe("SignalsGrid", () => {
     render(<SignalsGrid signals={[SIGNAL]} />);
     expect(screen.getByText("BTCUSDT")).toBeDefined();
     expect(screen.getByText("ទិញ")).toBeDefined();
+    expect(screen.getByText("គ្មានគំនូសតាង")).toBeDefined();
     expect(screen.getByText("108,240")).toBeDefined();
     expect(screen.getByText("106,900")).toBeDefined();
     expect(screen.getByText("110,920")).toBeDefined();
     expect(screen.getByText("82%")).toBeDefined();
     expect(screen.queryByText("Momentum aligns with news flow.")).toBeNull();
+  });
+
+  it("shows the setup chart image on the card when available", () => {
+    render(
+      <SignalsGrid
+        signals={[{ ...SIGNAL, chartUrl: "https://example.com/setup.png" }]}
+      />,
+    );
+    const img = screen.getByAltText(/btcusdt 1h long chart/i);
+    expect(img.getAttribute("src")).toBe("https://example.com/setup.png");
+  });
+
+  it("prefers the outcome chart over the setup chart on the card", () => {
+    render(
+      <SignalsGrid
+        signals={[{
+          ...SIGNAL,
+          chartUrl: "https://example.com/setup.png",
+          outcomeChartUrl: "https://example.com/outcome.png",
+        }]}
+      />,
+    );
+    const img = screen.getByAltText(/btcusdt 1h long chart/i);
+    expect(img.getAttribute("src")).toBe("https://example.com/outcome.png");
   });
 
   it("opens detail modal when a card is clicked", () => {

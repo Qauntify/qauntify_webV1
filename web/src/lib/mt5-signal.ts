@@ -1,9 +1,24 @@
-/** Validate + normalize payloads from the MT5 BBMA EA → /api/mt5/signal. */
+/** Validate + normalize payloads from the MT5 BBMA EA → /api/mt5/signal
+ * and chart screenshots → /api/mt5/chart. */
 
 export const MT5_LIVE_SYMBOLS = new Set(["XAUUSD"]);
 /** Lane id for the signals page tab — not a candle interval. */
 export const MT5_LIVE_TIMEFRAMES = new Set(["bbma"]);
 export const MT5_LIVE_STRATEGIES = new Set(["bbma_reentry", "bbma_extreme"]);
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** ~4MB decoded PNG ceiling for EA ChartScreenShot uploads. */
+export const MT5_CHART_MAX_BYTES = 4 * 1024 * 1024;
+
+export type Mt5ChartKind = "setup" | "outcome";
+
+export type Mt5ChartPayload = {
+  signalId: string;
+  kind: Mt5ChartKind;
+  png: Buffer;
+};
 
 export type Mt5SignalBody = {
   symbol: string;
@@ -127,4 +142,60 @@ export function parseMt5SignalBody(raw: unknown): Mt5SignalPayload | { error: st
     },
     bar_time: barTime != null && barTime > 0 ? Math.floor(barTime) : null,
   };
+}
+
+function stripDataUrl(b64: string): string {
+  const trimmed = b64.trim();
+  const comma = trimmed.indexOf(",");
+  if (trimmed.startsWith("data:") && comma >= 0) {
+    return trimmed.slice(comma + 1);
+  }
+  return trimmed;
+}
+
+function isPng(buf: Buffer): boolean {
+  return (
+    buf.length >= 8 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47
+  );
+}
+
+/** Validate MT5 ChartScreenShot upload body for /api/mt5/chart. */
+export function parseMt5ChartBody(
+  raw: unknown,
+): Mt5ChartPayload | { error: string } {
+  if (!raw || typeof raw !== "object") return { error: "invalid body" };
+  const body = raw as Record<string, unknown>;
+
+  const signalId = String(body.signal_id ?? body.signalId ?? "").trim();
+  if (!UUID_RE.test(signalId)) {
+    return { error: "signal_id must be a uuid" };
+  }
+
+  const kindRaw = String(body.kind ?? "setup").trim().toLowerCase();
+  if (kindRaw !== "setup" && kindRaw !== "outcome") {
+    return { error: "kind must be setup or outcome" };
+  }
+
+  const imageRaw = body.image_base64 ?? body.imageBase64 ?? body.png_base64;
+  if (typeof imageRaw !== "string" || !imageRaw.trim()) {
+    return { error: "image_base64 required" };
+  }
+
+  let png: Buffer;
+  try {
+    png = Buffer.from(stripDataUrl(imageRaw), "base64");
+  } catch {
+    return { error: "image_base64 is not valid base64" };
+  }
+  if (png.length < 32) return { error: "image too small" };
+  if (png.length > MT5_CHART_MAX_BYTES) {
+    return { error: "image too large" };
+  }
+  if (!isPng(png)) return { error: "image must be a PNG" };
+
+  return { signalId, kind: kindRaw, png };
 }

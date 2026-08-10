@@ -10,6 +10,7 @@ const links = [
   { href: "/signals", label: "Signals" },
   { href: "/war-room", label: "War Room" },
   { href: "/track-record", label: "កំណត់ត្រាលទ្ធផល" },
+  { href: "/tools", label: "ឧបករណ៍" },
 ];
 
 export async function Nav() {
