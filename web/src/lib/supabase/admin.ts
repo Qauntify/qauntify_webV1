@@ -773,7 +773,66 @@ export async function insertLiveSignal(
   }
 }
 
-const SIGNAL_CHART_BUCKET = "signal-charts";
+/** Load the MT5 OHLC ring buffer used by gold detectors / setup chart render. */
+export async function getMt5CandleSeries(
+  symbol: string,
+  timeframe: string,
+): Promise<Mt5CandleBar[] | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  const canon = symbol.trim().toUpperCase();
+  const tf = timeframe.trim().toLowerCase();
+  if (!canon || !tf) return null;
+  const path = `mt5-candles/${canon}-${tf}.json`;
+  try {
+    const get = await fetch(
+      `${cfg.url}/storage/v1/object/signal-charts/${path}`,
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
+    );
+    if (!get.ok) return null;
+    const data = (await get.json()) as { candles?: Mt5CandleBar[] } | Mt5CandleBar[];
+    const candles = Array.isArray(data) ? data : (data.candles ?? []);
+    return Array.isArray(candles) ? candles : null;
+  } catch {
+    return null;
+  }
+}
+
+export type SignalSetupRow = {
+  id: string;
+  symbol: string;
+  timeframe: string;
+  direction: string;
+  entry: number;
+  stop_loss: number;
+  take_profit: number;
+  take_profit_1: number | null;
+  take_profit_2: number | null;
+  take_profit_3: number | null;
+  indicators: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export async function getSignalSetupRow(
+  id: string,
+): Promise<SignalSetupRow | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/signals?id=eq.${encodeURIComponent(id)}` +
+        `&select=id,symbol,timeframe,direction,entry,stop_loss,take_profit,` +
+        `take_profit_1,take_profit_2,take_profit_3,indicators,created_at` +
+        `&limit=1`,
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
+    );
+    if (!response.ok) return null;
+    const rows = (await response.json()) as SignalSetupRow[];
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch {
+    return null;
+  }
+}
 
 /** True when a signals row with this id exists (service-role). */
 export async function signalExists(id: string): Promise<boolean | null> {

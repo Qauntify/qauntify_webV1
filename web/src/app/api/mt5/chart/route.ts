@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 
 import { tightFrameSetupPng } from "@/lib/mt5-chart-frame";
 import { parseMt5ChartBody } from "@/lib/mt5-signal";
+import { renderSetupChartPng } from "@/lib/mt5-setup-chart";
 import {
   formatSignalAlert,
   sendTelegramPhoto,
 } from "@/lib/outcome-alert";
 import {
+  getMt5CandleSeries,
   getSignalAlertRow,
+  getSignalSetupRow,
   setSignalChartUrl,
   signalExists,
   uploadSignalChartPng,
@@ -42,7 +45,42 @@ export async function POST(request: Request) {
   }
 
   let png = parsed.png;
-  if (parsed.kind === "setup" && parsed.tightFrame) {
+  let rendered = false;
+
+  // Prefer a drawn OHLC chart — VPS ChartScreenShot can't hold zoom on M1.
+  if (parsed.kind === "setup") {
+    try {
+      const row = await getSignalSetupRow(parsed.signalId);
+      if (row) {
+        const candles = await getMt5CandleSeries(row.symbol, row.timeframe);
+        if (candles && candles.length > 0) {
+          const drawn = await renderSetupChartPng(
+            {
+              symbol: row.symbol,
+              timeframe: row.timeframe,
+              direction: row.direction,
+              entry: row.entry,
+              stop_loss: row.stop_loss,
+              take_profit: row.take_profit_1 ?? row.take_profit,
+              take_profit_2: row.take_profit_2,
+              take_profit_3: row.take_profit_3,
+              indicators: row.indicators,
+              created_at: row.created_at,
+            },
+            candles,
+          );
+          if (drawn) {
+            png = drawn;
+            rendered = true;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[mt5/chart] setup render failed, using EA png", err);
+    }
+  }
+
+  if (!rendered && parsed.kind === "setup" && parsed.tightFrame) {
     try {
       png = await tightFrameSetupPng(png);
     } catch (err) {
@@ -116,5 +154,6 @@ export async function POST(request: Request) {
     url,
     kind: parsed.kind,
     telegram,
+    rendered,
   });
 }
