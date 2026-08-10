@@ -113,7 +113,8 @@ def test_cloud_mss_plan_draws_the_cloud_ma_and_choch():
     assert _kinds(plan, "premium"), "the cloud zone must be drawn"
     assert _kinds(plan, "choch"), "the level whose break confirmed the entry"
     labels = " ".join(a.get("label", "") for a in plan)
-    assert "Cloud" in labels and "LWMA200" in labels
+    assert "Cloud premium" in labels and "LWMA200" in labels
+    assert "CHoCH down" in labels
 
 
 def test_cloud_mss_discount_cloud_uses_the_discount_role():
@@ -126,3 +127,6 @@ def test_cloud_mss_discount_cloud_uses_the_discount_role():
     }
     plan = build_chart_plan(candles, _signal(ind))
     assert _kinds(plan, "discount")
+    labels = " ".join(a.get("label", "") for a in plan)
+    assert "Cloud discount" in labels
+    assert "CHoCH up" in labels

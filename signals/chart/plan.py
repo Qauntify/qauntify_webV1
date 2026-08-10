@@ -225,24 +225,36 @@ def _cloud_mss(candles, signal, h1_candles=None):
     role = side if side in ("premium", "discount") else "sr"
     out = []
 
+    if side == "discount":
+        cloud_label = "Cloud discount (buy) — look CHoCH up"
+    elif side == "premium":
+        cloud_label = "Cloud premium (sell) — look CHoCH down"
+    else:
+        cloud_label = f"Cloud ({side})"
+
     if h1_candles:
         rows = cloud_series(candles, h1_candles)
         out.append(band(
             [{"time": t, "upper": hi, "lower": lo} for t, lo, hi, _ in rows],
-            f"Cloud ({side})", role))
+            cloud_label, role))
         out.append(series(
             [{"time": t, "value": ce} for t, _, _, ce in rows],
             "Chandelier (1h)", "trail"))
     else:
         out.append(zone(ind["cloud_high"], ind["cloud_low"], None,
-                        f"Cloud ({side})", role))
+                        cloud_label, role))
 
     closes = [c.close for c in candles]
     out.append(series([{"time": c.open_time, "value": v}
                        for c, v in zip(candles, lwma(closes, 200))],
                       "LWMA200", "lwma"))
     if ind.get("choch_level") is not None:
-        out.append(level(ind["choch_level"], "CHoCH level", "choch",
+        # Premium shorts need CHoCH down; discount longs need CHoCH up.
+        if signal.direction == "short" or side == "premium":
+            choch_label = "CHoCH down (short)"
+        else:
+            choch_label = "CHoCH up (long)"
+        out.append(level(ind["choch_level"], choch_label, "choch",
                          style="dashed"))
     return out
 

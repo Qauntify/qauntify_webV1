@@ -33,8 +33,10 @@ ROLE_LINE = {
     "ma5": "#f472b6", "ma10": "#fbbf24", "ema50": "#a3e635",
 }
 ROLE_FILL = {
-    "fvg": "#14b8a6", "sr": "#38bdf8", "premium": "#f87171",
-    "discount": "#2dd4bf", "win": "#4ade80", "loss": "#f87171",
+    "fvg": "#14b8a6", "sr": "#38bdf8",
+    # cloud_mss: discount = buy zone (green), premium = sell zone (red)
+    "premium": "#ef4444", "discount": "#22c55e",
+    "win": "#4ade80", "loss": "#f87171",
 }
 # Primary trade levels get thicker lines + roomier labels.
 _PRIMARY_ROLES = frozenset({"entry", "stop", "target"})
