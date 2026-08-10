@@ -20,7 +20,7 @@ from signals.market_client import (
     setup_stop_risk_ok,
     is_gold_symbol,
 )
-from signals.chart.pipeline import attach_chart, attach_chart_plan
+from signals.chart.pipeline import attach_chart
 from signals.composer import confirm_setup, no_setup_rationale
 from signals.rag import retrieve_context
 from signals.config import load_config
@@ -809,16 +809,11 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         return ScanResult(candles=candles)
 
     signal = make_signal(setup, confirmation, [], timeframe=timeframe)
-    # Gold: store chart plan + MT5 draw fields (cloud series, FVG span) but
-    # leave chart_url null so TickPush ChartScreenShot fills the real screen.
-    if is_gold_symbol(symbol):
-        signal = attach_chart_plan(signal, candles, h1_candles=h1_candles)
-    else:
-        signal = attach_chart(
-            signal, candles,
-            supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
-            session=session, h1_candles=h1_candles,
-        )
+    signal = attach_chart(
+        signal, candles,
+        supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
+        session=session, h1_candles=h1_candles,
+    )
     try:
         with_retry(lambda: save_signal(
             signal, cfg.supabase_url, cfg.supabase_service_key, session=session,
@@ -893,14 +888,8 @@ def maybe_run_debate(signal, cfg, session=None):
 def maybe_send_alert(signal, settings, cfg):
     """Telegram alert for a stored signal; never raises — a failed or
     skipped alert must not affect the rest of the run.
-
-    Gold (XAUUSD) waits for the MT5 ChartScreenShot — `/api/mt5/chart`
-    sends the photo alert once the terminal screenshot lands.
     """
     if not cfg.telegram_bot_token or not cfg.telegram_channel_id:
-        return
-    if is_gold_symbol(signal.symbol) and not getattr(signal, "chart_url", None):
-        print(f"[{signal.symbol}] defer Telegram until MT5 chart upload")
         return
     if signal.confidence < settings.min_alert_confidence:
         print(f"[{signal.symbol}] confidence {signal.confidence} below alert "

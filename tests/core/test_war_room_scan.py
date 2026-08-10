@@ -113,9 +113,6 @@ def test_scan_stores_floor_signal_on_manager_agree(monkeypatch):
         war_room_scan, "attach_chart", lambda signal, *a, **k: signal,
     )
     monkeypatch.setattr(
-        war_room_scan, "attach_chart_plan", lambda signal, *a, **k: signal,
-    )
-    monkeypatch.setattr(
         war_room_scan, "with_retry", lambda fn: fn(),
     )
     monkeypatch.setattr(

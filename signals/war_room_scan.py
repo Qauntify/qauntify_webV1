@@ -11,7 +11,7 @@ from dataclasses import replace
 
 import requests
 
-from signals.chart.pipeline import attach_chart, attach_chart_plan
+from signals.chart.pipeline import attach_chart
 from signals.config import Config, load_floor_config
 from signals.debate import FloorAgents, run_debate
 from signals.llm_client import SeaLionClient
@@ -147,17 +147,11 @@ def scan_symbol_floor(symbol, floor, agents, *, session=None):
         "confirm", confidence, debate["transcript"][-1]["message"],
     )
     signal = make_signal(setup, confirmation, [], timeframe=STORE_TIMEFRAME)
-    # Gold: plan + flatten for TickPush; crypto keeps matplotlib PNG.
-    if is_gold_symbol(symbol):
-        signal = attach_chart_plan(
-            signal, market.candles, h1_candles=market.h1_candles,
-        )
-    else:
-        signal = attach_chart(
-            signal, market.candles,
-            supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
-            session=session, h1_candles=market.h1_candles,
-        )
+    signal = attach_chart(
+        signal, market.candles,
+        supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
+        session=session, h1_candles=market.h1_candles,
+    )
     try:
         with_retry(lambda: save_signal(
             signal, cfg.supabase_url, cfg.supabase_service_key, session=session,
@@ -176,17 +170,13 @@ def scan_symbol_floor(symbol, floor, agents, *, session=None):
         print(f"[{symbol}] war-room debate save skipped ({type(exc).__name__})")
 
     if cfg.telegram_bot_token and cfg.telegram_channel_id:
-        # Gold: MT5 chart upload path sends the photo alert.
-        if is_gold_symbol(symbol) and not getattr(signal, "chart_url", None):
-            print(f"[{symbol}] war-room defer Telegram until MT5 chart upload")
-        else:
-            try:
-                with_retry(lambda: send_alert(
-                    signal, cfg.telegram_bot_token, cfg.telegram_channel_id,
-                ))
-                print(f"[{symbol}] war-room Telegram alert sent")
-            except Exception as exc:
-                print(f"[{symbol}] war-room Telegram failed ({type(exc).__name__})")
+        try:
+            with_retry(lambda: send_alert(
+                signal, cfg.telegram_bot_token, cfg.telegram_channel_id,
+            ))
+            print(f"[{symbol}] war-room Telegram alert sent")
+        except Exception as exc:
+            print(f"[{symbol}] war-room Telegram failed ({type(exc).__name__})")
 
     print(f"[{symbol}] WAR ROOM CONFIRMED {signal.direction.upper()} "
           f"(confidence {signal.confidence})")

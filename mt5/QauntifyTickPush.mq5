@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.25"
+#property version   "1.26"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -23,7 +23,7 @@ input string WebhookSecret     = "906f61d7dbd1aa2c72cc19a7a0382ce61434f8bd5d6d6c
 input int    MinIntervalMs     = 150;
 input double MinPriceMove      = 0.0;
 input int    BackfillBars      = 2000;  // closed M1 bars sent on init (chunked)
-input bool   UploadPendingCharts = true;
+input bool   UploadPendingCharts = false; // gold charts come from Python now
 input int    ChartPollSec      = 20;    // how often to ask for pending setups
 input int    ChartWidth        = 1280;  // terminal-style screenshot width
 input int    ChartHeight       = 720;

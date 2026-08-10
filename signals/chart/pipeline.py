@@ -37,11 +37,9 @@ def attach_chart(signal, candles, *, supabase_url, service_key, session=None,
 
 
 def attach_chart_plan(signal, candles, *, h1_candles=None):
-    """Gold / MT5 path: store plan + flatten draw fields, leave chart_url null.
+    """Optional plan-only attach (no PNG). Kept for tests / tooling.
 
-    TickPush polls pending setups, draws from flat indicators (including the
-    moving cloud CSV series), then ChartScreenShot uploads the real terminal.
-    Never raises — a plan failure must not block signal storage.
+    Prefer `attach_chart` for live gold + crypto publishes.
     """
     try:
         plan = build_chart_plan(candles, signal, h1_candles=h1_candles)
@@ -55,6 +53,6 @@ def attach_chart_plan(signal, candles, *, h1_candles=None):
             chart_data={"plan": plan, "candles": _snapshot(candles)},
         )
     except Exception as exc:  # noqa: BLE001 - best-effort; signal still publishes
-        print(f"[{signal.symbol}] MT5 chart plan failed "
-              f"({type(exc).__name__}: {exc}), pending will use scalars only")
+        print(f"[{signal.symbol}] chart plan failed "
+              f"({type(exc).__name__}: {exc}), continuing without plan")
         return signal
