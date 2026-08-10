@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.20"
+#property version   "1.21"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -25,7 +25,7 @@ input double MinPriceMove      = 0.0;
 input int    BackfillBars      = 2000;  // closed M1 bars sent on init (chunked)
 input bool   UploadPendingCharts = true;
 input int    ChartPollSec      = 20;    // how often to ask for pending setups
-input int    ChartWidth        = 720;   // screenshot width — keep ≤800 for fat candles
+input int    ChartWidth        = 400;   // narrow shot → fewer bars → native fat candles
 input int    ChartHeight       = 720;
 input int    ChartBarsVisible  = 30;    // target bars in the frame (hard-capped in code)
 input int    ChartScale        = 0;     // 0=most zoomed-in (widest candles) … 5=zoomed-out
@@ -435,13 +435,15 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
    ChartSetInteger(chartId, CHART_FOREGROUND, false);
    ChartSetInteger(chartId, CHART_SHOW_PERIOD_SEP, false);
    ChartSetInteger(chartId, CHART_SHOW_TRADE_LEVELS, false);
+   ChartSetInteger(chartId, CHART_SCALE, ChartScale);
    ChartNavigate(chartId, CHART_END, 0);
    ChartRedraw(chartId);
    Sleep(150);
 
    long visible = ChartGetInteger(chartId, CHART_WIDTH_IN_BARS);
    Print("QauntifyTickPush: zoom visible_bars=", visible,
-         " win_px=", ChartGetInteger(chartId, CHART_WIDTH_IN_PIXELS));
+         " win_px=", ChartGetInteger(chartId, CHART_WIDTH_IN_PIXELS),
+         " scale=", ChartGetInteger(chartId, CHART_SCALE));
 
    if(priceCount > 0)
      {
@@ -487,8 +489,16 @@ string OpenShotChart(const ENUM_TIMEFRAMES tf, long &chartId)
    ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
    ObjectSetInteger(0, name, OBJPROP_XDISTANCE, 8);
    ObjectSetInteger(0, name, OBJPROP_YDISTANCE, 8);
-   ObjectSetInteger(0, name, OBJPROP_XSIZE, 720);
-   ObjectSetInteger(0, name, OBJPROP_YSIZE, 720);
+   // Narrow embedded chart → CHART_SCALE 0 paints ~30–40 fat candles (720px
+   // still showed 70+ hairlines on the VPS even at max zoom).
+   int ox = ChartWidth;
+   if(ox < 320) ox = 320;
+   if(ox > 480) ox = 480;
+   int oy = ChartHeight;
+   if(oy < 480) oy = 720;
+   if(oy > 900) oy = 720;
+   ObjectSetInteger(0, name, OBJPROP_XSIZE, ox);
+   ObjectSetInteger(0, name, OBJPROP_YSIZE, oy);
    ObjectSetInteger(0, name, OBJPROP_BACK, false);
    ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
@@ -496,7 +506,7 @@ string OpenShotChart(const ENUM_TIMEFRAMES tf, long &chartId)
    ObjectSetInteger(0, name, OBJPROP_PERIOD, tf);
    ObjectSetInteger(0, name, OBJPROP_DATE_SCALE, true);
    ObjectSetInteger(0, name, OBJPROP_PRICE_SCALE, true);
-   ObjectSetInteger(0, name, OBJPROP_CHART_SCALE, 0); // max zoom-in
+   ObjectSetInteger(0, name, OBJPROP_CHART_SCALE, ChartScale);
    ChartRedraw(0);
    Sleep(800);
    chartId = ObjectGetInteger(0, name, OBJPROP_CHART_ID);
@@ -511,6 +521,8 @@ string OpenShotChart(const ENUM_TIMEFRAMES tf, long &chartId)
    ChartClearAllObjects(chartId);
    ChartSetInteger(chartId, CHART_MODE, (long)CHART_CANDLES);
    ChartSetInteger(chartId, CHART_SHOW_VOLUMES, 0);
+   ChartSetInteger(chartId, CHART_SCALE, ChartScale);
+   ObjectSetInteger(0, name, OBJPROP_CHART_SCALE, ChartScale);
    ChartNavigate(chartId, CHART_END, 0);
    ChartRedraw(chartId);
    Sleep(400);
@@ -769,17 +781,18 @@ bool ProcessOnePending(const string block)
    n = sn;
 
    ZoomToSetup(chartId, want, prices, n);
-   // Re-assert max zoom on the OBJ_CHART host (CHART_SCALE is a no-op there).
-   ObjectSetInteger(0, shotObj, OBJPROP_CHART_SCALE, 0);
+   // Re-assert zoom on the OBJ_CHART host + sub-chart.
+   ObjectSetInteger(0, shotObj, OBJPROP_CHART_SCALE, ChartScale);
+   ChartSetInteger(chartId, CHART_SCALE, ChartScale);
    ChartNavigate(chartId, CHART_END, 0);
    ChartRedraw(chartId);
    Sleep(600);
 
    string fileName = "qtp_chart_" + id + ".png";
-   // Hard-cap width so ChartScreenShot can't paint 100+ tiny M1 bars.
+   // Match OBJ_CHART size — wider screenshots just pack more hairline bars.
    int w = ChartWidth;
-   if(w > 720) w = 720;
-   if(w < 640) w = 640;
+   if(w > 480) w = 480;
+   if(w < 320) w = 320;
    int h = ChartHeight;
    if(h < 480) h = 720;
    if(h > 900) h = 720;

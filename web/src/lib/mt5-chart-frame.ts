@@ -1,58 +1,13 @@
-/** Crop MT5 ChartScreenShot to the right-hand setup frame and fatten candles.
+/** Soft-frame MT5 ChartScreenShot — crop + lanczos only.
  *
- * VPS ChartScreenShot packs hundreds of M1 bars as ~1px strokes. We keep the
- * right-hand setup slice, upscale, then horizontally dilate bright candle
- * pixels so bodies read as real candles (not hairlines).
+ * Never dilate candle pixels (that turns charts into neon slabs). We only
+ * keep the right-hand setup slice and upscale smoothly so labels stay clean.
  */
 import sharp from "sharp";
 
-const KEEP_RIGHT_FRACTION = 0.24;
+/** Keep the right half — mild zoom without destroying MT5 pixels. */
+const KEEP_RIGHT_FRACTION = 0.5;
 const OUT_SIZE = 720;
-/** How many pixels to expand each candle column left/right. */
-const CANDLE_FAT_RADIUS = 4;
-
-function isCandlePixel(r: number, g: number, b: number): boolean {
-  // MT5 bull candles are often pure (0,255,0); also catch teal/red strokes.
-  if (g > 70 && g >= r + 15 && g >= b + 15) return true;
-  if (r > 70 && r >= g + 15 && r >= b + 15) return true;
-  return false;
-}
-
-function fattenCandleColumns(
-  data: Buffer,
-  width: number,
-  height: number,
-  radius: number,
-): Buffer {
-  const out = Buffer.from(data);
-  const bpp = 4; // RGBA
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * bpp;
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const a = data[i + 3];
-      if (!isCandlePixel(r, g, b)) continue;
-      for (let dx = -radius; dx <= radius; dx++) {
-        const nx = x + dx;
-        if (nx < 0 || nx >= width) continue;
-        const j = (y * width + nx) * bpp;
-        // Don't paint over axis text (near-white).
-        const or_ = out[j];
-        const og = out[j + 1];
-        const ob = out[j + 2];
-        const bright = or_ > 180 && og > 180 && ob > 180;
-        if (bright) continue;
-        out[j] = r;
-        out[j + 1] = g;
-        out[j + 2] = b;
-        out[j + 3] = a;
-      }
-    }
-  }
-  return out;
-}
 
 export async function tightFrameSetupPng(png: Buffer): Promise<Buffer> {
   const meta = await sharp(png).metadata();
@@ -60,33 +15,26 @@ export async function tightFrameSetupPng(png: Buffer): Promise<Buffer> {
   const height = meta.height ?? 0;
   if (width < 200 || height < 200) return png;
 
-  const keep = Math.max(Math.floor(width * KEEP_RIGHT_FRACTION), 180);
+  // Narrow EA shots already have fat native candles — soft upscale only.
+  if (width <= 480) {
+    return sharp(png)
+      .resize(OUT_SIZE, OUT_SIZE, {
+        fit: "fill",
+        kernel: "lanczos3",
+      })
+      .png()
+      .toBuffer();
+  }
+
+  const keep = Math.max(Math.floor(width * KEEP_RIGHT_FRACTION), 280);
   const left = Math.max(width - keep, 0);
 
-  const framed = await sharp(png)
+  return sharp(png)
     .extract({ left, top: 0, width: keep, height })
     .resize(OUT_SIZE, OUT_SIZE, {
       fit: "fill",
-      kernel: "nearest",
+      kernel: "lanczos3",
     })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-
-  const fat = fattenCandleColumns(
-    framed.data,
-    framed.info.width,
-    framed.info.height,
-    CANDLE_FAT_RADIUS,
-  );
-
-  return sharp(fat, {
-    raw: {
-      width: framed.info.width,
-      height: framed.info.height,
-      channels: 4,
-    },
-  })
     .png()
     .toBuffer();
 }
