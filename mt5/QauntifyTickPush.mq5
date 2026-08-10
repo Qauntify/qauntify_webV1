@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.17"
+#property version   "1.19"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -424,17 +424,8 @@ void ChartClearAllObjects(const long chartId)
 void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
                  const double &prices[], const int priceCount)
   {
-   // Float a small chart window so scale-0 actually yields ~30 fat candles.
-   // On a maximized VPS screen, scale 0 still shows 200+ bars — then
-   // ChartScreenShot squishes them all into the PNG (thin scribble).
-   ChartSetInteger(chartId, CHART_IS_DOCKED, false);
-   ChartSetInteger(chartId, CHART_FLOAT_LEFT, 40);
-   ChartSetInteger(chartId, CHART_FLOAT_TOP, 40);
-   ChartSetInteger(chartId, CHART_FLOAT_RIGHT, 40 + 720);
-   ChartSetInteger(chartId, CHART_FLOAT_BOTTOM, 40 + 720);
-   ChartRedraw(chartId);
-   Sleep(200);
-
+   // For OBJ_CHART sub-charts, CHART_SCALE is ignored — scale is set via
+   // OBJPROP_CHART_SCALE on the host object. Still navigate + price-lock here.
    ChartSetInteger(chartId, CHART_AUTOSCROLL, false);
    ChartSetInteger(chartId, CHART_SHIFT, true);
    ChartSetDouble(chartId, CHART_SHIFT_SIZE, 12.0);
@@ -444,28 +435,12 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
    ChartSetInteger(chartId, CHART_FOREGROUND, false);
    ChartSetInteger(chartId, CHART_SHOW_PERIOD_SEP, false);
    ChartSetInteger(chartId, CHART_SHOW_TRADE_LEVELS, false);
-   ChartSetInteger(chartId, CHART_SHOW_OHLC, false);
-   ChartSetInteger(chartId, CHART_SHOW_BID_LINE, true);
-   ChartSetInteger(chartId, CHART_SHOW_ASK_LINE, false);
-   ChartSetInteger(chartId, CHART_BRING_TO_TOP, true);
+   ChartNavigate(chartId, CHART_END, 0);
+   ChartRedraw(chartId);
+   Sleep(150);
 
-   int wantBars = ChartBarsVisible;
-   if(wantBars < 20) wantBars = 20;
-   if(wantBars > 36) wantBars = 36;
-
-   long visible = 9999;
-   for(int attempt = 0; attempt < 16; attempt++)
-     {
-      ChartSetInteger(chartId, CHART_SCALE, 0);
-      ChartNavigate(chartId, CHART_END, 0);
-      ChartRedraw(chartId);
-      Sleep(120);
-      visible = ChartGetInteger(chartId, CHART_WIDTH_IN_BARS);
-      if(visible > 0 && visible <= wantBars + 6)
-         break;
-     }
+   long visible = ChartGetInteger(chartId, CHART_WIDTH_IN_BARS);
    Print("QauntifyTickPush: zoom visible_bars=", visible,
-         " want~", wantBars,
          " win_px=", ChartGetInteger(chartId, CHART_WIDTH_IN_PIXELS));
 
    if(priceCount > 0)
@@ -493,8 +468,60 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
      }
 
    ChartRedraw(chartId);
-   Sleep(500);
+   Sleep(400);
    ChartRedraw(chartId);
+  }
+
+string OpenShotChart(const ENUM_TIMEFRAMES tf, long &chartId)
+  {
+   // Fixed-pixel OBJ_CHART so scale-0 yields ~30 fat candles (ChartOpen on a
+   // maximized VPS window still shows 200+ bars at scale 0).
+   string name = "QTP_SHOT_CHART";
+   ObjectDelete(0, name);
+   if(!ObjectCreate(0, name, OBJ_CHART, 0, 0, 0))
+     {
+      Print("QauntifyTickPush: OBJ_CHART create failed ", GetLastError());
+      chartId = -1;
+      return "";
+     }
+   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, 8);
+   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, 8);
+   ObjectSetInteger(0, name, OBJPROP_XSIZE, 720);
+   ObjectSetInteger(0, name, OBJPROP_YSIZE, 720);
+   ObjectSetInteger(0, name, OBJPROP_BACK, false);
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
+   ObjectSetString(0, name, OBJPROP_SYMBOL, _Symbol);
+   ObjectSetInteger(0, name, OBJPROP_PERIOD, tf);
+   ObjectSetInteger(0, name, OBJPROP_DATE_SCALE, true);
+   ObjectSetInteger(0, name, OBJPROP_PRICE_SCALE, true);
+   ObjectSetInteger(0, name, OBJPROP_CHART_SCALE, 0); // max zoom-in
+   ChartRedraw(0);
+   Sleep(800);
+   chartId = ObjectGetInteger(0, name, OBJPROP_CHART_ID);
+   if(chartId <= 0)
+     {
+      Print("QauntifyTickPush: OBJPROP_CHART_ID missing");
+      ObjectDelete(0, name);
+      return "";
+     }
+   // Drop any template junk inside the embedded chart.
+   StripForeignIndicators(chartId);
+   ChartClearAllObjects(chartId);
+   ChartSetInteger(chartId, CHART_MODE, (long)CHART_CANDLES);
+   ChartSetInteger(chartId, CHART_SHOW_VOLUMES, 0);
+   ChartNavigate(chartId, CHART_END, 0);
+   ChartRedraw(chartId);
+   Sleep(400);
+   return name;
+  }
+
+void CloseShotChart(const string objName, const long chartId)
+  {
+   if(StringLen(objName) > 0)
+      ObjectDelete(0, objName);
+   ChartRedraw(0);
   }
 
 // Brace-matched object extract so long CSV string fields stay intact.
@@ -568,17 +595,13 @@ bool ProcessOnePending(const string block)
       return false;
      }
 
-   long chartId = ChartOpen(_Symbol, want);
-   if(chartId <= 0)
+   long chartId = -1;
+   string shotObj = OpenShotChart(want, chartId);
+   if(chartId <= 0 || StringLen(shotObj) < 1)
      {
-      Print("QauntifyTickPush: ChartOpen failed ", GetLastError());
+      Print("QauntifyTickPush: shot chart open failed");
       return false;
      }
-   Sleep(2500);
-   // ChartOpen often loads a template (SMC zigzags / other indicators).
-   // Wipe those first so the screenshot only shows our structure markings.
-   StripForeignIndicators(chartId);
-   ChartClearAllObjects(chartId);
    ChartPinsClearId(chartId);
 
    fvgStart = SnapBarTime(want, fvgStart);
@@ -757,7 +780,7 @@ bool ProcessOnePending(const string block)
    if(h < 480) h = 720;
    if(h > 900) h = 720;
    bool shot = ChartScreenShot(chartId, fileName, w, h, ALIGN_RIGHT);
-   ChartClose(chartId);
+   CloseShotChart(shotObj, chartId);
    if(!shot)
      {
       Print("QauntifyTickPush: ChartScreenShot failed ", GetLastError());
