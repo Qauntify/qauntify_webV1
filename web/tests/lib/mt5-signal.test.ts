@@ -68,6 +68,7 @@ describe("parseMt5ChartBody", () => {
     expect(out.signalId).toBe(signalId);
     expect(out.kind).toBe("setup");
     expect(out.png.equals(png)).toBe(true);
+    expect(out.tightFrame).toBe(false);
   });
 
   it("accepts data-URL and outcome kind", () => {
@@ -79,6 +80,19 @@ describe("parseMt5ChartBody", () => {
     expect("error" in out).toBe(false);
     if ("error" in out) return;
     expect(out.kind).toBe("outcome");
+    expect(out.tightFrame).toBe(false);
+  });
+
+  it("parses tight_frame flag", () => {
+    const out = parseMt5ChartBody({
+      signal_id: signalId,
+      kind: "setup",
+      tight_frame: true,
+      image_base64: png.toString("base64"),
+    });
+    expect("error" in out).toBe(false);
+    if ("error" in out) return;
+    expect(out.tightFrame).toBe(true);
   });
 
   it("rejects non-uuid signal_id", () => {
