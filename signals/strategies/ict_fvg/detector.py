@@ -178,10 +178,13 @@ def detect_setup(symbol, candles, atr14, htf_trend=None):
                     "sweep_time": window[sweep_i].open_time,
                     "choch_time": window[choch_i].open_time,
                 }
-                if retest_i is not None:
+                # Always store FVG geometry for the chart when a gap exists —
+                # retest only adds the entry-path marker / structure label.
+                if fvg_i is not None and gap_bottom is not None and gap_top is not None:
                     indicators["fvg_bottom"] = gap_bottom
                     indicators["fvg_top"] = gap_top
                     indicators["fvg_start_time"] = window[max(fvg_i - 2, 0)].open_time
+                if retest_i is not None:
                     indicators["retest_time"] = window[retest_i].open_time
                 setup = _build(
                     symbol, "long", entry, stop, atr_value, indicators, htf_trend,
@@ -255,10 +258,11 @@ def detect_setup(symbol, candles, atr14, htf_trend=None):
                     "sweep_time": window[sweep_i].open_time,
                     "choch_time": window[choch_i].open_time,
                 }
-                if retest_i is not None:
+                if fvg_i is not None and gap_bottom is not None and gap_top is not None:
                     indicators["fvg_bottom"] = gap_bottom
                     indicators["fvg_top"] = gap_top
                     indicators["fvg_start_time"] = window[max(fvg_i - 2, 0)].open_time
+                if retest_i is not None:
                     indicators["retest_time"] = window[retest_i].open_time
                 setup = _build(
                     symbol, "short", entry, stop, atr_value, indicators, htf_trend,

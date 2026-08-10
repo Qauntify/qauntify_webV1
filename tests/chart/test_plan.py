@@ -30,13 +30,33 @@ def test_ict_fvg_plan_has_fvg_zone_and_markers():
         "strategy": "ict_fvg", "fvg_top": 2007.0, "fvg_bottom": 2005.7,
         "fvg_start_time": 190, "choch_level": 2008.0, "choch_time": 200,
         "sweep_level": 2004.5, "sweep_low": 2002.3, "sweep_time": 170,
-        "retest_time": 230,
+        "retest_time": 230, "structure": "bullish_choch_fvg",
     }
     plan = build_chart_plan([], _signal(ind))
     fvg = _kinds(plan, "fvg")
     assert len(fvg) == 1 and fvg[0]["kind"] == "zone"
     markers = [a for a in plan if a["kind"] == "marker"]
     assert {m["order"] for m in markers} == {1, 2, 3}
+    labels = " ".join(a.get("label", "") for a in plan)
+    assert "Liquidity sweep" in labels
+    assert "CHoCH" in labels
+    assert "Fair Value Gap" in labels
+    assert "FVG retest" in labels
+    assert "SSL" in labels  # long → sell-side liquidity swept
+
+
+def test_ict_fvg_plan_draws_fvg_without_retest_marker():
+    ind = {
+        "strategy": "ict_fvg", "structure": "bullish_choch",
+        "fvg_top": 2007.0, "fvg_bottom": 2005.7, "fvg_start_time": 190,
+        "choch_level": 2008.0, "choch_time": 200,
+        "sweep_level": 2004.5, "sweep_low": 2002.3, "sweep_time": 170,
+    }
+    plan = build_chart_plan([], _signal(ind))
+    assert _kinds(plan, "fvg")
+    markers = [a for a in plan if a["kind"] == "marker"]
+    assert {m["order"] for m in markers} == {1, 2}
+    assert not any("retest" in (m.get("label") or "") for m in markers)
 
 
 def test_ict_smc_plan_has_structure_markers():

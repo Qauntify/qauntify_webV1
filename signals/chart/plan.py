@@ -23,17 +23,25 @@ def _trade_levels(signal):
 def _ict_smc(candles, signal):
     ind = signal.indicators
     out = []
+    # BSL = buy-side liquidity (above highs); SSL = sell-side (below lows).
+    liq_tag = "SSL" if signal.direction == "long" else "BSL"
     if "sweep_level" in ind:
-        out.append(level(ind["sweep_level"], "Swept liquidity", "liquidity",
-                         style="dotted", start_time=ind.get("sweep_time")))
+        out.append(level(
+            ind["sweep_level"], f"Swept liquidity ({liq_tag})", "liquidity",
+            style="dotted", start_time=ind.get("sweep_time"),
+        ))
     if "choch_level" in ind:
         out.append(level(ind["choch_level"], "CHoCH level", "choch",
                          style="dashed", start_time=ind.get("choch_time")))
     sweep_px = ind.get("sweep_low") if signal.direction == "long" else ind.get("sweep_high")
     if ind.get("sweep_time") is not None and sweep_px is not None:
-        out.append(marker(ind["sweep_time"], sweep_px, "Liquidity sweep", "liquidity", 1))
+        out.append(marker(
+            ind["sweep_time"], sweep_px, "Liquidity sweep", "liquidity", 1,
+        ))
     if ind.get("choch_time") is not None and "choch_level" in ind:
-        out.append(marker(ind["choch_time"], ind["choch_level"], "CHoCH ✓", "choch", 2))
+        out.append(marker(
+            ind["choch_time"], ind["choch_level"], "CHoCH", "choch", 2,
+        ))
     return out
 
 

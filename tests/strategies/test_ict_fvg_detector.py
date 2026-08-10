@@ -83,6 +83,19 @@ def test_detect_ict_fvg_none_without_retest():
     assert setup.indicators["structure"] in ("bullish_choch", "bullish_choch_fvg")
 
 
+def test_detect_ict_fvg_stores_fvg_geometry_without_retest():
+    """FVG box must still be chartable when entry is sweep+CHoCH only."""
+    candles = _bullish_ict_fvg_series()[:-1]
+    atr14 = [4.0] * len(candles)
+    setup = detect_setup("BTCUSDT", candles, atr14)
+    assert setup is not None
+    ind = setup.indicators
+    assert ind["structure"] == "bullish_choch"
+    assert "retest_time" not in ind
+    assert "fvg_top" in ind and "fvg_bottom" in ind and "fvg_start_time" in ind
+    assert ind["fvg_top"] > ind["fvg_bottom"]
+
+
 def test_detect_ict_fvg_accepts_older_retest():
     """Retest may be up to 12 bars before the latest close (hot volume mode)."""
     candles = _bullish_ict_fvg_series()

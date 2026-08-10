@@ -15,6 +15,8 @@ import pandas as pd  # noqa: E402
 
 # Fewer bars → fatter candles; 1280×720-ish at higher DPI for phone clarity.
 RENDER_BARS = 40
+# Widen when Liquidity / CHoCH / FVG sit left of a blind 40-bar trim.
+RENDER_BARS_MAX = 80
 FIG_SIZE = (12.8, 7.2)
 FIG_DPI = 150
 _BG = "#000000"
@@ -249,27 +251,77 @@ def _to_png(fig) -> bytes:
     return buf.getvalue()
 
 
-def render_chart(candles, plan, signal, title=None) -> bytes:
-    """Render the last RENDER_BARS candles + annotations to PNG bytes.
+def _plan_times(plan) -> list:
+    """open_time values referenced by structure / trade annotations."""
+    times = []
+    for a in plan or []:
+        for key in ("time", "start_time", "end_time"):
+            t = a.get(key)
+            if t is not None:
+                times.append(t)
+    return times
 
-    Pass MORE than RENDER_BARS candles when the plan draws indicator series:
-    the builder computes them over everything given, and only the final
-    RENDER_BARS are displayed. Passing exactly the view would recompute every
-    indicator from a cold start inside it, showing warm-up artefacts instead of
-    the values the detector actually saw.
+
+def view_for_plan(candles, plan, *, min_bars=RENDER_BARS,
+                  max_bars=RENDER_BARS_MAX):
+    """Candles shown on the setup chart so structure markers stay on-screen.
+
+    Starts a couple of bars before the earliest plan timestamp (sweep / FVG /
+    CHoCH), through the latest candle. Floors at `min_bars` when structure is
+    tight; caps at `max_bars` so candles stay readable on phone.
+    """
+    if not candles:
+        return []
+    times = _plan_times(plan)
+    if not times:
+        return candles[-min_bars:]
+    earliest = min(times)
+    start_i = 0
+    for i, c in enumerate(candles):
+        if c.open_time >= earliest:
+            start_i = max(0, i - 2)
+            break
+    view = candles[start_i:]
+    if len(view) < min_bars:
+        view = candles[-min_bars:] if len(candles) >= min_bars else list(candles)
+    if len(view) > max_bars:
+        view = view[-max_bars:]
+    return view
+
+
+def _setup_title(signal) -> str:
+    ind = signal.indicators or {}
+    title = (
+        f"{signal.symbol}  ·  {signal.timeframe}  ·  "
+        f"{signal.direction.upper()}  ·  {signal.confidence}%"
+    )
+    structure = ind.get("structure")
+    if structure:
+        title = f"{title}  ·  {structure}"
+    return title
+
+
+def render_chart(candles, plan, signal, title=None) -> bytes:
+    """Render setup candles + annotations to PNG bytes.
+
+    The view auto-fits to structure timestamps in `plan` (Liquidity / CHoCH /
+    FVG) so markers are not clipped off the left by a blind last-N trim.
+
+    Pass MORE than the view length when the plan draws indicator series: the
+    builder computes them over everything given, and only the fitted window is
+    displayed. Passing exactly the view would recompute every indicator from a
+    cold start inside it, showing warm-up artefacts instead of the values the
+    detector actually saw.
 
     `title` overrides the default headline for callers with no confidence score
     to show, such as a backtest replay.
     """
-    view = candles[-RENDER_BARS:]
+    view = view_for_plan(candles, plan)
     fig, ax, x_of, last_x = _base_plot(view)
     _draw(ax, plan, x_of, last_x)
     ax.set_ylim(*_price_bounds(view, plan))
     ax.set_title(
-        title or (
-            f"{signal.symbol}  ·  {signal.timeframe}  ·  "
-            f"{signal.direction.upper()}  ·  {signal.confidence}%"
-        ),
+        title or _setup_title(signal),
         color=_TEXT, fontsize=15, fontweight="bold", loc="left", pad=12,
     )
     return _to_png(fig)
