@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.16"
+#property version   "1.17"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -25,9 +25,9 @@ input double MinPriceMove      = 0.0;
 input int    BackfillBars      = 2000;  // closed M1 bars sent on init (chunked)
 input bool   UploadPendingCharts = true;
 input int    ChartPollSec      = 20;    // how often to ask for pending setups
-input int    ChartWidth        = 960;   // narrower = fewer bars visible (= tighter time zoom)
+input int    ChartWidth        = 720;   // screenshot width — keep ≤800 for fat candles
 input int    ChartHeight       = 720;
-input int    ChartBarsVisible  = 55;    // target bars in view
+input int    ChartBarsVisible  = 30;    // target bars in the frame (hard-capped in code)
 input int    ChartScale        = 0;     // 0=most zoomed-in (widest candles) … 5=zoomed-out
 
 double   lastSentMid    = 0.0;
@@ -424,13 +424,12 @@ void ChartClearAllObjects(const long chartId)
 void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
                  const double &prices[], const int priceCount)
   {
-   int scale = ChartScale;
-   if(scale < 0) scale = 0;
-   if(scale > 5) scale = 5;
+   // Always max zoom-in for setup shots — ignore a stale ChartScale input of 3–5.
+   int scale = 0;
 
    ChartSetInteger(chartId, CHART_AUTOSCROLL, false);
    ChartSetInteger(chartId, CHART_SHIFT, true);
-   ChartSetDouble(chartId, CHART_SHIFT_SIZE, 10.0);
+   ChartSetDouble(chartId, CHART_SHIFT_SIZE, 12.0);
    ChartSetInteger(chartId, CHART_SHOW_GRID, true);
    ChartSetInteger(chartId, CHART_SHOW_VOLUMES, 0);
    ChartSetInteger(chartId, CHART_MODE, (long)CHART_CANDLES);
@@ -442,26 +441,26 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
    ChartSetInteger(chartId, CHART_SHOW_ASK_LINE, false);
    ChartSetInteger(chartId, CHART_BRING_TO_TOP, true);
 
-   // Hammer scale + navigate — ChartSetInteger is async; keep redrawing until
-   // WIDTH_IN_BARS collapses toward ChartBarsVisible (or we give up).
-   int wantBars = ChartBarsVisible > 20 ? ChartBarsVisible : 55;
-   if(wantBars > 120) wantBars = 120;
+   // Hard cap: ~30 bars so the setup (sweep→entry) fills the frame.
+   int wantBars = ChartBarsVisible;
+   if(wantBars < 20) wantBars = 20;
+   if(wantBars > 36) wantBars = 36;
+
    long visible = 9999;
-   for(int attempt = 0; attempt < 12; attempt++)
+   for(int attempt = 0; attempt < 16; attempt++)
      {
-      ChartSetInteger(chartId, CHART_SCALE, scale);
+      ChartSetInteger(chartId, CHART_SCALE, 0);
       ChartNavigate(chartId, CHART_END, 0);
       ChartRedraw(chartId);
-      Sleep(120);
+      Sleep(100);
       visible = ChartGetInteger(chartId, CHART_WIDTH_IN_BARS);
-      if(visible > 0 && visible <= wantBars + 8)
+      if(visible > 0 && visible <= wantBars + 4)
          break;
-      // Still too wide → force max zoom-in regardless of input.
-      scale = 0;
      }
-   Print("QauntifyTickPush: zoom visible_bars=", visible, " want~", wantBars,
-         " scale=", scale);
+   Print("QauntifyTickPush: zoom visible_bars=", visible, " want~", wantBars);
 
+   // Tight Y lock around entry/SL/structure only (TP2/TP3 excluded from bounds
+   // so they don't pull the camera out).
    if(priceCount > 0)
      {
       double lo = 0.0;
@@ -477,8 +476,9 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
       if(any)
         {
          double span = hi - lo;
-         if(span <= 0.0) span = MathMax(hi * 0.0008, _Point * 80);
-         double pad = MathMax(span * 0.22, _Point * 30);
+         if(span <= 0.0) span = MathMax(hi * 0.0005, _Point * 50);
+         // Small pad = heavy price zoom on the setup.
+         double pad = MathMax(span * 0.10, _Point * 25);
          ChartSetInteger(chartId, CHART_SCALEFIX, true);
          ChartSetInteger(chartId, CHART_SCALEFIX_11, false);
          ChartSetDouble(chartId, CHART_FIXED_MIN, lo - pad);
@@ -487,7 +487,7 @@ void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
      }
 
    ChartRedraw(chartId);
-   Sleep(400);
+   Sleep(500);
    ChartRedraw(chartId);
   }
 
@@ -707,36 +707,46 @@ bool ProcessOnePending(const string block)
       DrawLabel(chartId, "QTP_tp3_lbl", tRight, tp3, "TP3", colTp, ANCHOR_LEFT);
      }
 
+   // Y-zoom only on the core setup — TP2/TP3/cloud extremes stretch the frame.
    double prices[];
    ArrayResize(prices, 0);
    int n = 0;
    double seed[];
-   ArrayResize(seed, 20);
+   ArrayResize(seed, 16);
    int sn = 0;
-   seed[sn++] = entry; seed[sn++] = stop; seed[sn++] = tp1;
-   if(tp2 > 0.0) seed[sn++] = tp2;
-   if(tp3 > 0.0) seed[sn++] = tp3;
+   seed[sn++] = entry;
+   seed[sn++] = stop;
+   seed[sn++] = tp1;
    if(fvgTop > 0.0) seed[sn++] = fvgTop;
    if(fvgBot > 0.0) seed[sn++] = fvgBot;
-   if(cloudHigh > 0.0) seed[sn++] = cloudHigh;
-   if(cloudLow > 0.0) seed[sn++] = cloudLow;
+   if(sweepLevel > 0.0) seed[sn++] = sweepLevel;
+   if(sweepLow > 0.0) seed[sn++] = sweepLow;
+   if(sweepHigh > 0.0) seed[sn++] = sweepHigh;
+   if(chochLevel > 0.0) seed[sn++] = chochLevel;
    if(zoneHigh > 0.0) seed[sn++] = zoneHigh;
    if(zoneLow > 0.0) seed[sn++] = zoneLow;
-   if(sweepLevel > 0.0) seed[sn++] = sweepLevel;
-   if(chochLevel > 0.0) seed[sn++] = chochLevel;
    if(ceTrail > 0.0) seed[sn++] = ceTrail;
+   // Flat cloud snapshot only (not the full series range).
+   if(cloudSegs <= 0)
+     {
+      if(cloudHigh > 0.0) seed[sn++] = cloudHigh;
+      if(cloudLow > 0.0) seed[sn++] = cloudLow;
+     }
    ArrayResize(prices, sn);
    for(int i = 0; i < sn; i++) prices[i] = seed[i];
    n = sn;
-   if(cloudSegs > 0)
-      CollectCsvPrices(cloudLo, cloudHi, prices, n);
 
    ZoomToSetup(chartId, want, prices, n);
    Sleep(600);
 
    string fileName = "qtp_chart_" + id + ".png";
-   int w = ChartWidth > 640 ? ChartWidth : 1280;
-   int h = ChartHeight > 360 ? ChartHeight : 720;
+   // Hard-cap width so ChartScreenShot can't paint 100+ tiny M1 bars.
+   int w = ChartWidth;
+   if(w > 720) w = 720;
+   if(w < 640) w = 640;
+   int h = ChartHeight;
+   if(h < 480) h = 720;
+   if(h > 900) h = 720;
    bool shot = ChartScreenShot(chartId, fileName, w, h, ALIGN_RIGHT);
    ChartClose(chartId);
    if(!shot)
