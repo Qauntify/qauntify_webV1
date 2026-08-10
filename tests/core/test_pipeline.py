@@ -561,7 +561,7 @@ def test_trading_sessions_define_all_three_streams():
     assert by_name["scalp"].timeframe == "15m"
     assert by_name["swing"].timeframe == "1h"
     assert by_name["swing"].confluence_timeframe == "4h"
-    assert by_name["swing"].strategy is None
+    assert by_name["swing"].strategy == "msnr"
     # Faster sessions must expire faster: a 5m setup left open for two weeks
     # is meaningless.
     assert by_name["super_scalp"].max_open_days <= by_name["scalp"].max_open_days
