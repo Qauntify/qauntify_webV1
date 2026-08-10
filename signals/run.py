@@ -809,11 +809,14 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         return ScanResult(candles=candles)
 
     signal = make_signal(setup, confirmation, [], timeframe=timeframe)
-    signal = attach_chart(
-        signal, candles,
-        supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
-        session=session,
-    )
+    # Gold (XAUUSD) charts come from MT5 ChartScreenShot via TickPush —
+    # skip Python matplotlib so the site shows the real terminal screen.
+    if not is_gold_symbol(symbol):
+        signal = attach_chart(
+            signal, candles,
+            supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
+            session=session,
+        )
     try:
         with_retry(lambda: save_signal(
             signal, cfg.supabase_url, cfg.supabase_service_key, session=session,

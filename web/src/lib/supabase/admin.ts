@@ -850,6 +850,61 @@ export async function setSignalChartUrl(
   }
 }
 
+/** Python gold scalp/swing/war-room rows waiting for an MT5 ChartScreenShot.
+ * BBMA is excluded — that EA uploads immediately after publish. */
+export type PendingSetupChart = {
+  id: string;
+  symbol: string;
+  timeframe: string;
+  direction: string;
+  entry: number;
+  stop_loss: number;
+  take_profit: number;
+  created_at: string;
+};
+
+const PENDING_CHART_TFS = ["5m", "15m", "1h", "floor"] as const;
+const PENDING_CHART_MAX_AGE_HOURS = 48;
+
+export async function listPendingSetupCharts(
+  symbol: string,
+  opts: { timeframe?: string; limit?: number } = {},
+): Promise<PendingSetupChart[] | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  const canon = symbol.trim().toUpperCase();
+  if (!canon) return null;
+  const limit = Math.min(Math.max(opts.limit ?? 5, 1), 20);
+  const since = new Date(
+    Date.now() - PENDING_CHART_MAX_AGE_HOURS * 60 * 60 * 1000,
+  ).toISOString();
+
+  let tfFilter = `timeframe=in.(${PENDING_CHART_TFS.join(",")})`;
+  if (opts.timeframe) {
+    const tf = opts.timeframe.trim().toLowerCase();
+    if (!(PENDING_CHART_TFS as readonly string[]).includes(tf)) return [];
+    tfFilter = `timeframe=eq.${encodeURIComponent(tf)}`;
+  }
+
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/signals?symbol=eq.${encodeURIComponent(canon)}` +
+        `&chart_url=is.null&shadow=is.false&closed_at=is.null` +
+        `&status=in.(open,tp1_hit,tp2_hit)` +
+        `&created_at=gte.${encodeURIComponent(since)}` +
+        `&${tfFilter}` +
+        `&select=id,symbol,timeframe,direction,entry,stop_loss,take_profit,created_at` +
+        `&order=created_at.asc&limit=${limit}`,
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
+    );
+    if (!response.ok) return null;
+    const rows = (await response.json()) as PendingSetupChart[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return null;
+  }
+}
+
 const TOOLS_BUCKET = "tools";
 
 export type ToolInsert = {

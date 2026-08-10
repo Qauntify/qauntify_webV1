@@ -147,11 +147,13 @@ def scan_symbol_floor(symbol, floor, agents, *, session=None):
         "confirm", confidence, debate["transcript"][-1]["message"],
     )
     signal = make_signal(setup, confirmation, [], timeframe=STORE_TIMEFRAME)
-    signal = attach_chart(
-        signal, market.candles,
-        supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
-        session=session,
-    )
+    # Gold charts: MT5 ChartScreenShot (TickPush pending poll), not matplotlib.
+    if not is_gold_symbol(symbol):
+        signal = attach_chart(
+            signal, market.candles,
+            supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
+            session=session,
+        )
     try:
         with_retry(lambda: save_signal(
             signal, cfg.supabase_url, cfg.supabase_service_key, session=session,
