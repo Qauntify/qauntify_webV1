@@ -7,9 +7,14 @@ maps to a brand color — builders never choose colors.
 """
 
 
-def zone(price_top, price_bottom, start_time, label, role):
-    """A shaded box (FVG, S/R zone). start_time=None means full chart width."""
-    return {
+def zone(price_top, price_bottom, start_time, label, role, end_time=None):
+    """A shaded box (FVG, S/R zone).
+
+    `start_time=None` means full chart width. For an FVG, pass `end_time` as
+    the right edge of the 3-candle gap (candle-3 open + one bar) so drawers
+    do not stretch the imbalance across the whole window.
+    """
+    out = {
         "kind": "zone",
         "price_top": price_top,
         "price_bottom": price_bottom,
@@ -17,6 +22,9 @@ def zone(price_top, price_bottom, start_time, label, role):
         "label": label,
         "role": role,
     }
+    if end_time is not None:
+        out["end_time"] = end_time
+    return out
 
 
 def level(price, label, role, style="solid", start_time=None):

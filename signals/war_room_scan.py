@@ -11,7 +11,7 @@ from dataclasses import replace
 
 import requests
 
-from signals.chart.pipeline import attach_chart
+from signals.chart.pipeline import attach_chart, attach_chart_plan
 from signals.config import Config, load_floor_config
 from signals.debate import FloorAgents, run_debate
 from signals.llm_client import SeaLionClient
@@ -147,12 +147,16 @@ def scan_symbol_floor(symbol, floor, agents, *, session=None):
         "confirm", confidence, debate["transcript"][-1]["message"],
     )
     signal = make_signal(setup, confirmation, [], timeframe=STORE_TIMEFRAME)
-    # Gold charts: MT5 ChartScreenShot (TickPush pending poll), not matplotlib.
-    if not is_gold_symbol(symbol):
+    # Gold: plan + flatten for TickPush; crypto keeps matplotlib PNG.
+    if is_gold_symbol(symbol):
+        signal = attach_chart_plan(
+            signal, market.candles, h1_candles=market.h1_candles,
+        )
+    else:
         signal = attach_chart(
             signal, market.candles,
             supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
-            session=session,
+            session=session, h1_candles=market.h1_candles,
         )
     try:
         with_retry(lambda: save_signal(

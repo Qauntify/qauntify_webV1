@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.12"
+#property version   "1.16"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -25,10 +25,10 @@ input double MinPriceMove      = 0.0;
 input int    BackfillBars      = 2000;  // closed M1 bars sent on init (chunked)
 input bool   UploadPendingCharts = true;
 input int    ChartPollSec      = 20;    // how often to ask for pending setups
-input int    ChartWidth        = 1280;
+input int    ChartWidth        = 960;   // narrower = fewer bars visible (= tighter time zoom)
 input int    ChartHeight       = 720;
-input int    ChartBarsVisible  = 48;   // target bars in view (hint for scale)
-input int    ChartScale        = 0;    // 0=most zoomed-in (widest candles) … 5=zoomed-out
+input int    ChartBarsVisible  = 55;    // target bars in view
+input int    ChartScale        = 0;     // 0=most zoomed-in (widest candles) … 5=zoomed-out
 
 double   lastSentMid    = 0.0;
 uint     lastSentTick   = 0;
@@ -299,49 +299,227 @@ void DrawArrow(const long chartId, const string name, const datetime t,
    ObjectSetInteger(chartId, name, OBJPROP_HIDDEN, true);
   }
 
+int SplitCsv(const string csv, string &parts[])
+  {
+   ArrayResize(parts, 0);
+   if(StringLen(csv) < 1) return 0;
+   string work = csv;
+   StringReplace(work, " ", "");
+   string tmp[];
+   int count = StringSplit(work, ',', tmp);
+   if(count <= 0) return 0;
+   ArrayResize(parts, count);
+   for(int i = 0; i < count; i++)
+      parts[i] = tmp[i];
+   return count;
+  }
+
+// Moving cloud = stepped rectangles between consecutive (t, lo, hi) points.
+// Flat cloud_high/cloud_low is only a fallback when series is missing.
+int DrawCloudBand(const long chartId, const string tCsv, const string loCsv,
+                  const string hiCsv, const color border, const color fill)
+  {
+   string ts[], los[], his[];
+   int nt = SplitCsv(tCsv, ts);
+   int nlo = SplitCsv(loCsv, los);
+   int nhi = SplitCsv(hiCsv, his);
+   int n = nt;
+   if(nlo < n) n = nlo;
+   if(nhi < n) n = nhi;
+   if(n < 2) return 0;
+
+   int drawn = 0;
+   for(int i = 0; i < n - 1; i++)
+     {
+      datetime t0 = (datetime)StringToInteger(ts[i]);
+      datetime t1 = (datetime)StringToInteger(ts[i + 1]);
+      double lo = StringToDouble(los[i]);
+      double hi = StringToDouble(his[i]);
+      if(t1 <= t0 || hi <= lo) continue;
+      string tag = "cloud_" + IntegerToString(i);
+      string name = "QTP_" + tag;
+      ObjectDelete(chartId, name);
+      if(!ObjectCreate(chartId, name, OBJ_RECTANGLE, 0, t0, hi, t1, lo))
+         continue;
+      ObjectSetInteger(chartId, name, OBJPROP_COLOR, border);
+      ObjectSetInteger(chartId, name, OBJPROP_STYLE, STYLE_SOLID);
+      ObjectSetInteger(chartId, name, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(chartId, name, OBJPROP_FILL, true);
+      ObjectSetInteger(chartId, name, OBJPROP_BACK, true);
+      ObjectSetInteger(chartId, name, OBJPROP_BGCOLOR, fill);
+      ObjectSetInteger(chartId, name, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(chartId, name, OBJPROP_HIDDEN, true);
+      drawn++;
+     }
+   if(drawn > 0)
+     {
+      datetime tLabel = (datetime)StringToInteger(ts[0]);
+      double hi0 = StringToDouble(his[0]);
+      DrawLabel(chartId, "QTP_cloud_lbl", tLabel, hi0, "Cloud", border,
+                ANCHOR_LEFT_LOWER);
+     }
+   return drawn;
+  }
+
+void CollectCsvPrices(const string loCsv, const string hiCsv,
+                      double &prices[], int &n)
+  {
+   string los[], his[];
+   int nlo = SplitCsv(loCsv, los);
+   int nhi = SplitCsv(hiCsv, his);
+   for(int i = 0; i < nlo; i++)
+     {
+      double v = StringToDouble(los[i]);
+      if(v > 0.0)
+        {
+         ArrayResize(prices, n + 1);
+         prices[n++] = v;
+        }
+     }
+   for(int i = 0; i < nhi; i++)
+     {
+      double v = StringToDouble(his[i]);
+      if(v > 0.0)
+        {
+         ArrayResize(prices, n + 1);
+         prices[n++] = v;
+        }
+     }
+  }
+
+datetime CloudSeriesLeft(const string tCsv)
+  {
+   string ts[];
+   if(SplitCsv(tCsv, ts) < 1) return 0;
+   return (datetime)StringToInteger(ts[0]);
+  }
+
+void StripForeignIndicators(const long chartId)
+  {
+   int windows = (int)ChartGetInteger(chartId, CHART_WINDOWS_TOTAL);
+   if(windows < 1) windows = 1;
+   for(int w = windows - 1; w >= 0; w--)
+     {
+      int total = ChartIndicatorsTotal(chartId, w);
+      for(int i = total - 1; i >= 0; i--)
+        {
+         string name = ChartIndicatorName(chartId, w, i);
+         if(StringLen(name) > 0)
+            ChartIndicatorDelete(chartId, w, name);
+        }
+     }
+  }
+
+void ChartClearAllObjects(const long chartId)
+  {
+   int total = ObjectsTotal(chartId, -1, -1);
+   for(int i = total - 1; i >= 0; i--)
+     {
+      string name = ObjectName(chartId, i, -1, -1);
+      if(StringLen(name) > 0)
+         ObjectDelete(chartId, name);
+     }
+  }
+
 void ZoomToSetup(const long chartId, const ENUM_TIMEFRAMES tf,
                  const double &prices[], const int priceCount)
   {
-   int wantBars = ChartBarsVisible;
-   if(wantBars < 30) wantBars = 30;
-   if(wantBars > 120) wantBars = 120;
    int scale = ChartScale;
    if(scale < 0) scale = 0;
    if(scale > 5) scale = 5;
 
    ChartSetInteger(chartId, CHART_AUTOSCROLL, false);
    ChartSetInteger(chartId, CHART_SHIFT, true);
+   ChartSetDouble(chartId, CHART_SHIFT_SIZE, 10.0);
    ChartSetInteger(chartId, CHART_SHOW_GRID, true);
-   ChartSetInteger(chartId, CHART_SHOW_VOLUMES, CHART_VOLUME_HIDE);
-   ChartSetInteger(chartId, CHART_MODE, CHART_CANDLES);
-   ChartSetInteger(chartId, CHART_SCALE, scale);
-   ChartNavigate(chartId, CHART_END, 0);
+   ChartSetInteger(chartId, CHART_SHOW_VOLUMES, 0);
+   ChartSetInteger(chartId, CHART_MODE, (long)CHART_CANDLES);
+   ChartSetInteger(chartId, CHART_FOREGROUND, false);
+   ChartSetInteger(chartId, CHART_SHOW_PERIOD_SEP, false);
+   ChartSetInteger(chartId, CHART_SHOW_TRADE_LEVELS, false);
+   ChartSetInteger(chartId, CHART_SHOW_OHLC, false);
+   ChartSetInteger(chartId, CHART_SHOW_BID_LINE, true);
+   ChartSetInteger(chartId, CHART_SHOW_ASK_LINE, false);
+   ChartSetInteger(chartId, CHART_BRING_TO_TOP, true);
 
-   // Lock price axis tightly around setup levels so Entry/SL/TP dominate.
+   // Hammer scale + navigate — ChartSetInteger is async; keep redrawing until
+   // WIDTH_IN_BARS collapses toward ChartBarsVisible (or we give up).
+   int wantBars = ChartBarsVisible > 20 ? ChartBarsVisible : 55;
+   if(wantBars > 120) wantBars = 120;
+   long visible = 9999;
+   for(int attempt = 0; attempt < 12; attempt++)
+     {
+      ChartSetInteger(chartId, CHART_SCALE, scale);
+      ChartNavigate(chartId, CHART_END, 0);
+      ChartRedraw(chartId);
+      Sleep(120);
+      visible = ChartGetInteger(chartId, CHART_WIDTH_IN_BARS);
+      if(visible > 0 && visible <= wantBars + 8)
+         break;
+      // Still too wide → force max zoom-in regardless of input.
+      scale = 0;
+     }
+   Print("QauntifyTickPush: zoom visible_bars=", visible, " want~", wantBars,
+         " scale=", scale);
+
    if(priceCount > 0)
      {
-      double lo = prices[0];
-      double hi = prices[0];
-      for(int i = 1; i < priceCount; i++)
+      double lo = 0.0;
+      double hi = 0.0;
+      bool any = false;
+      for(int i = 0; i < priceCount; i++)
         {
          if(prices[i] <= 0.0) continue;
+         if(!any) { lo = hi = prices[i]; any = true; continue; }
          if(prices[i] < lo) lo = prices[i];
          if(prices[i] > hi) hi = prices[i];
         }
-      double span = hi - lo;
-      if(span <= 0.0) span = MathMax(hi * 0.001, _Point * 50);
-      double pad = span * 0.22;
-      ChartSetInteger(chartId, CHART_SCALEFIX, true);
-      ChartSetDouble(chartId, CHART_FIXED_MIN, lo - pad);
-      ChartSetDouble(chartId, CHART_FIXED_MAX, hi + pad);
+      if(any)
+        {
+         double span = hi - lo;
+         if(span <= 0.0) span = MathMax(hi * 0.0008, _Point * 80);
+         double pad = MathMax(span * 0.22, _Point * 30);
+         ChartSetInteger(chartId, CHART_SCALEFIX, true);
+         ChartSetInteger(chartId, CHART_SCALEFIX_11, false);
+         ChartSetDouble(chartId, CHART_FIXED_MIN, lo - pad);
+         ChartSetDouble(chartId, CHART_FIXED_MAX, hi + pad);
+        }
      }
 
-   // Nudge so ~ChartBarsVisible candles fit (scale already set).
-   int total = Bars(_Symbol, tf);
-   if(total > wantBars)
-      ChartNavigate(chartId, CHART_END, 0);
-
    ChartRedraw(chartId);
+   Sleep(400);
+   ChartRedraw(chartId);
+  }
+
+// Brace-matched object extract so long CSV string fields stay intact.
+string ExtractJsonObjectFromId(const string json, const int idPos)
+  {
+   int objStart = idPos;
+   for(int back = idPos; back >= 0 && back > idPos - 120; back--)
+     {
+      if(StringGetCharacter(json, back) == '{')
+        {
+         objStart = back;
+         break;
+        }
+     }
+   int depth = 0;
+   bool inStr = false;
+   for(int i = objStart; i < StringLen(json); i++)
+     {
+      ushort ch = StringGetCharacter(json, i);
+      if(ch == '"' && (i == 0 || StringGetCharacter(json, i - 1) != '\\'))
+         inStr = !inStr;
+      if(inStr) continue;
+      if(ch == '{') depth++;
+      else if(ch == '}')
+        {
+         depth--;
+         if(depth == 0)
+            return StringSubstr(json, objStart, i - objStart + 1);
+        }
+     }
+   return "";
   }
 
 bool ProcessOnePending(const string block)
@@ -360,6 +538,7 @@ bool ProcessOnePending(const string block)
    double fvgTop = ExtractJsonNumber(block, "fvg_top");
    double fvgBot = ExtractJsonNumber(block, "fvg_bottom");
    datetime fvgStart = (datetime)ExtractJsonNumber(block, "fvg_start");
+   datetime fvgEnd = (datetime)ExtractJsonNumber(block, "fvg_end");
    double sweepLevel = ExtractJsonNumber(block, "sweep_level");
    double sweepLow = ExtractJsonNumber(block, "sweep_low");
    double sweepHigh = ExtractJsonNumber(block, "sweep_high");
@@ -368,6 +547,9 @@ bool ProcessOnePending(const string block)
    datetime chochTime = (datetime)ExtractJsonNumber(block, "choch_time");
    double cloudHigh = ExtractJsonNumber(block, "cloud_high");
    double cloudLow = ExtractJsonNumber(block, "cloud_low");
+   string cloudT = ExtractJsonString(block, "cloud_t");
+   string cloudLo = ExtractJsonString(block, "cloud_lo");
+   string cloudHi = ExtractJsonString(block, "cloud_hi");
    double zoneHigh = ExtractJsonNumber(block, "zone_high");
    double zoneLow = ExtractJsonNumber(block, "zone_low");
    double ceTrail = ExtractJsonNumber(block, "ce_trail");
@@ -386,72 +568,103 @@ bool ProcessOnePending(const string block)
       Print("QauntifyTickPush: ChartOpen failed ", GetLastError());
       return false;
      }
-   Sleep(1500);
+   Sleep(2500);
+   // ChartOpen often loads a template (SMC zigzags / other indicators).
+   // Wipe those first so the screenshot only shows our structure markings.
+   StripForeignIndicators(chartId);
+   ChartClearAllObjects(chartId);
    ChartPinsClearId(chartId);
 
-   // Snap event times onto real bars (broker time), else markers float wrongly.
    fvgStart = SnapBarTime(want, fvgStart);
+   fvgEnd = SnapBarTime(want, fvgEnd);
    sweepTime = SnapBarTime(want, sweepTime);
    chochTime = SnapBarTime(want, chochTime);
    retestTime = SnapBarTime(want, retestTime);
 
    datetime tNow = iTime(_Symbol, want, 0);
    if(tNow == 0) tNow = TimeCurrent();
-   datetime tRight = tNow + PeriodSeconds(want) * 6;
+   datetime tRight = tNow + PeriodSeconds(want) * 4;
 
-   // Left edge of drawings: earliest structure event, else ~45 bars back.
-   datetime tLeft = iTime(_Symbol, want, 45);
-   if(tLeft == 0) tLeft = tNow - PeriodSeconds(want) * 45;
+   int barsBack = ChartBarsVisible > 20 ? ChartBarsVisible : 48;
+   if(barsBack > 120) barsBack = 120;
+   datetime tLeft = iTime(_Symbol, want, barsBack);
+   if(tLeft == 0) tLeft = tNow - PeriodSeconds(want) * barsBack;
+
+   datetime cloudLeft = CloudSeriesLeft(cloudT);
+   if(cloudLeft > 0 && cloudLeft < tLeft)
+      tLeft = cloudLeft - PeriodSeconds(want);
    if(sweepTime > 0 && sweepTime < tLeft) tLeft = sweepTime - PeriodSeconds(want) * 2;
    if(chochTime > 0 && chochTime < tLeft) tLeft = chochTime - PeriodSeconds(want) * 2;
    if(fvgStart > 0 && fvgStart < tLeft) tLeft = fvgStart - PeriodSeconds(want);
    if(retestTime > 0 && retestTime < tLeft) tLeft = retestTime - PeriodSeconds(want);
 
-   // Bright fills (dark olive was invisible on black charts).
-   color colFvgBorder = C'20,184,166';      // teal
+   color colFvgBorder = C'20,184,166';
    color colFvgFill   = C'13,148,136';
-   color colCloudBorder = C'45,212,191';   // bright aqua
+   color colCloudBorder = C'45,212,191';
    color colCloudFill   = C'15,118,110';
    color colSrBorder = C'56,189,248';
    color colSrFill   = C'3,105,161';
-   color colLiq = C'245,158,11';           // amber
-   color colChoch = C'167,139,250';        // violet
+   color colLiq = C'245,158,11';
+   color colChoch = C'167,139,250';
    color colEntry = C'226,232,240';
    color colSl = C'251,113,133';
    color colTp = C'52,211,153';
    color colRetest = C'163,230,53';
 
-   if(cloudHigh > 0.0 && cloudLow > 0.0 && cloudHigh > cloudLow)
+   int cloudSegs = 0;
+   if(StringLen(cloudT) > 0 && StringLen(cloudLo) > 0 && StringLen(cloudHi) > 0)
+      cloudSegs = DrawCloudBand(chartId, cloudT, cloudLo, cloudHi,
+                                colCloudBorder, colCloudFill);
+   else if(cloudHigh > 0.0 && cloudLow > 0.0 && cloudHigh > cloudLow)
       DrawZone(chartId, "cloud", tLeft, tRight, cloudHigh, cloudLow,
-               colCloudBorder, colCloudFill, "Cloud");
+               colCloudBorder, colCloudFill, "Cloud (flat)");
+
    if(zoneHigh > 0.0 && zoneLow > 0.0 && zoneHigh > zoneLow)
       DrawZone(chartId, "sr", tLeft, tRight, zoneHigh, zoneLow,
                colSrBorder, colSrFill, "S/R");
+
+   // FVG = 3-candle imbalance box (start → end), not full chart width.
    if(fvgTop > 0.0 && fvgBot > 0.0 && fvgTop > fvgBot)
      {
       datetime fs = fvgStart > 0 ? fvgStart : tLeft;
-      DrawZone(chartId, "fvg", fs, tRight, fvgTop, fvgBot,
+      datetime fe = fvgEnd;
+      if(fe <= fs)
+         fe = fs + PeriodSeconds(want) * 3;
+      // Light forward extension past the gap (still active zone feel).
+      datetime fvgRight = fe + PeriodSeconds(want) * 2;
+      if(fvgRight > tRight) fvgRight = tRight;
+      DrawZone(chartId, "fvg", fs, fvgRight, fvgTop, fvgBot,
                colFvgBorder, colFvgFill, "FVG");
+      // 50% CE midline of the gap.
+      double ce = (fvgTop + fvgBot) * 0.5;
+      DrawHLine(chartId, "QTP_fvg_ce", fs, fvgRight, ce, colFvgBorder,
+                STYLE_DOT, 1);
      }
 
    datetime sweepFrom = sweepTime > 0 ? sweepTime : tLeft;
    if(sweepLevel > 0.0)
      {
-      DrawHLine(chartId, "QTP_sweep", sweepFrom, tRight, sweepLevel, colLiq, STYLE_DOT, 2);
-      DrawLabel(chartId, "QTP_sweep_lbl", sweepFrom, sweepLevel, "Liquidity", colLiq);
+      DrawHLine(chartId, "QTP_sweep", sweepFrom, tRight, sweepLevel, colLiq,
+                STYLE_DOT, 2);
+      DrawLabel(chartId, "QTP_sweep_lbl", sweepFrom, sweepLevel, "Liquidity",
+                colLiq);
      }
    datetime chochFrom = chochTime > 0 ? chochTime : tLeft;
    if(chochLevel > 0.0)
      {
-      DrawHLine(chartId, "QTP_choch", chochFrom, tRight, chochLevel, colChoch, STYLE_DASH, 2);
-      DrawLabel(chartId, "QTP_choch_lbl", chochFrom, chochLevel, "CHoCH", colChoch);
+      DrawHLine(chartId, "QTP_choch", chochFrom, tRight, chochLevel, colChoch,
+                STYLE_DASH, 2);
+      DrawLabel(chartId, "QTP_choch_lbl", chochFrom, chochLevel, "CHoCH",
+                colChoch);
      }
    if(ceTrail > 0.0)
      {
-      DrawHLine(chartId, "QTP_ce", tLeft, tRight, ceTrail, clrSilver, STYLE_DASHDOT, 1);
+      DrawHLine(chartId, "QTP_ce", tLeft, tRight, ceTrail, clrSilver,
+                STYLE_DASHDOT, 1);
       DrawLabel(chartId, "QTP_ce_lbl", tLeft, ceTrail, "CE", clrSilver);
      }
 
+   // Sweep marker sits on the wick extreme that grabbed liquidity.
    if(sweepTime > 0)
      {
       double sweepPx = isBuy
@@ -496,23 +709,27 @@ bool ProcessOnePending(const string block)
 
    double prices[];
    ArrayResize(prices, 0);
-   double cand[];
-   ArrayResize(cand, 16);
    int n = 0;
-   cand[n++] = entry; cand[n++] = stop; cand[n++] = tp1;
-   if(tp2 > 0.0) cand[n++] = tp2;
-   if(tp3 > 0.0) cand[n++] = tp3;
-   if(fvgTop > 0.0) cand[n++] = fvgTop;
-   if(fvgBot > 0.0) cand[n++] = fvgBot;
-   if(cloudHigh > 0.0) cand[n++] = cloudHigh;
-   if(cloudLow > 0.0) cand[n++] = cloudLow;
-   if(zoneHigh > 0.0) cand[n++] = zoneHigh;
-   if(zoneLow > 0.0) cand[n++] = zoneLow;
-   if(sweepLevel > 0.0) cand[n++] = sweepLevel;
-   if(chochLevel > 0.0) cand[n++] = chochLevel;
-   if(ceTrail > 0.0) cand[n++] = ceTrail;
-   ArrayResize(prices, n);
-   for(int i = 0; i < n; i++) prices[i] = cand[i];
+   double seed[];
+   ArrayResize(seed, 20);
+   int sn = 0;
+   seed[sn++] = entry; seed[sn++] = stop; seed[sn++] = tp1;
+   if(tp2 > 0.0) seed[sn++] = tp2;
+   if(tp3 > 0.0) seed[sn++] = tp3;
+   if(fvgTop > 0.0) seed[sn++] = fvgTop;
+   if(fvgBot > 0.0) seed[sn++] = fvgBot;
+   if(cloudHigh > 0.0) seed[sn++] = cloudHigh;
+   if(cloudLow > 0.0) seed[sn++] = cloudLow;
+   if(zoneHigh > 0.0) seed[sn++] = zoneHigh;
+   if(zoneLow > 0.0) seed[sn++] = zoneLow;
+   if(sweepLevel > 0.0) seed[sn++] = sweepLevel;
+   if(chochLevel > 0.0) seed[sn++] = chochLevel;
+   if(ceTrail > 0.0) seed[sn++] = ceTrail;
+   ArrayResize(prices, sn);
+   for(int i = 0; i < sn; i++) prices[i] = seed[i];
+   n = sn;
+   if(cloudSegs > 0)
+      CollectCsvPrices(cloudLo, cloudHi, prices, n);
 
    ZoomToSetup(chartId, want, prices, n);
    Sleep(600);
@@ -598,29 +815,17 @@ void MaybeUploadPendingCharts()
       return;
      }
 
-   // Walk each {"id":...} object in the pending array (simple scan).
    int pos = 0;
    int processed = 0;
    while(processed < 3)
      {
       int idPos = StringFind(resp, "\"id\":\"", pos);
       if(idPos < 0) break;
-      int objStart = idPos;
-      // Prefer the nearest '{' before id.
-      for(int back = idPos; back >= 0 && back > idPos - 80; back--)
-        {
-         if(StringGetCharacter(resp, back) == '{')
-           {
-            objStart = back;
-            break;
-           }
-        }
-      int objEnd = StringFind(resp, "}", idPos);
-      if(objEnd < 0) break;
-      string block = StringSubstr(resp, objStart, objEnd - objStart + 1);
+      string block = ExtractJsonObjectFromId(resp, idPos);
+      if(StringLen(block) < 8) break;
       ProcessOnePending(block);
       processed++;
-      pos = objEnd + 1;
+      pos = idPos + StringLen(block);
      }
    if(processed == 0)
       lastChartStatus = "no pending";

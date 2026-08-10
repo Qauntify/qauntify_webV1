@@ -62,16 +62,19 @@ function timeSec(value: unknown): number | null {
   return n > 1e12 ? Math.floor(n / 1000) : Math.floor(n);
 }
 
-/** Flatten signal indicators into MT5-friendly annotation numbers. */
+/** Flatten signal indicators into MT5-friendly annotation fields.
+ * Numbers for levels/times; CSV strings for the moving cloud band. */
 export function buildChartAnnotations(
   indicators: Record<string, unknown> | null | undefined,
-): Record<string, number> {
+  opts?: { periodMinutes?: number | null },
+): Record<string, number | string> {
   if (!indicators || typeof indicators !== "object") return {};
-  const out: Record<string, number> = {};
+  const out: Record<string, number | string> = {};
   const pairs: Array<[string, unknown]> = [
     ["fvg_top", indicators.fvg_top],
     ["fvg_bottom", indicators.fvg_bottom],
     ["fvg_start", indicators.fvg_start_time ?? indicators.fvg_time],
+    ["fvg_end", indicators.fvg_end_time ?? indicators.fvg_end],
     ["sweep_level", indicators.sweep_level],
     ["sweep_low", indicators.sweep_low],
     ["sweep_high", indicators.sweep_high],
@@ -86,7 +89,7 @@ export function buildChartAnnotations(
     ["retest_time", indicators.retest_time],
   ];
   for (const [key, raw] of pairs) {
-    if (key.endsWith("_time") || key === "fvg_start") {
+    if (key.endsWith("_time") || key === "fvg_start" || key === "fvg_end") {
       const t = timeSec(raw);
       if (t != null) out[key] = t;
     } else {
@@ -94,6 +97,26 @@ export function buildChartAnnotations(
       if (v != null) out[key] = v;
     }
   }
+
+  // Moving cloud: comma-separated unix-sec / prices (written at gold save).
+  for (const key of ["cloud_t", "cloud_lo", "cloud_hi"] as const) {
+    const v = indicators[key];
+    if (typeof v === "string" && v.trim().length > 0) {
+      out[key] = v.trim();
+    }
+  }
+
+  // Fallback FVG end = start + 3 bars when detector omitted end_time.
+  const periodMin = opts?.periodMinutes;
+  if (
+    typeof out.fvg_start === "number" &&
+    out.fvg_end == null &&
+    periodMin != null &&
+    periodMin > 0
+  ) {
+    out.fvg_end = out.fvg_start + 3 * periodMin * 60;
+  }
+
   return out;
 }
 

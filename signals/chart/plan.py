@@ -37,12 +37,30 @@ def _ict_smc(candles, signal):
     return out
 
 
+def _fvg_end_time(candles, start_time):
+    """Right edge of the 3-candle FVG: open of candle-3 + one bar period."""
+    if start_time is None or not candles or len(candles) < 2:
+        return None
+    period = candles[-1].open_time - candles[-2].open_time
+    if period <= 0:
+        return None
+    for i, c in enumerate(candles):
+        if c.open_time == start_time:
+            # candle1 at i → candle3 at i+2; end after that bar
+            if i + 2 < len(candles):
+                return candles[i + 2].open_time + period
+            return start_time + 3 * period
+    return start_time + 3 * period
+
+
 def _ict_fvg(candles, signal):
     ind = signal.indicators
     out = []
     if "fvg_top" in ind and "fvg_bottom" in ind:
-        out.append(zone(ind["fvg_top"], ind["fvg_bottom"], ind.get("fvg_start_time"),
-                        "Fair Value Gap", "fvg"))
+        start = ind.get("fvg_start_time")
+        end = ind.get("fvg_end_time") or _fvg_end_time(candles, start)
+        out.append(zone(ind["fvg_top"], ind["fvg_bottom"], start,
+                        "Fair Value Gap", "fvg", end_time=end))
     out.extend(_ict_smc(candles, signal))
     if ind.get("retest_time") is not None:
         out.append(marker(ind["retest_time"], signal.entry,

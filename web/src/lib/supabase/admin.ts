@@ -942,10 +942,11 @@ export async function listPendingSetupCharts(
   }
 
   try {
+    // Include recently closed rows too — 1m gold often hits SL before the
+    // EA's 20s poll, and we still want the setup screenshot.
     const response = await fetch(
       `${cfg.url}/rest/v1/signals?symbol=eq.${encodeURIComponent(canon)}` +
-        `&chart_url=is.null&shadow=is.false&closed_at=is.null` +
-        `&status=in.(open,tp1_hit,tp2_hit)` +
+        `&chart_url=is.null&shadow=is.false` +
         `&created_at=gte.${encodeURIComponent(since)}` +
         `&${tfFilter}` +
         `&select=id,symbol,timeframe,direction,entry,stop_loss,take_profit,` +

@@ -20,7 +20,7 @@ from signals.market_client import (
     setup_stop_risk_ok,
     is_gold_symbol,
 )
-from signals.chart.pipeline import attach_chart
+from signals.chart.pipeline import attach_chart, attach_chart_plan
 from signals.composer import confirm_setup, no_setup_rationale
 from signals.rag import retrieve_context
 from signals.config import load_config
@@ -809,13 +809,15 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
         return ScanResult(candles=candles)
 
     signal = make_signal(setup, confirmation, [], timeframe=timeframe)
-    # Gold (XAUUSD) charts come from MT5 ChartScreenShot via TickPush —
-    # skip Python matplotlib so the site shows the real terminal screen.
-    if not is_gold_symbol(symbol):
+    # Gold: store chart plan + MT5 draw fields (cloud series, FVG span) but
+    # leave chart_url null so TickPush ChartScreenShot fills the real screen.
+    if is_gold_symbol(symbol):
+        signal = attach_chart_plan(signal, candles, h1_candles=h1_candles)
+    else:
         signal = attach_chart(
             signal, candles,
             supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
-            session=session,
+            session=session, h1_candles=h1_candles,
         )
     try:
         with_retry(lambda: save_signal(

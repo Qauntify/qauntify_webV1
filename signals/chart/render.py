@@ -56,10 +56,19 @@ def _draw(ax, plan, x_of, last_x):
         kind = a["kind"]
         if kind == "zone":
             x0 = x_of.get(a["start_time"], 0) - 0.5
+            if a.get("end_time") is not None and a["end_time"] in x_of:
+                x1 = x_of[a["end_time"]] + 0.5
+            elif a.get("end_time") is not None:
+                # end_time may fall between bars — clamp to last visible x
+                x1 = min(right, x0 + 3.5)
+            else:
+                x1 = right
+            if x1 <= x0:
+                x1 = right
             low = min(a["price_bottom"], a["price_top"])
             high = max(a["price_bottom"], a["price_top"])
             color = ROLE_FILL.get(a["role"], "#38bdf8")
-            ax.add_patch(Rectangle((x0, low), right - x0, high - low,
+            ax.add_patch(Rectangle((x0, low), x1 - x0, high - low,
                                    facecolor=color, alpha=0.15, edgecolor=color,
                                    linewidth=1, linestyle="--", zorder=1))
             ax.text(x0 + 0.4, high, a["label"], color=color, fontsize=9,

@@ -38,7 +38,10 @@ export async function GET(request: Request) {
   }
 
   const pending = rows.map((r) => {
-    const annotations = buildChartAnnotations(r.indicators);
+    const periodMinutes = PERIOD_MINUTES[r.timeframe] ?? null;
+    const annotations = buildChartAnnotations(r.indicators, {
+      periodMinutes,
+    });
     return {
       id: r.id,
       symbol: r.symbol,
@@ -49,7 +52,7 @@ export async function GET(request: Request) {
       take_profit: r.take_profit,
       take_profit_2: r.take_profit_2,
       take_profit_3: r.take_profit_3,
-      period_minutes: PERIOD_MINUTES[r.timeframe] ?? null,
+      period_minutes: periodMinutes,
       // Flat fields for MQL5 (no nested JSON objects).
       ...annotations,
       created_at: r.created_at,

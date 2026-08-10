@@ -11,7 +11,8 @@ def _signal():
 
 
 def test_attach_chart_sets_url_on_success(monkeypatch):
-    monkeypatch.setattr(pipeline, "build_chart_plan", lambda c, s: [{"kind": "level"}])
+    monkeypatch.setattr(pipeline, "build_chart_plan",
+                        lambda c, s, h1_candles=None: [{"kind": "level"}])
     monkeypatch.setattr(pipeline, "render_chart", lambda c, p, s: b"PNG")
     monkeypatch.setattr(pipeline, "upload_chart",
                         lambda png, sid, url, key, session=None: "http://x/s1.png")
@@ -23,7 +24,8 @@ def test_attach_chart_sets_url_on_success(monkeypatch):
 def test_attach_chart_swallows_errors(monkeypatch):
     def _boom(*a, **k):
         raise RuntimeError("render exploded")
-    monkeypatch.setattr(pipeline, "build_chart_plan", lambda c, s: [])
+    monkeypatch.setattr(pipeline, "build_chart_plan",
+                        lambda c, s, h1_candles=None: [])
     monkeypatch.setattr(pipeline, "render_chart", _boom)
     out = pipeline.attach_chart(_signal(), [], supabase_url="u", service_key="k")
     assert out.chart_url is None  # signal survives, text-only
