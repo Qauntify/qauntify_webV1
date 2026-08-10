@@ -9,7 +9,7 @@ import sharp from "sharp";
 const KEEP_RIGHT_FRACTION = 0.24;
 const OUT_SIZE = 720;
 /** How many pixels to expand each candle column left/right. */
-const CANDLE_FAT_RADIUS = 2;
+const CANDLE_FAT_RADIUS = 5;
 
 function isCandlePixel(r: number, g: number, b: number): boolean {
   // MT5 bull/bear bodies on black — bright green or red-ish strokes.
