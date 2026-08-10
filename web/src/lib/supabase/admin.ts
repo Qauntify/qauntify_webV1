@@ -826,16 +826,28 @@ export async function uploadSignalChartPng(
   }
 }
 
-/** PATCH chart_url or outcome_chart_url on one signal row. */
+/** PATCH chart_url or outcome_chart_url on one signal row.
+ * Returns previous chart URL (null if none) so callers can detect first upload. */
 export async function setSignalChartUrl(
   signalId: string,
   url: string,
   kind: "setup" | "outcome" = "setup",
-): Promise<boolean> {
+): Promise<{ ok: boolean; previousUrl: string | null }> {
   const cfg = config();
-  if (!cfg) return false;
+  if (!cfg) return { ok: false, previousUrl: null };
   const field = kind === "outcome" ? "outcome_chart_url" : "chart_url";
+  let previousUrl: string | null = null;
   try {
+    const before = await fetch(
+      `${cfg.url}/rest/v1/signals?id=eq.${encodeURIComponent(signalId)}` +
+        `&select=${field}`,
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
+    );
+    if (before.ok) {
+      const rows = (await before.json()) as Array<Record<string, string | null>>;
+      const prev = rows[0]?.[field];
+      previousUrl = typeof prev === "string" ? prev : null;
+    }
     const response = await fetch(
       `${cfg.url}/rest/v1/signals?id=eq.${encodeURIComponent(signalId)}`,
       {
@@ -844,9 +856,49 @@ export async function setSignalChartUrl(
         body: JSON.stringify({ [field]: url }),
       },
     );
-    return response.ok || response.status === 204;
+    return {
+      ok: response.ok || response.status === 204,
+      previousUrl,
+    };
   } catch {
-    return false;
+    return { ok: false, previousUrl };
+  }
+}
+
+export type SignalAlertRow = {
+  id: string;
+  symbol: string;
+  timeframe: string;
+  direction: string;
+  entry: number;
+  stop_loss: number;
+  take_profit: number;
+  take_profit_1: number | null;
+  take_profit_2: number | null;
+  take_profit_3: number | null;
+  confidence: number;
+  rationale: string;
+  chart_url: string | null;
+};
+
+export async function getSignalAlertRow(
+  id: string,
+): Promise<SignalAlertRow | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  try {
+    const response = await fetch(
+      `${cfg.url}/rest/v1/signals?id=eq.${encodeURIComponent(id)}` +
+        `&select=id,symbol,timeframe,direction,entry,stop_loss,take_profit,` +
+        `take_profit_1,take_profit_2,take_profit_3,confidence,rationale,chart_url` +
+        `&limit=1`,
+      { headers: headers(cfg.serviceKey), ...READ_CACHE },
+    );
+    if (!response.ok) return null;
+    const rows = (await response.json()) as SignalAlertRow[];
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch {
+    return null;
   }
 }
 
@@ -863,7 +915,7 @@ export type PendingSetupChart = {
   created_at: string;
 };
 
-const PENDING_CHART_TFS = ["5m", "15m", "1h", "floor"] as const;
+const PENDING_CHART_TFS = ["1m", "5m", "15m", "1h", "floor"] as const;
 const PENDING_CHART_MAX_AGE_HOURS = 48;
 
 export async function listPendingSetupCharts(

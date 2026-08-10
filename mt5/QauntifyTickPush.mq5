@@ -161,6 +161,7 @@ void MaybePushClosedM1()
 
 ENUM_TIMEFRAMES PeriodFromMinutes(const int minutes)
   {
+   if(minutes == 1) return PERIOD_M1;
    if(minutes == 5) return PERIOD_M5;
    if(minutes == 15) return PERIOD_M15;
    if(minutes == 60) return PERIOD_H1;

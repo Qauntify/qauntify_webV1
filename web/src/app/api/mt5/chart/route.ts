@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 
 import { parseMt5ChartBody } from "@/lib/mt5-signal";
 import {
+  formatSignalAlert,
+  sendTelegramPhoto,
+} from "@/lib/outcome-alert";
+import {
+  getSignalAlertRow,
   setSignalChartUrl,
   signalExists,
   uploadSignalChartPng,
@@ -49,12 +54,57 @@ export async function POST(request: Request) {
     url,
     parsed.kind,
   );
-  if (!patched) {
+  if (!patched.ok) {
     return NextResponse.json(
       { error: "Failed to store chart url", url },
       { status: 502 },
     );
   }
 
-  return NextResponse.json({ ok: true, id: parsed.signalId, url, kind: parsed.kind });
+  // First setup chart upload → Telegram photo (Python/BBMA defer text for gold).
+  let telegram = false;
+  if (parsed.kind === "setup" && !patched.previousUrl) {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
+    const chatId =
+      (process.env.TELEGRAM_CHANNEL_ID || process.env.TELEGRAM_CHAT_ID)?.trim() ??
+      "";
+    if (botToken && chatId) {
+      try {
+        const row = await getSignalAlertRow(parsed.signalId);
+        if (row) {
+          const tp1 = row.take_profit_1 ?? row.take_profit;
+          const tp2 = row.take_profit_2 ?? tp1;
+          const tp3 = row.take_profit_3 ?? tp2;
+          await sendTelegramPhoto(
+            url,
+            formatSignalAlert({
+              symbol: row.symbol,
+              timeframe: row.timeframe,
+              direction: row.direction,
+              entry: row.entry,
+              stopLoss: row.stop_loss,
+              takeProfit: tp1,
+              takeProfit2: tp2,
+              takeProfit3: tp3,
+              confidence: row.confidence,
+              rationale: row.rationale,
+            }),
+            botToken,
+            chatId,
+          );
+          telegram = true;
+        }
+      } catch (err) {
+        console.error("[mt5/chart] telegram photo failed", err);
+      }
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    id: parsed.signalId,
+    url,
+    kind: parsed.kind,
+    telegram,
+  });
 }

@@ -890,8 +890,15 @@ def maybe_run_debate(signal, cfg, session=None):
 
 def maybe_send_alert(signal, settings, cfg):
     """Telegram alert for a stored signal; never raises — a failed or
-    skipped alert must not affect the rest of the run."""
+    skipped alert must not affect the rest of the run.
+
+    Gold (XAUUSD) waits for the MT5 ChartScreenShot — `/api/mt5/chart`
+    sends the photo alert once the terminal screenshot lands.
+    """
     if not cfg.telegram_bot_token or not cfg.telegram_channel_id:
+        return
+    if is_gold_symbol(signal.symbol) and not getattr(signal, "chart_url", None):
+        print(f"[{signal.symbol}] defer Telegram until MT5 chart upload")
         return
     if signal.confidence < settings.min_alert_confidence:
         print(f"[{signal.symbol}] confidence {signal.confidence} below alert "

@@ -137,3 +137,36 @@ export async function sendTelegramMessage(
     );
   }
 }
+
+/** Send a signal alert as a photo caption (MT5 ChartScreenShot path). */
+export async function sendTelegramPhoto(
+  photoUrl: string,
+  caption: string,
+  botToken: string,
+  chatId: string,
+): Promise<void> {
+  // Telegram caption limit is 1024; keep headroom for HTML entities.
+  const trimmed = caption.length > 1000 ? caption.slice(0, 997) + "…" : caption;
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      photo: photoUrl,
+      caption: trimmed,
+      parse_mode: "HTML",
+    }),
+  });
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const body = (await response.json()) as { description?: string };
+      detail = body.description ?? "";
+    } catch {
+      detail = (await response.text()).slice(0, 200);
+    }
+    throw new Error(
+      `${response.status} Telegram photo failed` + (detail ? `: ${detail}` : ""),
+    );
+  }
+}

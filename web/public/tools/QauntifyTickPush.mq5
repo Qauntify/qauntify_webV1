@@ -161,6 +161,7 @@ void MaybePushClosedM1()
 
 ENUM_TIMEFRAMES PeriodFromMinutes(const int minutes)
   {
+   if(minutes == 1) return PERIOD_M1;
    if(minutes == 5) return PERIOD_M5;
    if(minutes == 15) return PERIOD_M15;
    if(minutes == 60) return PERIOD_H1;
@@ -207,102 +208,6 @@ void ChartPinsClear()
       if(StringFind(name, "QTP_") == 0)
          ObjectDelete(0, name);
      }
-  }
-
-void ChartPinLevels(const double entry, const double stop, const double tp)
-  {
-   ChartPinsClear();
-   datetime t0 = iTime(_Symbol, PERIOD_CURRENT, 30);
-   datetime t1 = iTime(_Symbol, PERIOD_CURRENT, 0) + PeriodSeconds() * 8;
-   if(t0 == 0) t0 = TimeCurrent() - PeriodSeconds() * 30;
-   if(t1 == 0) t1 = TimeCurrent() + PeriodSeconds() * 8;
-
-   string en = "QTP_en";
-   if(ObjectCreate(0, en, OBJ_TREND, 0, t0, entry, t1, entry))
-     {
-      ObjectSetInteger(0, en, OBJPROP_COLOR, clrDodgerBlue);
-      ObjectSetInteger(0, en, OBJPROP_WIDTH, 2);
-      ObjectSetInteger(0, en, OBJPROP_RAY_RIGHT, false);
-      ObjectSetInteger(0, en, OBJPROP_SELECTABLE, false);
-     }
-   string sl = "QTP_sl";
-   if(ObjectCreate(0, sl, OBJ_TREND, 0, t0, stop, t1, stop))
-     {
-      ObjectSetInteger(0, sl, OBJPROP_COLOR, clrOrangeRed);
-      ObjectSetInteger(0, sl, OBJPROP_STYLE, STYLE_DASH);
-      ObjectSetInteger(0, sl, OBJPROP_WIDTH, 1);
-      ObjectSetInteger(0, sl, OBJPROP_RAY_RIGHT, false);
-      ObjectSetInteger(0, sl, OBJPROP_SELECTABLE, false);
-     }
-   string tpName = "QTP_tp";
-   if(ObjectCreate(0, tpName, OBJ_TREND, 0, t0, tp, t1, tp))
-     {
-      ObjectSetInteger(0, tpName, OBJPROP_COLOR, clrMediumSeaGreen);
-      ObjectSetInteger(0, tpName, OBJPROP_STYLE, STYLE_DASH);
-      ObjectSetInteger(0, tpName, OBJPROP_WIDTH, 1);
-      ObjectSetInteger(0, tpName, OBJPROP_RAY_RIGHT, false);
-      ObjectSetInteger(0, tpName, OBJPROP_SELECTABLE, false);
-     }
-   ChartRedraw(0);
-  }
-
-bool UploadChartPng(const string signalId)
-  {
-   ChartRedraw(0);
-   Sleep(300);
-   string fileName = "qtp_chart_" + signalId + ".png";
-   int w = ChartWidth > 640 ? ChartWidth : 1280;
-   int h = ChartHeight > 360 ? ChartHeight : 720;
-   if(!ChartScreenShot(0, fileName, w, h, ALIGN_RIGHT))
-     {
-      Print("QauntifyTickPush: ChartScreenShot failed ", GetLastError());
-      return false;
-     }
-
-   int handle = FileOpen(fileName, FILE_READ|FILE_BIN);
-   if(handle == INVALID_HANDLE)
-     {
-      Print("QauntifyTickPush: open screenshot failed ", GetLastError());
-      return false;
-     }
-   int size = (int)FileSize(handle);
-   if(size <= 0)
-     {
-      FileClose(handle);
-      FileDelete(fileName);
-      return false;
-     }
-   uchar data[];
-   ArrayResize(data, size);
-   if(FileReadArray(handle, data, 0, size) != size)
-     {
-      FileClose(handle);
-      FileDelete(fileName);
-      return false;
-     }
-   FileClose(handle);
-   FileDelete(fileName);
-
-   uchar key[];
-   uchar encoded[];
-   if(!CryptEncode(CRYPT_BASE64, data, key, encoded))
-     {
-      Print("QauntifyTickPush: base64 encode failed ", GetLastError());
-      return false;
-     }
-   string b64 = CharArrayToString(encoded, 0, WHOLE_ARRAY, CP_UTF8);
-   string body = "{\"signal_id\":\"" + signalId +
-                 "\",\"kind\":\"setup\",\"image_base64\":\"" + b64 + "\"}";
-   string resp = "";
-   lastChartHttp = HttpPost(ChartUploadUrl, body, resp);
-   if(lastChartHttp == 200)
-     {
-      chartUploadsOk++;
-      return true;
-     }
-   chartFails++;
-   Print("QauntifyTickPush: chart upload HTTP ", lastChartHttp, " ", resp);
-   return false;
   }
 
 bool ProcessOnePending(const string block)
@@ -471,7 +376,6 @@ int OnInit()
   {
    if(WebhookSecret == "")
       Print("QauntifyTickPush: WebhookSecret is empty.");
-   originalPeriod = (ENUM_TIMEFRAMES)ChartPeriod(0);
    BackfillClosedM1();
    UpdateStatusComment();
    return(INIT_SUCCEEDED);

@@ -1,7 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
-import { formatSignalAlert, sendTelegramMessage } from "@/lib/outcome-alert";
 import { parseMt5SignalBody } from "@/lib/mt5-signal";
 import {
   hasOpenLiveSignal,
@@ -67,34 +66,7 @@ export async function POST(request: Request) {
 
   invalidateOpenSignalsCache(parsed.symbol);
 
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
-  const chatId =
-    (process.env.TELEGRAM_CHANNEL_ID || process.env.TELEGRAM_CHAT_ID)?.trim() ??
-    "";
-  let telegram = false;
-  if (botToken && chatId) {
-    try {
-      await sendTelegramMessage(
-        formatSignalAlert({
-          symbol: parsed.symbol,
-          timeframe: parsed.timeframe,
-          direction: parsed.direction,
-          entry: parsed.entry,
-          stopLoss: parsed.stop_loss,
-          takeProfit: parsed.take_profit,
-          takeProfit2: parsed.take_profit_2,
-          takeProfit3: parsed.take_profit_3,
-          confidence: parsed.confidence,
-          rationale: parsed.rationale,
-        }),
-        botToken,
-        chatId,
-      );
-      telegram = true;
-    } catch (err) {
-      console.error("[mt5/signal] telegram failed", err);
-    }
-  }
-
-  return NextResponse.json({ ok: true, id, telegram });
+  // Telegram photo is sent from /api/mt5/chart after ChartScreenShot lands
+  // (same path as gold Scalp/Swing/War Room). Avoid a text-only duplicate.
+  return NextResponse.json({ ok: true, id, telegram: false });
 }

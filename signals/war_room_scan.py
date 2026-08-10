@@ -172,13 +172,17 @@ def scan_symbol_floor(symbol, floor, agents, *, session=None):
         print(f"[{symbol}] war-room debate save skipped ({type(exc).__name__})")
 
     if cfg.telegram_bot_token and cfg.telegram_channel_id:
-        try:
-            with_retry(lambda: send_alert(
-                signal, cfg.telegram_bot_token, cfg.telegram_channel_id,
-            ))
-            print(f"[{symbol}] war-room Telegram alert sent")
-        except Exception as exc:
-            print(f"[{symbol}] war-room Telegram failed ({type(exc).__name__})")
+        # Gold: MT5 chart upload path sends the photo alert.
+        if is_gold_symbol(symbol) and not getattr(signal, "chart_url", None):
+            print(f"[{symbol}] war-room defer Telegram until MT5 chart upload")
+        else:
+            try:
+                with_retry(lambda: send_alert(
+                    signal, cfg.telegram_bot_token, cfg.telegram_channel_id,
+                ))
+                print(f"[{symbol}] war-room Telegram alert sent")
+            except Exception as exc:
+                print(f"[{symbol}] war-room Telegram failed ({type(exc).__name__})")
 
     print(f"[{symbol}] WAR ROOM CONFIRMED {signal.direction.upper()} "
           f"(confidence {signal.confidence})")

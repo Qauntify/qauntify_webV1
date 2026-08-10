@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** Map stored timeframe → MT5 period minutes for the EA. */
 const PERIOD_MINUTES: Record<string, number> = {
+  "1m": 1,
   "5m": 5,
   "15m": 15,
   floor: 15,
