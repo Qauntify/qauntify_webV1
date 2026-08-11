@@ -7,20 +7,22 @@ signals.json
 .pytest_cache/
 .superpowers/
 .vercel
+.qodo/
 
 .ipynb_checkpoints/
 
 # Cached historical archives for backtesting (verified downloads).
 .cache/
 
-# Generated review images (regenerate with scripts/bbma_trade_shots.py).
-artifacts/bbma-trades/
+# Generated review / shot images (regenerate via scripts/*_trade_shots.py).
+artifacts/
 
 # Root-level npm install (web/ has its own ignore for web/node_modules).
 /node_modules/
 
-# Generated review images (regenerate with scripts/cloud_mss_trade_shots.py).
-artifacts/cloud-mss-trades/
+# One-off chart dumps under the public tools download folder.
+web/public/tools/_outcome_*
+web/public/tools/cloud-mss-10/
 
 # macOS finder metadata
 .DS_Store
