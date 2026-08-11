@@ -12,7 +12,7 @@ from signals.models import (
     DEFAULT_SIGNAL_STRATEGY,
     Signal,
 )
-from signals.market_client import canonical_symbol
+from signals.clients.market import canonical_symbol
 
 
 def save_signal(signal: Signal, supabase_url: str, service_key: str,

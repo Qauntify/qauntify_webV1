@@ -1,6 +1,6 @@
 import pytest
 
-from signals.market_client import (
+from signals.clients.market import (
     canonical_symbol,
     fetch_candles,
     is_gold_symbol,
@@ -249,7 +249,7 @@ def test_gold_1h_uses_kraken_hourly():
 
 
 def test_parse_kraken_last_price():
-    from signals.market_client import _parse_kraken_last_price
+    from signals.clients.market import _parse_kraken_last_price
 
     price = _parse_kraken_last_price(
         {"error": [], "result": {"PAXGUSD": {"c": ["4115.45", "0.1"]}}},
@@ -259,14 +259,14 @@ def test_parse_kraken_last_price():
 
 
 def test_gold_entry_live_ok_within_cap():
-    from signals.market_client import gold_entry_live_ok
+    from signals.clients.market import gold_entry_live_ok
 
     ok, msg = gold_entry_live_ok(4115.0, 4116.0, "1m", atr=2.0)
     assert ok and msg == ""
 
 
 def test_gold_entry_live_ok_rejects_stale():
-    from signals.market_client import gold_entry_live_ok
+    from signals.clients.market import gold_entry_live_ok
 
     ok, msg = gold_entry_live_ok(4154.0, 4115.0, "1m", atr=2.0)
     assert not ok
@@ -275,7 +275,7 @@ def test_gold_entry_live_ok_rejects_stale():
 
 def test_gold_5m_allows_paxg_mt5_basis_drift():
     """PAXG fallback vs MT5 mid can sit ~10pt apart — still publishable."""
-    from signals.market_client import gold_entry_live_ok, max_gold_entry_drift
+    from signals.clients.market import gold_entry_live_ok, max_gold_entry_drift
 
     assert max_gold_entry_drift("5m", atr=3.0) >= 15.0
     ok, msg = gold_entry_live_ok(4250.07, 4259.80, "5m", atr=3.0)
@@ -283,7 +283,7 @@ def test_gold_5m_allows_paxg_mt5_basis_drift():
 
 
 def test_setup_stop_risk_ok_rejects_tight_stop():
-    from signals.market_client import setup_stop_risk_ok, stop_risk_fraction
+    from signals.clients.market import setup_stop_risk_ok, stop_risk_fraction
 
     entry = 4100.0
     stop = entry * (1 - 0.0005)
@@ -294,7 +294,7 @@ def test_setup_stop_risk_ok_rejects_tight_stop():
 
 
 def test_setup_stop_risk_ok_accepts_wide_enough_stop():
-    from signals.market_client import setup_stop_risk_ok
+    from signals.clients.market import setup_stop_risk_ok
 
     entry = 4100.0
     stop = entry * (1 - 0.002)

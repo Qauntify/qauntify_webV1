@@ -13,7 +13,7 @@ from typing import NamedTuple
 
 import requests
 
-from signals.market_client import (
+from signals.clients.market import (
     fetch_candles,
     fetch_gold_last_price,
     gold_entry_live_ok,
@@ -26,7 +26,7 @@ from signals.rag import retrieve_context
 from signals.config import load_config
 from signals.indicators import adx, atr, ema, macd_histogram, rsi
 from signals.debate import run_debate
-from signals.llm_client import SeaLionClient
+from signals.clients.llm import SeaLionClient
 from signals.models import (
     DEFAULT_SIGNAL_STRATEGY,
     TIMEFRAME_MINUTES,
@@ -60,7 +60,7 @@ from signals.storage import (
     save_signal,
     try_acquire_engine_lock,
 )
-from signals.telegram_client import send_alert
+from signals.clients.telegram import send_alert
 
 RETRY_DELAY = 2.0
 
@@ -908,7 +908,7 @@ def maybe_send_alert(signal, settings, cfg):
 # Telegram carries confirmed signals and TP/SL outcomes only. No-signal and
 # rejected scans, and per-run summaries, stay in Supabase and the logs — they
 # are noise in a channel people act on. The formatters for both still exist in
-# signals.telegram_client for ad-hoc use; this module deliberately never calls
+# signals.clients.telegram for ad-hoc use; this module deliberately never calls
 # them, and tests/core/test_telegram.py asserts that.
 
 OUTCOME_LABELS = {

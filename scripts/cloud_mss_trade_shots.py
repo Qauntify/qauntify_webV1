@@ -33,7 +33,7 @@ from signals.chart.render import render_chart, render_outcome_chart
 from signals.history import binance_symbol, load_history
 from signals.indicators import atr
 from signals.candle_resample import resample_candles
-from signals.market_client import fetch_candles
+from signals.clients.market import fetch_candles
 from signals.models import Confirmation, make_signal
 from signals.r_model import cost_r, scaled_r
 from signals.strategies.cloud_mss import detect_setup

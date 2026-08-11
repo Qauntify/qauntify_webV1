@@ -3,7 +3,7 @@ import pytest
 from signals.config import Config
 from signals.models import BotSettings, CandidateSetup, Confirmation, NoSignalReport, make_signal
 from signals.run import maybe_send_alert
-from signals.telegram_client import (
+from signals.clients.telegram import (
     format_alert,
     format_caption,
     format_no_signal_alert,
@@ -360,13 +360,13 @@ def test_run_module_never_pushes_no_signal_or_summary_alerts():
     assert "send_no_signal_alert" not in called
     assert "send_run_summary" not in called
     # The senders themselves stay available for ad-hoc use.
-    from signals import telegram_client
-    assert hasattr(telegram_client, "send_no_signal_alert")
-    assert hasattr(telegram_client, "send_run_summary")
+    from signals.clients import telegram
+    assert hasattr(telegram, "send_no_signal_alert")
+    assert hasattr(telegram, "send_run_summary")
 
 
 def test_format_run_summary_tags_lines_with_timeframe():
-    from signals.telegram_client import format_run_summary
+    from signals.clients.telegram import format_run_summary
 
     text = format_run_summary("run-1", "15m+1h", [
         {"symbol": "BTCUSDT", "status": "CONFIRMED", "extra": "LONG 82%",
@@ -379,7 +379,7 @@ def test_format_run_summary_tags_lines_with_timeframe():
 
 
 from signals.models import Signal
-from signals.telegram_client import format_caption, send_alert
+from signals.clients.telegram import format_caption, send_alert
 
 
 def _chart_signal(chart_url=None):
@@ -461,7 +461,7 @@ def _outcome_row(outcome_chart_url=None):
 
 
 def test_outcome_alert_uses_photo_when_chart_present():
-    from signals.telegram_client import send_outcome_alert
+    from signals.clients.telegram import send_outcome_alert
     rec = _ChartRec()
     send_outcome_alert(_outcome_row("http://x/s1-outcome.png"), "tp3_hit",
                        "tok", "chat", session=rec)
@@ -470,7 +470,7 @@ def test_outcome_alert_uses_photo_when_chart_present():
 
 
 def test_outcome_alert_falls_back_to_message_without_chart():
-    from signals.telegram_client import send_outcome_alert
+    from signals.clients.telegram import send_outcome_alert
     rec = _ChartRec()
     send_outcome_alert(_outcome_row(None), "sl_hit", "tok", "chat", session=rec)
     assert rec.calls[0]["url"].endswith("/sendMessage")

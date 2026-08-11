@@ -13,7 +13,7 @@ import sys
 
 from signals.config import load_config
 from signals.healthcheck import check_session_health, format_healthcheck_alert
-from signals.telegram_client import send_message
+from signals.clients.telegram import send_message
 
 
 def main() -> int:

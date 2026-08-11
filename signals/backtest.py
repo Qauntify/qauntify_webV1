@@ -342,7 +342,7 @@ def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
 def main():
     import requests
 
-    from signals.market_client import fetch_candles
+    from signals.clients.market import fetch_candles
 
     session = requests.Session()
     print("Scale-out model: 1/3 booked at each of TP1/TP2/TP3, stop trails to "

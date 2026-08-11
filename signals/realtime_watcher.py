@@ -31,7 +31,7 @@ import threading
 import requests
 
 from signals.config import Config
-from signals.market_client import fetch_candles
+from signals.clients.market import fetch_candles
 from signals.models import Candle
 from signals.outcome_tracker import apply_events, check_outcome_events
 from signals.storage import list_open_signals

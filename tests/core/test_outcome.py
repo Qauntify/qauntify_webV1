@@ -8,7 +8,7 @@ from signals.config import Config
 from signals.models import Candle
 from signals.outcome_tracker import check_outcome, track_open_signals
 from signals.storage import close_signal, list_open_signals
-from signals.telegram_client import format_outcome_alert
+from signals.clients.telegram import format_outcome_alert
 
 NOW = datetime(2026, 7, 7, 12, 0, tzinfo=timezone.utc)
 

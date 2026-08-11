@@ -26,7 +26,7 @@ Costs are subtracted separately (see `cost_r`) so a gross and a net number can
 both be quoted, and so the pre-registered gate A/B can stay on the gross
 metric it was registered with.
 """
-from signals.market_client import canonical_symbol
+from signals.clients.market import canonical_symbol
 
 # ---------------------------------------------------------------------------
 # Gross R

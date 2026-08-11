@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import requests
 
 from signals.config import load_config
-from signals.llm_client import SeaLionClient
+from signals.clients.llm import SeaLionClient
 from signals.models import ScanResult
 from signals.run import (
     maybe_send_alert,

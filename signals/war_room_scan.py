@@ -14,8 +14,8 @@ import requests
 from signals.chart.pipeline import attach_chart
 from signals.config import Config, load_floor_config
 from signals.debate import FloorAgents, run_debate
-from signals.llm_client import SeaLionClient
-from signals.market_client import is_gold_symbol, setup_stop_risk_ok
+from signals.clients.llm import SeaLionClient
+from signals.clients.market import is_gold_symbol, setup_stop_risk_ok
 from signals.models import Confirmation, make_signal
 from signals.run import (
     _load_market_data,
@@ -30,7 +30,7 @@ from signals.storage import (
     save_signal,
 )
 from signals.strategies import detect_setup
-from signals.telegram_client import send_alert
+from signals.clients.telegram import send_alert
 
 CANDLE_TIMEFRAME = "15m"
 STORE_TIMEFRAME = "floor"
