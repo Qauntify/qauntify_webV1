@@ -27,9 +27,13 @@ def zone(price_top, price_bottom, start_time, label, role, end_time=None):
     return out
 
 
-def level(price, label, role, style="solid", start_time=None):
-    """A horizontal line (CHoCH, swept level, entry/SL/TP)."""
-    return {
+def level(price, label, role, style="solid", start_time=None, end_time=None):
+    """A horizontal line (CHoCH, swept level, entry/SL/TP).
+
+    `end_time` stops the line at a candle (outcome charts end at the fill);
+    omit it to draw through the right edge of the view.
+    """
+    out = {
         "kind": "level",
         "price": price,
         "label": label,
@@ -37,6 +41,9 @@ def level(price, label, role, style="solid", start_time=None):
         "style": style,
         "start_time": start_time,
     }
+    if end_time is not None:
+        out["end_time"] = end_time
+    return out
 
 
 def marker(time, price, label, role, order=None):

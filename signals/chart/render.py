@@ -104,11 +104,17 @@ def _draw(ax, plan, x_of, last_x):
             )
         elif kind == "level":
             x0 = x_of.get(a["start_time"], 0) if a.get("start_time") else 0
+            if a.get("end_time") is not None and a["end_time"] in x_of:
+                x1 = x_of[a["end_time"]]
+            else:
+                x1 = right
+            if x1 < x0:
+                x1 = right
             role = a["role"]
             color = ROLE_LINE.get(role, "#94a3b8")
             primary = role in _PRIMARY_ROLES
             ax.plot(
-                [x0, right], [a["price"], a["price"]], color=color,
+                [x0, x1], [a["price"], a["price"]], color=color,
                 linewidth=2.0 if primary else 1.35,
                 linestyle=_DASH.get(a.get("style", "solid"), "-"),
                 zorder=3, solid_capstyle="round",
@@ -330,6 +336,9 @@ def render_chart(candles, plan, signal, title=None) -> bytes:
 
 
 OUTCOME_MAX_BARS = 100
+# Pad a few bars before entry so the SL/TP path has context, without burying
+# the trade under a long setup snapshot.
+OUTCOME_PRE_ENTRY_BARS = 16
 
 
 def _outcome_title(signal_row, outcome) -> str:
@@ -372,6 +381,40 @@ def _outcome_title(signal_row, outcome) -> str:
             f"{direction.upper()}  ·  {tag}  ·  {r:+.1f}R ({move:+.2f}%)")
 
 
+def view_for_outcome(candles, entry_time, *, max_bars=OUTCOME_MAX_BARS,
+                     pre_entry=OUTCOME_PRE_ENTRY_BARS, exit_time=None,
+                     post_exit=8):
+    """Candles from a few bars before entry through the exit path.
+
+    Blind last-N trimming dropped the entry on longer trades, so the title
+    claimed an SL/TP the chart no longer showed. When the path is longer than
+    `max_bars`, keep the entry (with pre-entry pad) and as much of the
+    resolution as fits. `exit_time` trims trailing post-fill noise.
+    """
+    if not candles:
+        return []
+    if entry_time is None:
+        return candles[-max_bars:]
+    if exit_time is not None:
+        for i, c in enumerate(candles):
+            if c.open_time >= exit_time:
+                candles = candles[: min(len(candles), i + post_exit + 1)]
+                break
+    entry_i = 0
+    for i, c in enumerate(candles):
+        if c.open_time >= entry_time:
+            entry_i = i
+            break
+    start_i = max(0, entry_i - pre_entry)
+    if len(candles) - start_i <= max_bars:
+        return candles[start_i:]
+    # Prefer the newest bars (exit), but never drop the entry.
+    start = len(candles) - max_bars
+    if start > entry_i:
+        start = start_i
+    return candles[start:start + max_bars]
+
+
 def render_outcome_chart(candles, plan, signal_row, entry_time, outcome,
                         title=None, max_bars=None) -> bytes:
     """Render an outcome (result) chart: price path + fills + HIT/STOP flag.
@@ -380,12 +423,18 @@ def render_outcome_chart(candles, plan, signal_row, entry_time, outcome,
     non-win as a stop, which is wrong for a trade that simply expired — a
     backtest replay needs to say so rather than label it "SL HIT".
 
-    `max_bars` widens the window past OUTCOME_MAX_BARS. The default trims to
-    the most recent bars, which on a long-running trade drops the entry and its
-    early fills off the left edge — leaving a chart whose title claims targets
-    it does not show. Callers that know the trade's full length should pass it.
+    `max_bars` widens the window past OUTCOME_MAX_BARS. The default view starts
+    a few bars before entry so the SL/TP path stays on-screen.
     """
-    view = candles[-(max_bars or OUTCOME_MAX_BARS):]
+    exit_time = None
+    for a in plan or ():
+        if a.get("kind") == "zone" and a.get("end_time") is not None:
+            exit_time = a["end_time"]
+            break
+    view = view_for_outcome(
+        candles, entry_time, max_bars=max_bars or OUTCOME_MAX_BARS,
+        exit_time=exit_time,
+    )
     fig, ax, x_of, last_x = _base_plot(view)
     entry_x = x_of.get(entry_time)
     if entry_x is not None:

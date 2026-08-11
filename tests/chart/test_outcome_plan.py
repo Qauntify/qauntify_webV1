@@ -69,7 +69,11 @@ def test_build_outcome_plan_win_has_ticks_flag_and_zone():
     assert roles.count("target") >= 3  # TP1/TP2/TP3 levels
     labels = [a.get("label") for a in plan if a["kind"] == "marker"]
     assert "TP1 ✓" in labels and "TP2 ✓" in labels and "✓ TP3 HIT" in labels
-    assert any(a["kind"] == "zone" and a["role"] == "win" for a in plan)
+    win_zones = [a for a in plan if a["kind"] == "zone" and a["role"] == "win"]
+    assert win_zones and win_zones[0].get("end_time") == 3  # TP3 hit bar
+    levels = [a for a in plan if a["kind"] == "level"]
+    assert all(a.get("start_time") == 0 for a in levels)
+    assert all(a.get("end_time") == 3 for a in levels)
 
 
 def test_build_outcome_plan_loss_shows_partial_and_stop():
@@ -80,8 +84,12 @@ def test_build_outcome_plan_loss_shows_partial_and_stop():
     labels = [a.get("label") for a in plan if a["kind"] == "marker"]
     assert "TP1 ✓" not in labels
     assert "✗ SL HIT" in labels
-    assert any(a["kind"] == "zone" and a["role"] == "loss" for a in plan)
-
+    loss_zones = [a for a in plan if a["kind"] == "zone" and a["role"] == "loss"]
+    assert loss_zones and loss_zones[0].get("end_time") == 1  # SL hit bar
+    # Unused TPs stay off the chart so a stop doesn't zoom into empty air.
+    assert not any(
+        a["kind"] == "level" and a["label"].startswith("TP") for a in plan
+    )
 
 def test_build_outcome_plan_tp1_then_sl_counts_as_win():
     row = {**_win_row(), "tp1_hit_at": "2026-07-01T01:00:00Z"}
