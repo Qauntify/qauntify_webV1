@@ -1,6 +1,6 @@
 import pytest
 
-from signals.news_client import (
+from signals.clients.news import (
     FEED_URLS,
     fetch_feed_titles,
     fetch_headlines,

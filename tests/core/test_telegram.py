@@ -2,8 +2,8 @@ import pytest
 
 from signals.config import Config
 from signals.models import BotSettings, CandidateSetup, Confirmation, NoSignalReport, make_signal
-from signals.run import maybe_send_alert
-from signals.telegram_client import (
+from signals.pipeline.deliver import maybe_send_alert
+from signals.clients.telegram import (
     format_alert,
     format_caption,
     format_no_signal_alert,
@@ -131,7 +131,7 @@ def _cfg(token="bot-token", chat="chat-42"):
 
 def test_maybe_send_alert_skips_without_telegram_config(monkeypatch):
     calls = []
-    monkeypatch.setattr("signals.run.send_alert",
+    monkeypatch.setattr("signals.pipeline.deliver.send_alert",
                         lambda *a, **k: calls.append(a))
     maybe_send_alert(_signal(), BotSettings(), _cfg(token=""))
     assert calls == []
@@ -139,7 +139,7 @@ def test_maybe_send_alert_skips_without_telegram_config(monkeypatch):
 
 def test_maybe_send_alert_skips_below_threshold(monkeypatch):
     calls = []
-    monkeypatch.setattr("signals.run.send_alert",
+    monkeypatch.setattr("signals.pipeline.deliver.send_alert",
                         lambda *a, **k: calls.append(a))
     settings = BotSettings(min_alert_confidence=90)
     maybe_send_alert(_signal(confidence=80), settings, _cfg())
@@ -148,7 +148,7 @@ def test_maybe_send_alert_skips_below_threshold(monkeypatch):
 
 def test_maybe_send_alert_sends_at_threshold(monkeypatch):
     calls = []
-    monkeypatch.setattr("signals.run.send_alert",
+    monkeypatch.setattr("signals.pipeline.deliver.send_alert",
                         lambda *a, **k: calls.append(a))
     settings = BotSettings(min_alert_confidence=80)
     maybe_send_alert(_signal(confidence=80), settings, _cfg())
@@ -158,8 +158,8 @@ def test_maybe_send_alert_sends_at_threshold(monkeypatch):
 def test_maybe_send_alert_swallows_send_failure(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("telegram down")
-    monkeypatch.setattr("signals.run.send_alert", boom)
-    monkeypatch.setattr("signals.run.RETRY_DELAY", 0)
+    monkeypatch.setattr("signals.pipeline.deliver.send_alert", boom)
+    monkeypatch.setattr("signals.pipeline.dedup.RETRY_DELAY", 0)
     maybe_send_alert(_signal(), BotSettings(), _cfg())  # must not raise
 
 
@@ -178,34 +178,34 @@ def _stored_row(direction="long", minutes_ago=30):
 
 
 def test_already_signaled_true_for_fresh_same_direction(monkeypatch):
-    from signals.run import already_signaled
-    monkeypatch.setattr("signals.run.latest_signal",
+    from signals.pipeline.dedup import already_signaled
+    monkeypatch.setattr("signals.pipeline.dedup.latest_signal",
                         lambda *a, **k: _stored_row("long", minutes_ago=30))
     assert already_signaled(_setup("long"), _cfg()) is True
 
 
 def test_already_signaled_false_for_other_direction(monkeypatch):
-    from signals.run import already_signaled
-    monkeypatch.setattr("signals.run.latest_signal",
+    from signals.pipeline.dedup import already_signaled
+    monkeypatch.setattr("signals.pipeline.dedup.latest_signal",
                         lambda *a, **k: _stored_row("short", minutes_ago=30))
     assert already_signaled(_setup("long"), _cfg()) is False
 
 
 def test_already_signaled_false_outside_window(monkeypatch):
-    from signals.run import already_signaled
-    monkeypatch.setattr("signals.run.latest_signal",
+    from signals.pipeline.dedup import already_signaled
+    monkeypatch.setattr("signals.pipeline.dedup.latest_signal",
                         lambda *a, **k: _stored_row("long", minutes_ago=200))
     assert already_signaled(_setup("long"), _cfg()) is False
 
 
 def test_already_signaled_false_when_no_history_or_error(monkeypatch):
-    from signals.run import already_signaled
-    monkeypatch.setattr("signals.run.latest_signal", lambda *a, **k: None)
+    from signals.pipeline.dedup import already_signaled
+    monkeypatch.setattr("signals.pipeline.dedup.latest_signal", lambda *a, **k: None)
     assert already_signaled(_setup(), _cfg()) is False
 
     def boom(*a, **k):
         raise RuntimeError("db down")
-    monkeypatch.setattr("signals.run.latest_signal", boom)
+    monkeypatch.setattr("signals.pipeline.dedup.latest_signal", boom)
     # Fail closed: lookup errors block stores rather than allow duplicates.
     assert already_signaled(_setup(), _cfg()) is True
 
@@ -336,37 +336,39 @@ def test_send_run_summary_posts_to_bot_api():
     assert "ENGINE RUN" in session.last_json["text"]
 
 
-def test_run_module_never_pushes_no_signal_or_summary_alerts():
+def test_pipeline_never_pushes_no_signal_or_summary_alerts():
     """Telegram carries confirmed signals and TP/SL outcomes only.
 
     This used to be enforced by two functions in signals.run whose entire body
     was `return`, which is a comment pretending to be code. The invariant is
-    that the run path never reaches the no-signal / run-summary senders, so
-    assert that directly.
+    that the run path (now split across signals.pipeline.*) never reaches the
+    no-signal / run-summary senders, so assert that directly.
     """
     import ast
     import inspect
 
-    from signals import run as run_module
+    from signals.pipeline import dedup, deliver, engine, market_data, scan
 
-    tree = ast.parse(inspect.getsource(run_module))
-    called = {
-        node.func.id for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    } | {
-        node.func.attr for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-    }
+    called = set()
+    for module in (dedup, deliver, engine, market_data, scan):
+        tree = ast.parse(inspect.getsource(module))
+        called |= {
+            node.func.id for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        } | {
+            node.func.attr for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        }
     assert "send_no_signal_alert" not in called
     assert "send_run_summary" not in called
     # The senders themselves stay available for ad-hoc use.
-    from signals import telegram_client
-    assert hasattr(telegram_client, "send_no_signal_alert")
-    assert hasattr(telegram_client, "send_run_summary")
+    from signals.clients import telegram
+    assert hasattr(telegram, "send_no_signal_alert")
+    assert hasattr(telegram, "send_run_summary")
 
 
 def test_format_run_summary_tags_lines_with_timeframe():
-    from signals.telegram_client import format_run_summary
+    from signals.clients.telegram import format_run_summary
 
     text = format_run_summary("run-1", "15m+1h", [
         {"symbol": "BTCUSDT", "status": "CONFIRMED", "extra": "LONG 82%",
@@ -379,7 +381,7 @@ def test_format_run_summary_tags_lines_with_timeframe():
 
 
 from signals.models import Signal
-from signals.telegram_client import format_caption, send_alert
+from signals.clients.telegram import format_caption, send_alert
 
 
 def _chart_signal(chart_url=None):
@@ -461,7 +463,7 @@ def _outcome_row(outcome_chart_url=None):
 
 
 def test_outcome_alert_uses_photo_when_chart_present():
-    from signals.telegram_client import send_outcome_alert
+    from signals.clients.telegram import send_outcome_alert
     rec = _ChartRec()
     send_outcome_alert(_outcome_row("http://x/s1-outcome.png"), "tp3_hit",
                        "tok", "chat", session=rec)
@@ -470,7 +472,7 @@ def test_outcome_alert_uses_photo_when_chart_present():
 
 
 def test_outcome_alert_falls_back_to_message_without_chart():
-    from signals.telegram_client import send_outcome_alert
+    from signals.clients.telegram import send_outcome_alert
     rec = _ChartRec()
     send_outcome_alert(_outcome_row(None), "sl_hit", "tok", "chat", session=rec)
     assert rec.calls[0]["url"].endswith("/sendMessage")

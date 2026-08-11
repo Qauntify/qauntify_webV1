@@ -1,13 +1,12 @@
 import pytest
 
 from signals.models import BotSettings, CandidateSetup, Confirmation, make_signal
-from signals.storage import (
-    delete_rows_older_than,
-    fetch_bot_settings,
+from signals.persistence.cleanup import delete_rows_older_than
+from signals.persistence.events import save_debate, save_xau_scan_run
+from signals.persistence.settings import fetch_bot_settings
+from signals.persistence.signals import (
     list_signals_missing_outcome_chart,
-    save_debate,
     save_signal,
-    save_xau_scan_run,
     update_signal_outcome,
 )
 
@@ -262,7 +261,7 @@ def test_fetch_bot_settings_defaults_on_malformed_row():
 
 def test_latest_signal_filters_by_timeframe():
     session = FakeGetSession(payload=[])
-    from signals.storage import latest_signal
+    from signals.persistence.signals import latest_signal
 
     latest_signal("BTCUSDT", "https://abc.supabase.co", "key",
                   timeframe="15m", session=session)
@@ -271,7 +270,7 @@ def test_latest_signal_filters_by_timeframe():
 
 def test_list_open_signals_selects_timeframe():
     session = FakeGetSession(payload=[])
-    from signals.storage import list_open_signals
+    from signals.persistence.signals import list_open_signals
 
     list_open_signals("https://abc.supabase.co", "key", session=session)
     assert "timeframe" in session.last_url
@@ -280,7 +279,7 @@ def test_list_open_signals_selects_timeframe():
 def test_latest_ai_event_time_returns_created_at_for_symbol_and_timeframe():
     session = FakeGetSession(
         payload=[{"created_at": "2026-07-08T09:00:00+00:00"}])
-    from signals.storage import latest_ai_event_time
+    from signals.persistence.events import latest_ai_event_time
 
     result = latest_ai_event_time(
         "BTCUSDT", "1h", "https://abc.supabase.co", "key", session=session)
@@ -292,7 +291,7 @@ def test_latest_ai_event_time_returns_created_at_for_symbol_and_timeframe():
 
 def test_latest_ai_event_time_none_when_no_history():
     session = FakeGetSession(payload=[])
-    from signals.storage import latest_ai_event_time
+    from signals.persistence.events import latest_ai_event_time
 
     result = latest_ai_event_time(
         "BTCUSDT", "1h", "https://abc.supabase.co", "key", session=session)
@@ -300,7 +299,7 @@ def test_latest_ai_event_time_none_when_no_history():
 
 
 def test_latest_ai_event_times_since_batches_one_query_for_all_symbols():
-    from signals.storage import latest_ai_event_times_since
+    from signals.persistence.events import latest_ai_event_times_since
 
     # Two rows for BTCUSDT (newest first within the group), one for ETHUSDT;
     # SOLUSDT has none.
@@ -331,7 +330,7 @@ def test_latest_ai_event_times_since_empty_symbols_skips_request():
         def get(self, *a, **k):
             raise AssertionError("no request should be made for an empty symbol list")
 
-    from signals.storage import latest_ai_event_times_since
+    from signals.persistence.events import latest_ai_event_times_since
 
     result = latest_ai_event_times_since(
         [], "1h", "2026-07-09T00:00:00+00:00",
@@ -341,7 +340,7 @@ def test_latest_ai_event_times_since_empty_symbols_skips_request():
 
 
 def test_latest_signals_since_batches_one_query_for_all_symbols():
-    from signals.storage import latest_signals_since
+    from signals.persistence.signals import latest_signals_since
 
     session = FakeGetSession(payload=[
         {"symbol": "BTCUSDT", "direction": "long",
@@ -365,7 +364,7 @@ def test_latest_signals_since_batches_one_query_for_all_symbols():
 
 
 def test_list_closed_signals_filters_terminal_statuses():
-    from signals.storage import list_closed_signals
+    from signals.persistence.signals import list_closed_signals
 
     session = FakeGetSession(payload=[
         {"symbol": "BTCUSDT", "status": "tp_hit"},
@@ -387,7 +386,7 @@ def test_latest_signals_since_empty_symbols_skips_request():
         def get(self, *a, **k):
             raise AssertionError("no request should be made for an empty symbol list")
 
-    from signals.storage import latest_signals_since
+    from signals.persistence.signals import latest_signals_since
 
     result = latest_signals_since(
         [], "1h", "2026-07-09T00:00:00+00:00",
@@ -397,7 +396,7 @@ def test_latest_signals_since_empty_symbols_skips_request():
 
 
 def test_set_outcome_chart_url_patches_row():
-    from signals.storage import set_outcome_chart_url
+    from signals.persistence.signals import set_outcome_chart_url
 
     class _Resp:
         status_code = 200
@@ -447,7 +446,7 @@ def test_dedup_queries_ignore_shadow_rows():
     engine skip a genuine confirmed setup for that symbol — the experiment
     would silently change what gets traded.
     """
-    from signals.storage import (
+    from signals.persistence.signals import (
         latest_signal, latest_signals_since, open_symbols_for_timeframe,
     )
 
@@ -469,7 +468,7 @@ def test_dedup_queries_ignore_shadow_rows():
 
 def test_outcome_polling_still_sees_shadow_rows():
     """Shadows MUST be polled — that is how their outcome gets recorded."""
-    from signals.storage import list_open_signals
+    from signals.persistence.signals import list_open_signals
 
     session = FakeGetSession(payload=[])
     list_open_signals("https://abc.supabase.co", "k", session=session)
@@ -488,7 +487,7 @@ def test_list_signals_missing_outcome_chart_queries_closed_without_chart():
 
 
 def test_upsert_mt5_last_tick_posts_merge():
-    from signals.storage import upsert_mt5_last_tick
+    from signals.persistence.mt5 import upsert_mt5_last_tick
 
     session = FakeSession()
     upsert_mt5_last_tick(
@@ -508,7 +507,7 @@ def test_upsert_mt5_last_tick_posts_merge():
 def test_mt5_tick_is_fresh():
     from datetime import datetime, timedelta, timezone
 
-    from signals.storage import mt5_tick_is_fresh
+    from signals.persistence.mt5 import mt5_tick_is_fresh
 
     now = datetime.now(timezone.utc)
     fresh = {"price": 1.0, "tick_time": now.isoformat()}
@@ -522,7 +521,7 @@ def test_mt5_tick_is_fresh():
 
 
 def test_fetch_mt5_last_tick_parses_row():
-    from signals.storage import fetch_mt5_last_tick
+    from signals.persistence.mt5 import fetch_mt5_last_tick
 
     session = FakeGetSession(payload=[{
         "symbol": "XAUUSD", "price": 4121.1, "bid": 4121.0, "ask": 4121.2,
@@ -538,7 +537,7 @@ def test_fetch_mt5_last_tick_parses_row():
 
 
 def test_expire_drifted_open_gold_signals():
-    from signals.storage import expire_drifted_open_gold_signals
+    from signals.persistence.mt5 import expire_drifted_open_gold_signals
 
     session = FakeGetSession(
         payload=[{
@@ -555,7 +554,7 @@ def test_expire_drifted_open_gold_signals():
 
 
 def test_merge_mt5_candle_bars_dedupes_and_caps():
-    from signals.storage import merge_mt5_candle_bars
+    from signals.persistence.mt5 import merge_mt5_candle_bars
 
     existing = [
         {"open_time": 100, "open": 1, "high": 2, "low": 0.5, "close": 1.5, "volume": 1},
@@ -575,7 +574,7 @@ def test_merge_mt5_candle_bars_dedupes_and_caps():
 def test_mt5_candles_usable_requires_depth_and_freshness():
     from datetime import datetime, timezone
 
-    from signals.storage import mt5_candles_usable
+    from signals.persistence.mt5 import mt5_candles_usable
 
     now = int(datetime.now(timezone.utc).timestamp())
     # Align to minute
@@ -591,7 +590,7 @@ def test_mt5_candles_usable_requires_depth_and_freshness():
 
 
 def test_purge_mt5_candle_outliers_drops_far_closes():
-    from signals.storage import purge_mt5_candle_outliers
+    from signals.persistence.mt5 import purge_mt5_candle_outliers
 
     # Gradual live move 4138→4139, then a discontinuous junk cluster at 4120.
     rows = [
@@ -608,7 +607,7 @@ def test_purge_mt5_candle_outliers_drops_far_closes():
 
 def test_purge_mt5_candle_outliers_keeps_fast_gold_moves_by_default():
     """Default drift must tolerate a >$15 1m gold step (news / TP rush)."""
-    from signals.storage import purge_mt5_candle_outliers
+    from signals.persistence.mt5 import purge_mt5_candle_outliers
 
     rows = []
     px = 5050.0
@@ -624,7 +623,7 @@ def test_purge_mt5_candle_outliers_keeps_fast_gold_moves_by_default():
 
 
 def test_purge_mt5_candle_outliers_still_drops_junk_seed_by_default():
-    from signals.storage import purge_mt5_candle_outliers
+    from signals.persistence.mt5 import purge_mt5_candle_outliers
 
     rows = [
         {"open_time": 1, "open": 4120, "high": 4121, "low": 4119, "close": 4120.0, "volume": 1},

@@ -3,7 +3,7 @@ from signals.models import CandidateSetup
 from signals.rag.format import format_rag_block
 from signals.rag.playbook import PLAYBOOK_CHUNKS
 from signals.rag.retrieve import local_playbook_chunks, retrieve_context
-from signals.composer import build_messages, confirm_setup
+from signals.pipeline.composer import build_messages, confirm_setup
 
 
 SETUP = CandidateSetup(

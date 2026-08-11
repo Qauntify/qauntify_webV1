@@ -11,7 +11,7 @@ import zipfile
 
 import pytest
 
-from signals.history import (
+from signals.analysis.history import (
     archive_url,
     binance_symbol,
     checksum_url,

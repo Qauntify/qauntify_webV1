@@ -2,14 +2,14 @@
 
 A healthy session logs a no_setup/reject/confirm ai_event on nearly every
 scan — most scans find nothing, but that still gets recorded (see
-signals/run.py's no-setup path). Zero events across a multi-hour window is a
-strong signal that scans are silently crashing before they reach storage,
-not that the strategy is simply quiet.
+signals/pipeline/scan.py's no-setup path). Zero events across a multi-hour
+window is a strong signal that scans are silently crashing before they reach
+storage, not that the strategy is simply quiet.
 
 This is exactly the failure mode that let the 15m cloud_mss session sit at
 zero signals for five days (2026-07-31 to 2026-08-05): composer.py crashed
 on every single scan with KeyError('ema9'), the crash was swallowed by a
-broad except in run.py, and nothing was left behind to notice — no error,
+broad except in scan.py, and nothing was left behind to notice — no error,
 no ai_events row, nothing. This module exists so that goes unnoticed for
 minutes, not days.
 """

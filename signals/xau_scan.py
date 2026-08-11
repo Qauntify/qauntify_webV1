@@ -14,19 +14,15 @@ from datetime import datetime, timezone
 import requests
 
 from signals.config import load_config
-from signals.llm_client import SeaLionClient
+from signals.clients.llm import SeaLionClient
 from signals.models import ScanResult
-from signals.run import (
-    maybe_send_alert,
-    resolve_gold_live_price,
-    scan_symbol,
-)
-from signals.session_clock import scalp_session_active, sessions_at
-from signals.storage import (
-    expire_drifted_open_gold_signals,
-    fetch_bot_settings,
-    save_xau_scan_run,
-)
+from signals.pipeline.deliver import maybe_send_alert
+from signals.pipeline.market_data import resolve_gold_live_price
+from signals.pipeline.scan import scan_symbol
+from signals.analysis.session_clock import scalp_session_active, sessions_at
+from signals.persistence.events import save_xau_scan_run
+from signals.persistence.mt5 import expire_drifted_open_gold_signals
+from signals.persistence.settings import fetch_bot_settings
 
 XAU_SYMBOL = "XAUUSD"
 XAU_TIMEFRAME = "1m"

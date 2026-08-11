@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-from signals.llm_client import SeaLionClient
+from signals.clients.llm import SeaLionClient
 
 
 class FakeResponse:

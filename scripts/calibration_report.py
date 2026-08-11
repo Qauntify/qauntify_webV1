@@ -17,9 +17,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from signals.calibration import calibration_report
+from signals.analysis.calibration import calibration_report
 from signals.config import load_config
-from signals.storage import list_closed_signals
+from signals.persistence.signals import list_closed_signals
 
 
 def _fmt_win_rate(win_rate) -> str:

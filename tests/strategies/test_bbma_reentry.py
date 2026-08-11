@@ -6,7 +6,7 @@ Bollinger arithmetic already covered by tests/core/test_indicators.py.
 """
 import random
 
-from signals.indicators import atr
+from signals.analysis.indicators import atr
 from signals.models import Candle
 from signals.strategies.bbma import reentry
 from signals.strategies.bbma.reentry import SIGNAL_LOOKBACK, detect_setup

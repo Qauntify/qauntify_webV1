@@ -4,7 +4,7 @@ Long only on a fresh H1 CE bullish flip while M15 is in discount
 (CE trail below LWMA). Short only on a fresh bearish flip in premium.
 SL = active CE trail; TP1/TP2/TP3 = 1R/2R/3R.
 """
-from signals.indicators import chandelier_exit, lwma
+from signals.analysis.indicators import chandelier_exit, lwma
 from signals.models import CandidateSetup, TP1_R, TP2_R, TP3_R, take_profits_from_risk
 
 CE_ATR_PERIOD = 22

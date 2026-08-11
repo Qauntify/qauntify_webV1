@@ -1,5 +1,5 @@
 """Tests for the LLM confirmation composer."""
-from signals.composer import (
+from signals.pipeline.composer import (
     build_messages,
     build_no_setup_messages,
     confirm_setup,
@@ -93,7 +93,7 @@ def test_ict_fvg_messages_use_actual_tp_r_labels():
 
 
 def test_ict_fvg_no_setup_mentions_reclaim_fallback():
-    from signals.composer import no_setup_rationale
+    from signals.pipeline.composer import no_setup_rationale
 
     text = no_setup_rationale(
         "XAUUSD", "5m", {"atr": 2.0}, strategy="ict_fvg",

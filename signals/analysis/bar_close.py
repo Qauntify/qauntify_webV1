@@ -6,7 +6,7 @@ each closed bar fires at most once.
 """
 from __future__ import annotations
 
-from signals.market_client import INTERVAL_MINUTES
+from signals.clients.market import INTERVAL_MINUTES
 from signals.models import TradingSession
 
 # How long after a bar boundary we still consider it a "fresh close".

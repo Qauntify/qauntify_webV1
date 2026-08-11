@@ -19,8 +19,8 @@ import random
 import statistics
 import sys
 
-from signals.r_model import gross_r
-from signals.storage import list_closed_signals
+from signals.analysis.r_model import gross_r
+from signals.persistence.signals import list_closed_signals
 
 ALPHA = 0.05
 TARGET_N = 250
@@ -50,7 +50,7 @@ def permutation_p(a, b, trials=20000, seed=7):
 
 # GROSS, deliberately. The pre-registered metric is mean realised R under the
 # engine's scale-out model, fixed before any data was collected. Costs were
-# added to the reporting stack later (signals.r_model.net_r); switching this
+# added to the reporting stack later (signals.analysis.r_model.net_r); switching this
 # arm-comparison to net mid-experiment would be changing the metric after
 # seeing data, which is the exact failure the pre-registration exists to
 # prevent. Both arms trade the same symbols at the same stop distances, so a

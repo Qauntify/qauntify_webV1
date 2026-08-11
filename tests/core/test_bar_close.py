@@ -1,7 +1,7 @@
 """Bar-close scheduling for the live scanner."""
 from datetime import datetime, timezone
 
-from signals.bar_close import (
+from signals.analysis.bar_close import (
     closed_bar_open_ms,
     just_closed,
     sessions_due,

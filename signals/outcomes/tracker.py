@@ -8,15 +8,15 @@ Telegram fires once per newly crossed level.
 from datetime import datetime, timedelta, timezone
 
 from signals.chart.outcome_pipeline import attach_outcome_chart
-from signals.market_client import fetch_candles
+from signals.clients.market import fetch_candles
 from signals.models import ALL_SESSIONS, OPEN_POLL_STATUSES, TIMEFRAME_MINUTES
-from signals.storage import (
+from signals.persistence.signals import (
     list_open_signals,
     list_signals_missing_outcome_chart,
     set_outcome_chart_url,
     update_signal_outcome,
 )
-from signals.telegram_client import send_outcome_alert
+from signals.clients.telegram import send_outcome_alert
 
 # Keyed off ALL_SESSIONS, not TRADING_SESSIONS: this tracker settles every open
 # row, including those written by workflows the main scan loop never runs.

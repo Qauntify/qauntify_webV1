@@ -1,7 +1,7 @@
 """Tests for free ForexFactory-style economic calendar client."""
 from datetime import datetime, timezone
 
-from signals.calendar_client import (
+from signals.clients.calendar import (
     calendar_block_for_symbol,
     fetch_calendar_events,
     filter_events_for_symbol,

@@ -14,7 +14,7 @@ side of the pullback leg (the change of character), and that bar is the entry.
 The Chandelier here uses `sma_atr`, MetaTrader's simple-average true range,
 because the Pine does. `ce_lwma` uses the Wilder default and is untouched.
 """
-from signals.indicators import chandelier_exit, lwma, sma_atr
+from signals.analysis.indicators import chandelier_exit, lwma, sma_atr
 from signals.models import CandidateSetup, take_profits_from_risk
 from signals.strategies.ict_smc.detector import pivot_highs, pivot_lows
 

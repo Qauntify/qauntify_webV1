@@ -3,12 +3,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from signals import outcome_tracker
+from signals.outcomes import tracker as outcome_tracker
 from signals.config import Config
 from signals.models import Candle
-from signals.outcome_tracker import check_outcome, track_open_signals
-from signals.storage import close_signal, list_open_signals
-from signals.telegram_client import format_outcome_alert
+from signals.outcomes.tracker import check_outcome, track_open_signals
+from signals.persistence.signals import close_signal, list_open_signals
+from signals.clients.telegram import format_outcome_alert
 
 NOW = datetime(2026, 7, 7, 12, 0, tzinfo=timezone.utc)
 
@@ -431,7 +431,7 @@ def test_limit_entry_fill_bar_resolved_by_close_not_index(monkeypatch):
     # the candle list is the CURRENT bar, not the fill bar. Stepping back one
     # index would pick the wrong one; the fill bar is the newest one that had
     # already closed.
-    from signals.outcome_tracker import _scan_start
+    from signals.outcomes.tracker import _scan_start
 
     hour = 3_600_000
     candles = [SimpleNamespace(open_time=t) for t in
@@ -463,7 +463,7 @@ def test_one_minute_dedup_window_scales_to_its_own_bar(monkeypatch):
     # _dedup_window fell back to the 1h value for any unknown timeframe, so a
     # scalper firing every 60s could only emit one same-direction signal every
     # 3 hours.
-    from signals.run import _dedup_window
+    from signals.pipeline.dedup import _dedup_window
 
     assert _dedup_window("1m") == timedelta(minutes=3)
     assert _dedup_window("5m") == timedelta(minutes=15)
@@ -485,7 +485,7 @@ def test_track_scalp_signals_expire_faster_than_swing(monkeypatch):
 
 
 def test_cloned_tp_levels_collapse_to_single_target():
-    from signals.outcome_tracker import _targets
+    from signals.outcomes.tracker import _targets
     row = {
         "take_profit": 110.0,
         "take_profit_1": 110.0,
@@ -496,7 +496,7 @@ def test_cloned_tp_levels_collapse_to_single_target():
 
 
 def test_distinct_tp_ladder_kept():
-    from signals.outcome_tracker import _targets
+    from signals.outcomes.tracker import _targets
     row = {
         "take_profit": 102.0,
         "take_profit_1": 102.0,
@@ -507,7 +507,7 @@ def test_distinct_tp_ladder_kept():
 
 
 def test_terminal_outcome_attaches_and_stores_chart_url(monkeypatch):
-    import signals.outcome_tracker as ot
+    import signals.outcomes.tracker as ot
     from datetime import datetime, timezone
     from signals.models import Candle
 

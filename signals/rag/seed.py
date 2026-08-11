@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import requests
 
 from signals.config import load_config
-from signals.llm_client import SeaLionClient
+from signals.clients.llm import SeaLionClient
 from signals.rag.playbook import PLAYBOOK_CHUNKS
 
 

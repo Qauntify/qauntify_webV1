@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
 
-from signals.telegram_client import send_message
+from signals.clients.telegram import send_message
 
 DEFAULT_MESSAGE = (
     "✅ <b>Qauntify push notification test</b>\n"

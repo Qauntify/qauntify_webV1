@@ -1,5 +1,5 @@
 """Unit tests for the AI War Room technical debate orchestration."""
-from signals.debate import FloorAgents, parse_manager, run_debate
+from signals.pipeline.debate import FloorAgents, parse_manager, run_debate
 from signals.models import CandidateSetup
 
 SETUP = CandidateSetup(

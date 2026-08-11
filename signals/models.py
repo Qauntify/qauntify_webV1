@@ -228,7 +228,7 @@ def session_scans(session_name: str, symbol: str) -> bool:
     # Imported inside the function on purpose: market_client imports Candle
     # from this module, so a top-level import here would be circular. Reusing
     # canonical_symbol keeps one definition of how BTCUSDT maps to BTCUSD.
-    from signals.market_client import canonical_symbol
+    from signals.clients.market import canonical_symbol
 
     canon = canonical_symbol(symbol)
     if canon in RETIRED_SYMBOLS:

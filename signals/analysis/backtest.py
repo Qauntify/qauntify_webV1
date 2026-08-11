@@ -16,13 +16,13 @@ Assumptions (documented so results are read correctly):
 - No higher-timeframe confluence and no multi-timeframe strategies (ce_lwma
   needs H1 alignment — not covered here).
 
-Usage: python -m signals.backtest
+Usage: python -m signals.analysis.backtest
 """
-from signals.indicators import adx, atr, ema, macd_histogram, rsi
-# Re-exported: the R model lives in signals.r_model so the live reporting paths
-# and this backtester cannot drift apart. Imported here for call-site
+from signals.analysis.indicators import adx, atr, ema, macd_histogram, rsi
+# Re-exported: the R model lives in signals.analysis.r_model so the live reporting
+# paths and this backtester cannot drift apart. Imported here for call-site
 # compatibility.
-from signals.r_model import cost_r, scaled_r  # noqa: F401
+from signals.analysis.r_model import cost_r, scaled_r  # noqa: F401
 from signals.strategies import detect_setup
 
 # Default per-strategy timeframe (matches the live sessions) and warm-up bars
@@ -342,7 +342,7 @@ def backtest_strategy(strategy, symbol, candles, *, warmup=DEFAULT_WARMUP,
 def main():
     import requests
 
-    from signals.market_client import fetch_candles
+    from signals.clients.market import fetch_candles
 
     session = requests.Session()
     print("Scale-out model: 1/3 booked at each of TP1/TP2/TP3, stop trails to "

@@ -1,6 +1,6 @@
 import pytest
 
-from signals.indicators import adx, atr, bollinger, ema, macd_histogram, rsi, sma_atr
+from signals.analysis.indicators import adx, atr, bollinger, ema, macd_histogram, rsi, sma_atr
 
 
 def test_ema_constant_series_equals_constant():
@@ -128,7 +128,7 @@ def test_adx_choppy_series_is_low():
 
 
 def test_lwma_weights_recent_bars_more():
-    from signals.indicators import lwma
+    from signals.analysis.indicators import lwma
 
     # Rising series: LWMA sits above SMA of the same window.
     values = [float(i) for i in range(1, 11)]
@@ -140,13 +140,13 @@ def test_lwma_weights_recent_bars_more():
 
 
 def test_lwma_too_short_is_all_none():
-    from signals.indicators import lwma
+    from signals.analysis.indicators import lwma
 
     assert lwma([1.0, 2.0], 5) == [None, None]
 
 
 def test_chandelier_exit_flips_on_close_through_trail():
-    from signals.indicators import chandelier_exit
+    from signals.analysis.indicators import chandelier_exit
 
     # Strong uptrend then a sharp break below the long trail.
     n = 60
@@ -254,7 +254,7 @@ def test_chandelier_exit_accepts_an_alternative_atr():
     """The series must CHANGE volatility. On a constant-range series Wilder and
     a simple mean agree exactly, so identical bands would prove nothing about
     whether atr_fn was honoured."""
-    from signals.indicators import chandelier_exit
+    from signals.analysis.indicators import chandelier_exit
 
     highs = [100.0 + i for i in range(40)] + [140.0 + i * 3 for i in range(20)]
     lows = [99.0 + i for i in range(40)] + [130.0 + i * 3 for i in range(20)]
@@ -267,7 +267,7 @@ def test_chandelier_exit_accepts_an_alternative_atr():
 
 def test_chandelier_exit_default_path_is_unchanged():
     """ce_lwma is live on this default. Adding the hook must not move it."""
-    from signals.indicators import chandelier_exit
+    from signals.analysis.indicators import chandelier_exit
 
     n = 60
     highs = [100.0 + i for i in range(n)]
