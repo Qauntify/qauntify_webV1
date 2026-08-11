@@ -17,9 +17,9 @@ _INERT_RUN_STORAGE_DEFAULTS = {
     "signals.run.save_signal": lambda *a, **k: None,
     "signals.run.save_engine_run": lambda *a, **k: None,
     "signals.run.attach_chart": lambda signal, *a, **k: signal,
-    "signals.outcome_tracker.attach_outcome_chart": lambda *a, **k: None,
-    "signals.outcome_tracker.set_outcome_chart_url": lambda *a, **k: None,
-    "signals.outcome_tracker.list_signals_missing_outcome_chart": lambda *a, **k: [],
+    "signals.outcomes.tracker.attach_outcome_chart": lambda *a, **k: None,
+    "signals.outcomes.tracker.set_outcome_chart_url": lambda *a, **k: None,
+    "signals.outcomes.tracker.list_signals_missing_outcome_chart": lambda *a, **k: [],
     "signals.retention.delete_rows_older_than": lambda *a, **k: None,
 }
 

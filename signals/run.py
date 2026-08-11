@@ -24,7 +24,7 @@ from signals.chart.pipeline import attach_chart
 from signals.composer import confirm_setup, no_setup_rationale
 from signals.rag import retrieve_context
 from signals.config import load_config
-from signals.indicators import adx, atr, ema, macd_histogram, rsi
+from signals.analysis.indicators import adx, atr, ema, macd_histogram, rsi
 from signals.debate import run_debate
 from signals.clients.llm import SeaLionClient
 from signals.models import (
@@ -39,9 +39,9 @@ from signals.models import (
     session_scans,
     take_profits_from_risk,
 )
-from signals.outcome_tracker import backfill_missing_outcome_charts, track_open_signals
+from signals.outcomes.tracker import backfill_missing_outcome_charts, track_open_signals
 from signals.retention import run_retention_cleanup
-from signals.session_clock import describe_market_session
+from signals.analysis.session_clock import describe_market_session
 from signals.strategies import detect_setup
 from signals.storage import (
     fetch_bot_settings,

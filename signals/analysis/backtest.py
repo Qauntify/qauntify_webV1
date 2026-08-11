@@ -18,11 +18,11 @@ Assumptions (documented so results are read correctly):
 
 Usage: python -m signals.backtest
 """
-from signals.indicators import adx, atr, ema, macd_histogram, rsi
-# Re-exported: the R model lives in signals.r_model so the live reporting paths
-# and this backtester cannot drift apart. Imported here for call-site
+from signals.analysis.indicators import adx, atr, ema, macd_histogram, rsi
+# Re-exported: the R model lives in signals.analysis.r_model so the live reporting
+# paths and this backtester cannot drift apart. Imported here for call-site
 # compatibility.
-from signals.r_model import cost_r, scaled_r  # noqa: F401
+from signals.analysis.r_model import cost_r, scaled_r  # noqa: F401
 from signals.strategies import detect_setup
 
 # Default per-strategy timeframe (matches the live sessions) and warm-up bars

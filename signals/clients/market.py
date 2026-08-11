@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import requests
 
-from signals.candle_resample import resample_candles
+from signals.analysis.candle_resample import resample_candles
 from signals.models import Candle
 
 OHLC_URL = "https://api.kraken.com/0/public/OHLC"

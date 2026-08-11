@@ -1,6 +1,6 @@
 """Deep historical candles for backtesting — NOT the live engine's data path.
 
-`signals/market_client.py` serves the live scans, and both of its sources cap
+`signals/clients/market.py` serves the live scans, and both of its sources cap
 hard: Kraken returns at most 721 OHLC bars whatever you ask for, and offers no
 deeper history, which is roughly 30 days at 1h. That is far too little to
 decide whether a strategy has an edge — it covers a single market regime.

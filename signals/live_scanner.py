@@ -17,7 +17,7 @@ import os
 import time
 from datetime import datetime, timezone
 
-from signals.bar_close import sessions_due
+from signals.analysis.bar_close import sessions_due
 from signals.models import TRADING_SESSIONS
 from signals.run import main as run_engine
 

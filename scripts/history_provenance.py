@@ -25,7 +25,7 @@ import datetime as dt
 
 import requests
 
-from signals.history import EARLIEST_MONTH, load_history
+from signals.analysis.history import EARLIEST_MONTH, load_history
 
 # (label, expected UTC date window, expected price window, what to find)
 LANDMARKS = (

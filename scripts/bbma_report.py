@@ -13,7 +13,7 @@ Usage: .venv/bin/python -m scripts.bbma_report
 """
 import requests
 
-from signals.backtest import backtest_strategy
+from signals.analysis.backtest import backtest_strategy
 from signals.clients.market import fetch_candles
 
 STRATEGIES = ("bbma_extreme", "bbma_reentry")

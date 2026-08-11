@@ -1,7 +1,7 @@
 """Tests for Asia / London / New York session labeling."""
 from datetime import datetime, timezone
 
-from signals.session_clock import describe_market_session, sessions_at
+from signals.analysis.session_clock import describe_market_session, sessions_at
 
 
 def test_asia_only_window():
@@ -41,7 +41,7 @@ def test_describe_single_session():
 
 
 def test_scalp_session_active_blocks_asia_only():
-    from signals.session_clock import scalp_session_active
+    from signals.analysis.session_clock import scalp_session_active
 
     asia = datetime(2026, 7, 14, 3, 0, tzinfo=timezone.utc)
     london = datetime(2026, 7, 14, 10, 0, tzinfo=timezone.utc)

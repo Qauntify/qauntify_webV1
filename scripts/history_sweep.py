@@ -23,10 +23,10 @@ import statistics
 
 import requests
 
-from signals.backtest import backtest_windowed, htf_trend_series
-from signals.history import load_history
-from signals.indicators import atr
-from signals.r_model import MAKER_BPS
+from signals.analysis.backtest import backtest_windowed, htf_trend_series
+from signals.analysis.history import load_history
+from signals.analysis.indicators import atr
+from signals.analysis.r_model import MAKER_BPS
 
 SYMBOLS = ("BTCUSD", "ETHUSD")
 TF_MINUTES = {"15m": 15, "1h": 60, "4h": 240, "1d": 1440}

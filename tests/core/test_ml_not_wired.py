@@ -15,10 +15,10 @@ LIVE_PATH = [
     SIGNALS / "run.py",
     SIGNALS / "xau_scan.py",
     SIGNALS / "composer.py",
-    SIGNALS / "outcome_tracker.py",
+    SIGNALS / "outcomes" / "tracker.py",
     SIGNALS / "storage.py",
     SIGNALS / "models.py",
-    SIGNALS / "r_model.py",
+    SIGNALS / "analysis" / "r_model.py",
     SIGNALS / "strategies" / "router.py",
 ]
 

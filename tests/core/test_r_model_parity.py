@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from signals.r_model import COST_BPS, DEFAULT_COST_BPS, scaled_r
+from signals.analysis.r_model import COST_BPS, DEFAULT_COST_BPS, scaled_r
 
 TS_PATH = (Path(__file__).resolve().parents[2]
            / "web" / "src" / "lib" / "track-record.ts")

@@ -5,10 +5,10 @@ Closes the loop between outcome_tracker's recorded results (tp_hit/sl_hit/
 expired) and the parameters that produced them, so strategy or threshold
 changes can be checked against real history instead of guessed.
 
-R comes from signals.r_model — the scale-out model, net of costs — so these
-numbers mean the same thing as the ones on the public track record.
+R comes from signals.analysis.r_model — the scale-out model, net of costs — so
+these numbers mean the same thing as the ones on the public track record.
 """
-from signals.r_model import cost_r, gross_r, is_win, net_r
+from signals.analysis.r_model import cost_r, gross_r, is_win, net_r
 
 
 def _strategy_of(row: dict) -> str:
@@ -26,7 +26,7 @@ def _confidence_bucket(confidence) -> str:
 def _r_multiple(row: dict) -> float:
     """Realized R-multiple for one closed signal, net of costs.
 
-    Thin wrapper over signals.r_model.net_r that maps the unscoreable case
+    Thin wrapper over signals.analysis.r_model.net_r that maps the unscoreable case
     (missing levels) to 0.0, since a grouped average has nowhere to put None.
     """
     r = net_r(row)

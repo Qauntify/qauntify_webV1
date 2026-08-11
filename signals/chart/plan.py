@@ -4,7 +4,7 @@ Each strategy builder emits only its *structure* elements; entry/SL/TP levels
 are appended by the dispatcher so every plan has them (DRY).
 """
 from signals.chart.annotations import band, level, marker, series, zone
-from signals.indicators import ema, lwma
+from signals.analysis.indicators import ema, lwma
 
 
 def _trade_levels(signal):
@@ -178,7 +178,7 @@ def cloud_series(candles, h1_candles):
     time, the same causality rule the detector and the backtester use, so the
     drawn cloud is the one the setup was actually read against.
     """
-    from signals.indicators import chandelier_exit, sma_atr
+    from signals.analysis.indicators import chandelier_exit, sma_atr
     from signals.strategies.cloud_mss.detector import (
         CE_ATR_PERIOD, CE_LOOKBACK, CE_MULTIPLIER, MA_PERIOD,
     )

@@ -25,17 +25,17 @@ from pathlib import Path
 
 import requests
 
-from signals.backtest import HTF_WINDOW, htf_close_index, simulate_scaled
+from signals.analysis.backtest import HTF_WINDOW, htf_close_index, simulate_scaled
 from signals.chart.outcome_plan import build_outcome_plan
 from signals.chart.annotations import band
 from signals.chart.plan import build_chart_plan, cloud_series
 from signals.chart.render import render_chart, render_outcome_chart
-from signals.history import binance_symbol, load_history
-from signals.indicators import atr
-from signals.candle_resample import resample_candles
+from signals.analysis.history import binance_symbol, load_history
+from signals.analysis.indicators import atr
+from signals.analysis.candle_resample import resample_candles
 from signals.clients.market import fetch_candles
 from signals.models import Confirmation, make_signal
-from signals.r_model import cost_r, scaled_r
+from signals.analysis.r_model import cost_r, scaled_r
 from signals.strategies.cloud_mss import detect_setup
 
 PRIMARY = "15m"

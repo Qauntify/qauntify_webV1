@@ -9,7 +9,7 @@ is taught and charted on LWMA, so `lwma` is the correct primitive here and
 substituting `ema` or a simple average would move every level the rules test
 against.
 """
-from signals.indicators import bollinger, ema, lwma
+from signals.analysis.indicators import bollinger, ema, lwma
 from signals.models import take_profits_from_risk
 
 BB_PERIOD = 20

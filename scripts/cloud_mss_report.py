@@ -14,9 +14,9 @@ import statistics
 
 import requests
 
-from signals.backtest import backtest_windowed
-from signals.history import load_history
-from signals.indicators import atr
+from signals.analysis.backtest import backtest_windowed
+from signals.analysis.history import load_history
+from signals.analysis.indicators import atr
 from signals.strategies.cloud_mss import detect_setup
 
 SYMBOLS = ("BTCUSD", "ETHUSD")

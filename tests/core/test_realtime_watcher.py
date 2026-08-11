@@ -5,7 +5,7 @@ tests/core/test_outcome.py — these tests only cover the orchestration around
 them (cache lookup, when to fetch a chart window, when to alert vs no-op),
 monkeypatched at the module level like the rest of this test suite.
 """
-from signals import realtime_watcher
+from signals.outcomes import realtime as realtime_watcher
 from signals.config import Config
 
 

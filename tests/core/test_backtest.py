@@ -1,7 +1,7 @@
 """Unit tests for the rules-only backtester's fill simulation + stats."""
 import pytest
 
-from signals.backtest import (
+from signals.analysis.backtest import (
     backtest_windowed,
     htf_trend_series,
     net_r_multiples,
@@ -317,7 +317,7 @@ def test_windowed_replay_abandons_a_trade_past_max_hold():
 def test_maker_tier_costs_less_than_the_default_taker_tier():
     """sr_limit rests an order rather than crossing the spread, so charging it
     the taker rate measures a strategy nobody would run."""
-    from signals.r_model import MAKER_BPS
+    from signals.analysis.r_model import MAKER_BPS
 
     taker = net_r_multiples("BTCUSD", [1.0], [100.0], [98.0])
     maker = net_r_multiples("BTCUSD", [1.0], [100.0], [98.0], bps=MAKER_BPS)

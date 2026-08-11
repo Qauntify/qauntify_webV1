@@ -19,13 +19,13 @@ from pathlib import Path
 
 import requests
 
-from signals.backtest import htf_trend_series, simulate_scaled
+from signals.analysis.backtest import htf_trend_series, simulate_scaled
 from signals.chart.plan import build_chart_plan
 from signals.chart.render import render_chart
-from signals.history import load_history
-from signals.indicators import atr
+from signals.analysis.history import load_history
+from signals.analysis.indicators import atr
 from signals.models import Confirmation, make_signal
-from signals.r_model import cost_r, scaled_r
+from signals.analysis.r_model import cost_r, scaled_r
 from signals.strategies.bbma import detect_reentry
 
 WINDOW = 200          # matches the live scan (ScanConfig.candle_limit - 1)

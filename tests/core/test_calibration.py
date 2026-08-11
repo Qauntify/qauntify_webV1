@@ -1,7 +1,7 @@
 import pytest
 
 from signals import r_model
-from signals.calibration import (
+from signals.analysis.calibration import (
     _bucket_stats,
     _confidence_bucket,
     _r_multiple,

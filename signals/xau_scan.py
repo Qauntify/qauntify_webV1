@@ -21,7 +21,7 @@ from signals.run import (
     resolve_gold_live_price,
     scan_symbol,
 )
-from signals.session_clock import scalp_session_active, sessions_at
+from signals.analysis.session_clock import scalp_session_active, sessions_at
 from signals.storage import (
     expire_drifted_open_gold_signals,
     fetch_bot_settings,

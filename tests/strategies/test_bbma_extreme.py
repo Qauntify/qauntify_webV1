@@ -7,7 +7,7 @@ tests/core/test_indicators.py and tests/strategies/test_bbma_stack.py.
 """
 import random
 
-from signals.indicators import atr
+from signals.analysis.indicators import atr
 from signals.models import Candle
 from signals.strategies.bbma import extreme
 from signals.strategies.bbma.extreme import EXTREME_LOOKBACK, detect_setup
