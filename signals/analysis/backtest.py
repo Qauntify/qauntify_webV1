@@ -16,7 +16,7 @@ Assumptions (documented so results are read correctly):
 - No higher-timeframe confluence and no multi-timeframe strategies (ce_lwma
   needs H1 alignment — not covered here).
 
-Usage: python -m signals.backtest
+Usage: python -m signals.analysis.backtest
 """
 from signals.analysis.indicators import adx, atr, ema, macd_histogram, rsi
 # Re-exported: the R model lives in signals.analysis.r_model so the live reporting
