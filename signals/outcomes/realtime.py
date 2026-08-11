@@ -34,7 +34,7 @@ from signals.config import Config
 from signals.clients.market import fetch_candles
 from signals.models import Candle
 from signals.outcomes.tracker import apply_events, check_outcome_events
-from signals.storage import list_open_signals
+from signals.persistence.signals import list_open_signals
 
 CACHE_REFRESH_SECONDS = 10
 HISTORY_LIMIT = 1000

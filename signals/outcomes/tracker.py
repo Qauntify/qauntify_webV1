@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from signals.chart.outcome_pipeline import attach_outcome_chart
 from signals.clients.market import fetch_candles
 from signals.models import ALL_SESSIONS, OPEN_POLL_STATUSES, TIMEFRAME_MINUTES
-from signals.storage import (
+from signals.persistence.signals import (
     list_open_signals,
     list_signals_missing_outcome_chart,
     set_outcome_chart_url,

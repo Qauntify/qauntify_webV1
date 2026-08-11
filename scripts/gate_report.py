@@ -20,7 +20,7 @@ import statistics
 import sys
 
 from signals.analysis.r_model import gross_r
-from signals.storage import list_closed_signals
+from signals.persistence.signals import list_closed_signals
 
 ALPHA = 0.05
 TARGET_N = 250

@@ -144,7 +144,7 @@ def test_fetch_xauusd_1m_refuses_paxg_when_mt5_cold(monkeypatch):
         return []
 
     monkeypatch.setattr(
-        "signals.storage.fetch_mt5_candles", _empty,
+        "signals.persistence.mt5.fetch_mt5_candles", _empty,
     )
     with pytest.raises(RuntimeError, match="refusing PAXG"):
         fetch_candles(
@@ -186,7 +186,7 @@ def test_fetch_xauusd_5m_resamples_mt5_1m_when_warm(monkeypatch):
     rows = _fresh_mt5_1m_rows(600)  # → 120 five-minute bars
 
     monkeypatch.setattr(
-        "signals.storage.fetch_mt5_candles",
+        "signals.persistence.mt5.fetch_mt5_candles",
         lambda *a, **k: rows,
     )
     candles = fetch_candles(
@@ -207,7 +207,7 @@ def test_fetch_xauusd_5m_resamples_mt5_1m_when_warm(monkeypatch):
 def test_fetch_xauusd_5m_falls_back_to_paxg_when_mt5_shallow(monkeypatch):
     session = FakeSession(OHLC_PAYLOAD)
     monkeypatch.setattr(
-        "signals.storage.fetch_mt5_candles",
+        "signals.persistence.mt5.fetch_mt5_candles",
         lambda *a, **k: _fresh_mt5_1m_rows(80),  # only ~16 five-minute bars
     )
     # Warm-but-shallow must refuse PAXG mix (structure vs broker entry).

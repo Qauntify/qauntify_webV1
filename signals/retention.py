@@ -3,7 +3,7 @@ ai_events (LLM decision audit log), engine_runs / xau_scan_runs (heartbeat
 logs, one row per cron/tick cycle). signals and agent_debates are permanent
 historical/showcase content and are never pruned here.
 """
-from signals.storage import delete_rows_older_than
+from signals.persistence.cleanup import delete_rows_older_than
 
 # (table, date_column, days_to_keep)
 _RETENTION = [

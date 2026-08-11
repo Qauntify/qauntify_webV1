@@ -22,11 +22,9 @@ from signals.run import (
     scan_symbol,
 )
 from signals.analysis.session_clock import scalp_session_active, sessions_at
-from signals.storage import (
-    expire_drifted_open_gold_signals,
-    fetch_bot_settings,
-    save_xau_scan_run,
-)
+from signals.persistence.events import save_xau_scan_run
+from signals.persistence.mt5 import expire_drifted_open_gold_signals
+from signals.persistence.settings import fetch_bot_settings
 
 XAU_SYMBOL = "XAUUSD"
 XAU_TIMEFRAME = "1m"

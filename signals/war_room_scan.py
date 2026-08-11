@@ -24,11 +24,9 @@ from signals.run import (
     resolve_gold_live_price,
     with_retry,
 )
-from signals.storage import (
-    fetch_mt5_last_tick,
-    save_debate,
-    save_signal,
-)
+from signals.persistence.events import save_debate
+from signals.persistence.mt5 import fetch_mt5_last_tick
+from signals.persistence.signals import save_signal
 from signals.strategies import detect_setup
 from signals.clients.telegram import send_alert
 

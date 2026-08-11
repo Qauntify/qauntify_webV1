@@ -241,7 +241,7 @@ def _gold_from_mt5_1m(symbol, interval, limit, start_time, session,
 
     status is "ok", "cold", or "shallow" (1m warm but HTF resample too thin).
     """
-    from signals.storage import (
+    from signals.persistence.mt5 import (
         fetch_mt5_candles,
         mt5_candles_usable,
         mt5_rows_to_candles,

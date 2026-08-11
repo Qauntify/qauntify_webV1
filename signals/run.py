@@ -43,22 +43,25 @@ from signals.outcomes.tracker import backfill_missing_outcome_charts, track_open
 from signals.retention import run_retention_cleanup
 from signals.analysis.session_clock import describe_market_session
 from signals.strategies import detect_setup
-from signals.storage import (
-    fetch_bot_settings,
-    fetch_mt5_last_tick,
+from signals.persistence.events import (
     latest_ai_event_time,
     latest_ai_event_times_since,
-    latest_signal,
-    latest_signals_since,
-    mt5_tick_is_fresh,
-    expire_drifted_open_gold_signals,
-    open_symbols_for_timeframe,
-    release_engine_lock,
     save_ai_event,
     save_debate,
     save_engine_run,
+)
+from signals.persistence.locks import release_engine_lock, try_acquire_engine_lock
+from signals.persistence.mt5 import (
+    expire_drifted_open_gold_signals,
+    fetch_mt5_last_tick,
+    mt5_tick_is_fresh,
+)
+from signals.persistence.settings import fetch_bot_settings
+from signals.persistence.signals import (
+    latest_signal,
+    latest_signals_since,
+    open_symbols_for_timeframe,
     save_signal,
-    try_acquire_engine_lock,
 )
 from signals.clients.telegram import send_alert
 
