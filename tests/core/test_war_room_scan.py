@@ -1,7 +1,7 @@
 """Unit tests for the independent War Room Floor pipeline."""
 from signals import war_room_scan
 from signals.config import FloorConfig
-from signals.debate import FloorAgents
+from signals.pipeline.debate import FloorAgents
 from signals.models import CandidateSetup, TIMEFRAME_MINUTES
 
 

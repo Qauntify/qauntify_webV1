@@ -14,7 +14,12 @@ SIGNALS = Path(__file__).resolve().parents[2] / "signals"
 LIVE_PATH = [
     SIGNALS / "run.py",
     SIGNALS / "xau_scan.py",
-    SIGNALS / "composer.py",
+    SIGNALS / "pipeline" / "composer.py",
+    SIGNALS / "pipeline" / "dedup.py",
+    SIGNALS / "pipeline" / "market_data.py",
+    SIGNALS / "pipeline" / "scan.py",
+    SIGNALS / "pipeline" / "deliver.py",
+    SIGNALS / "pipeline" / "engine.py",
     SIGNALS / "outcomes" / "tracker.py",
     SIGNALS / "persistence" / "signals.py",
     SIGNALS / "persistence" / "events.py",

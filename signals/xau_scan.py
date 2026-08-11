@@ -16,11 +16,9 @@ import requests
 from signals.config import load_config
 from signals.clients.llm import SeaLionClient
 from signals.models import ScanResult
-from signals.run import (
-    maybe_send_alert,
-    resolve_gold_live_price,
-    scan_symbol,
-)
+from signals.pipeline.deliver import maybe_send_alert
+from signals.pipeline.market_data import resolve_gold_live_price
+from signals.pipeline.scan import scan_symbol
 from signals.analysis.session_clock import scalp_session_active, sessions_at
 from signals.persistence.events import save_xau_scan_run
 from signals.persistence.mt5 import expire_drifted_open_gold_signals

@@ -463,7 +463,7 @@ def test_one_minute_dedup_window_scales_to_its_own_bar(monkeypatch):
     # _dedup_window fell back to the 1h value for any unknown timeframe, so a
     # scalper firing every 60s could only emit one same-direction signal every
     # 3 hours.
-    from signals.run import _dedup_window
+    from signals.pipeline.dedup import _dedup_window
 
     assert _dedup_window("1m") == timedelta(minutes=3)
     assert _dedup_window("5m") == timedelta(minutes=15)

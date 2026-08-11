@@ -4,19 +4,19 @@ import pytest
 # routable domain that stalls for the full connect timeout instead of
 # failing fast, so any storage call a test forgets to mock silently eats
 # many real seconds instead of raising instantly. These autouse defaults
-# make every signals.run-level storage call inert unless a test explicitly
-# overrides one with its own monkeypatch.setattr — which simply takes
-# precedence, since it runs after this fixture within the same test.
+# make every signals.pipeline-level storage call inert unless a test
+# explicitly overrides one with its own monkeypatch.setattr — which simply
+# takes precedence, since it runs after this fixture within the same test.
 
 _INERT_RUN_STORAGE_DEFAULTS = {
-    "signals.run.latest_ai_event_time": lambda *a, **k: None,
-    "signals.run.latest_ai_event_times_since": lambda *a, **k: {},
-    "signals.run.latest_signal": lambda *a, **k: None,
-    "signals.run.latest_signals_since": lambda *a, **k: {},
-    "signals.run.save_ai_event": lambda *a, **k: None,
-    "signals.run.save_signal": lambda *a, **k: None,
-    "signals.run.save_engine_run": lambda *a, **k: None,
-    "signals.run.attach_chart": lambda signal, *a, **k: signal,
+    "signals.pipeline.dedup.latest_ai_event_time": lambda *a, **k: None,
+    "signals.pipeline.dedup.latest_ai_event_times_since": lambda *a, **k: {},
+    "signals.pipeline.dedup.latest_signal": lambda *a, **k: None,
+    "signals.pipeline.dedup.latest_signals_since": lambda *a, **k: {},
+    "signals.pipeline.scan.save_ai_event": lambda *a, **k: None,
+    "signals.pipeline.scan.save_signal": lambda *a, **k: None,
+    "signals.pipeline.engine.save_engine_run": lambda *a, **k: None,
+    "signals.pipeline.scan.attach_chart": lambda signal, *a, **k: signal,
     "signals.outcomes.tracker.attach_outcome_chart": lambda *a, **k: None,
     "signals.outcomes.tracker.set_outcome_chart_url": lambda *a, **k: None,
     "signals.outcomes.tracker.list_signals_missing_outcome_chart": lambda *a, **k: [],

@@ -7,7 +7,8 @@ read path filters it out, and can never break a live scan.
 """
 import pytest
 
-from signals import run
+from signals.pipeline import scan as run
+from signals.pipeline.market_data import MarketData
 from signals.models import Candle
 from signals.strategies.bbma.stack import MIN_CANDLES
 
@@ -19,7 +20,7 @@ class _Cfg:
 
 def _market(candles):
     n = len(candles)
-    return run.MarketData(
+    return MarketData(
         candles=candles, ema9=[None] * n, ema21=[None] * n, rsi14=[None] * n,
         macd_hist=[None] * n, atr14=[5.0] * n, adx14=[20.0] * n,
         htf_trend="up", h1_candles=None,
@@ -132,6 +133,7 @@ def test_trial_timeframe_matches_the_swing_session_that_carries_it():
     — the exact configuration measured in the backtest. If that session's
     timeframe ever changes, this pin fails rather than silently recording an
     unmeasured setup."""
-    swing = next(s for s in run.TRADING_SESSIONS if s.name == "swing")
+    from signals.models import TRADING_SESSIONS
+    swing = next(s for s in TRADING_SESSIONS if s.name == "swing")
     assert run.PAPER_BBMA_REENTRY_TIMEFRAME == swing.timeframe
     assert swing.confluence_timeframe == "4h"

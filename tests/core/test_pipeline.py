@@ -1,7 +1,12 @@
-from signals import run as run_module
 from signals.config import Config
-from signals.models import BotSettings, Candle, CandidateSetup
-from signals.run import scan_symbol, with_retry
+from signals.models import BotSettings, Candle, CandidateSetup, ScanResult, TRADING_SESSIONS
+from signals.pipeline import dedup as dedup_module
+from signals.pipeline import deliver as deliver_module
+from signals.pipeline import engine as engine_module
+from signals.pipeline import market_data as market_data_module
+from signals.pipeline import scan as scan_module
+from signals.pipeline.dedup import already_signaled, with_retry
+from signals.pipeline.scan import scan_symbol
 
 import pytest
 
@@ -9,7 +14,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _stub_rag(monkeypatch):
     """Pipeline unit tests do not hit Supabase for RAG."""
-    monkeypatch.setattr(run_module, "retrieve_context", lambda *a, **k: "")
+    monkeypatch.setattr(scan_module, "retrieve_context", lambda *a, **k: "")
 
 
 def _flat_candles(n=200, price=100.0):
@@ -30,14 +35,14 @@ def _config():
 
 def _patch_engine_lock(monkeypatch):
     """main() acquires a DB lock; tests without Supabase always pass it."""
-    monkeypatch.setattr(run_module, "try_acquire_engine_lock",
+    monkeypatch.setattr(engine_module, "try_acquire_engine_lock",
                         lambda *a, **k: True)
-    monkeypatch.setattr(run_module, "release_engine_lock",
+    monkeypatch.setattr(engine_module, "release_engine_lock",
                         lambda *a, **k: None)
     # Gold drift housekeeping would hit live MT5/Kraken without this.
-    monkeypatch.setattr(run_module, "resolve_gold_live_price",
+    monkeypatch.setattr(engine_module, "resolve_gold_live_price",
                         lambda *a, **k: (2000.0, "test"))
-    monkeypatch.setattr(run_module, "expire_drifted_open_gold_signals",
+    monkeypatch.setattr(engine_module, "expire_drifted_open_gold_signals",
                         lambda *a, **k: 0)
 
 
@@ -57,24 +62,24 @@ class FakeLLM:
 
 
 def _capture_saves(monkeypatch):
-    """Replace run.save_signal with a recorder; returns the call list."""
+    """Replace scan.save_signal with a recorder; returns the call list."""
     saved = []
 
     def fake_save(signal, supabase_url, service_key, session=None):
         saved.append((signal, supabase_url, service_key))
 
-    monkeypatch.setattr(run_module, "save_signal", fake_save)
+    monkeypatch.setattr(scan_module, "save_signal", fake_save)
     return saved
 
 
 def _capture_ai_events(monkeypatch):
-    """Replace run.save_ai_event with a recorder; returns the call list."""
+    """Replace scan.save_ai_event with a recorder; returns the call list."""
     events = []
 
     def fake_save(event, supabase_url, service_key, session=None):
         events.append((event, supabase_url, service_key))
 
-    monkeypatch.setattr(run_module, "save_ai_event", fake_save)
+    monkeypatch.setattr(scan_module, "save_ai_event", fake_save)
     return events
 
 
@@ -104,7 +109,7 @@ def test_with_retry_raises_after_exhausting_attempts():
 
 def test_scan_symbol_no_setup_stores_nothing(monkeypatch):
     # Flat prices produce no crossover → real detector returns None.
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
@@ -121,7 +126,7 @@ def test_scan_symbol_no_setup_stores_nothing(monkeypatch):
 
 
 def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
@@ -138,9 +143,9 @@ def test_scan_symbol_no_setup_returns_no_signal_report(monkeypatch):
 
 
 def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
-    monkeypatch.setattr(run_module, "detect_setup",
+    monkeypatch.setattr(scan_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
@@ -164,10 +169,10 @@ def test_scan_symbol_confirmed_signal_is_stored(monkeypatch):
 
 def test_scan_symbol_skip_recency_bypasses_guard(monkeypatch):
     # Recency guard would normally skip, but skip_recency=True overrides it.
-    monkeypatch.setattr(run_module, "_recently_evaluated", lambda *a, **k: True)
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(scan_module, "_recently_evaluated", lambda *a, **k: True)
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
-    monkeypatch.setattr(run_module, "detect_setup", lambda *a, **k: SETUP)
+    monkeypatch.setattr(scan_module, "detect_setup", lambda *a, **k: SETUP)
     _capture_saves(monkeypatch)
     _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 80, "rationale": "ok"}')
@@ -177,10 +182,10 @@ def test_scan_symbol_skip_recency_bypasses_guard(monkeypatch):
 
 
 def test_scan_symbol_log_no_setup_false_writes_no_event(monkeypatch):
-    monkeypatch.setattr(run_module, "_recently_evaluated", lambda *a, **k: False)
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(scan_module, "_recently_evaluated", lambda *a, **k: False)
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
-    monkeypatch.setattr(run_module, "detect_setup", lambda *a, **k: None)
+    monkeypatch.setattr(scan_module, "detect_setup", lambda *a, **k: None)
     events = _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"rationale": "flat"}')
 
@@ -200,15 +205,15 @@ def _debate_signal():
 def test_maybe_run_debate_saves_transcript_with_signal_id(monkeypatch):
     signal = _debate_signal()
     saved = []
-    monkeypatch.setattr(run_module, "run_debate", lambda setup, llm, **kw: {
+    monkeypatch.setattr(deliver_module, "run_debate", lambda setup, llm, **kw: {
         "symbol": setup.symbol, "timeframe": kw["timeframe"],
         "direction": setup.direction, "transcript": [],
         "manager_verdict": "agree", "manager_confidence": 66,
     })
-    monkeypatch.setattr(run_module, "save_debate",
+    monkeypatch.setattr(deliver_module, "save_debate",
                         lambda debate, url, key, session=None: saved.append(debate))
 
-    run_module.maybe_run_debate(signal, _config())
+    deliver_module.maybe_run_debate(signal, _config())
     assert len(saved) == 1
     assert saved[0]["signal_id"] == signal.id
     assert saved[0]["manager_verdict"] == "agree"
@@ -220,14 +225,14 @@ def test_maybe_run_debate_is_best_effort(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("agent down")
 
-    monkeypatch.setattr(run_module, "run_debate", boom)
-    run_module.maybe_run_debate(signal, _config())  # must not raise
+    monkeypatch.setattr(deliver_module, "run_debate", boom)
+    deliver_module.maybe_run_debate(signal, _config())  # must not raise
 
 
 def test_scan_symbol_rejected_signal_not_stored(monkeypatch):
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
-    monkeypatch.setattr(run_module, "detect_setup",
+    monkeypatch.setattr(scan_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
@@ -248,24 +253,24 @@ def test_scan_symbol_binance_failure_returns_none(monkeypatch):
     def broken_candles(symbol, interval, limit, session=None, **kwargs):
         raise RuntimeError("binance down")
 
-    monkeypatch.setattr(run_module, "fetch_candles", broken_candles)
-    monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
+    monkeypatch.setattr(market_data_module, "fetch_candles", broken_candles)
+    monkeypatch.setattr(dedup_module, "RETRY_DELAY", 0.0)
     llm = FakeLLM(reply="{}")
 
-    assert scan_symbol("BTCUSDT", _config(), llm) == run_module.ScanResult()
+    assert scan_symbol("BTCUSDT", _config(), llm) == ScanResult()
 
 
 def test_scan_symbol_storage_failure_discards_without_raising(monkeypatch):
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
-    monkeypatch.setattr(run_module, "detect_setup",
+    monkeypatch.setattr(scan_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
-    monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
+    monkeypatch.setattr(dedup_module, "RETRY_DELAY", 0.0)
 
     def broken_save(signal, supabase_url, service_key, session=None):
         raise RuntimeError("HTTP 503")
 
-    monkeypatch.setattr(run_module, "save_signal", broken_save)
+    monkeypatch.setattr(scan_module, "save_signal", broken_save)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 82, "rationale": "ok"}')
 
     result = scan_symbol("BTCUSDT", _config(), llm)
@@ -283,10 +288,10 @@ def test_scan_symbol_drops_forming_candle(monkeypatch):
         seen["candles"] = candles
         return None
 
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs:
                         candles + [forming])
-    monkeypatch.setattr(run_module, "detect_setup", capture_detect)
+    monkeypatch.setattr(scan_module, "detect_setup", capture_detect)
     llm = FakeLLM(reply="{}")
 
     scan_symbol("BTCUSDT", _config(), llm)
@@ -312,36 +317,36 @@ def _falling_candles(n=40, start=140.0, step=1.0):
 
 
 def test_fetch_htf_trend_up_when_fast_ema_above_slow(monkeypatch):
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _rising_candles())
-    assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) == "up"
+    assert market_data_module._fetch_htf_trend("BTCUSDT", "1h", _config()) == "up"
 
 
 def test_fetch_htf_trend_down_when_fast_ema_below_slow(monkeypatch):
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _falling_candles())
-    assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) == "down"
+    assert market_data_module._fetch_htf_trend("BTCUSDT", "1h", _config()) == "down"
 
 
 def test_fetch_htf_trend_raises_on_fetch_failure(monkeypatch):
     def boom(symbol, interval, limit, session=None, **kwargs):
         raise RuntimeError("binance down")
 
-    monkeypatch.setattr(run_module, "fetch_candles", boom)
-    monkeypatch.setattr(run_module, "RETRY_DELAY", 0.0)
+    monkeypatch.setattr(market_data_module, "fetch_candles", boom)
+    monkeypatch.setattr(dedup_module, "RETRY_DELAY", 0.0)
     import pytest
     with pytest.raises(RuntimeError):
-        run_module._fetch_htf_trend("BTCUSDT", "1h", _config())
+        market_data_module._fetch_htf_trend("BTCUSDT", "1h", _config())
 
 
 def test_fetch_htf_trend_none_during_warmup(monkeypatch):
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _rising_candles(n=5))
-    assert run_module._fetch_htf_trend("BTCUSDT", "1h", _config()) is None
+    assert market_data_module._fetch_htf_trend("BTCUSDT", "1h", _config()) is None
 
 
 def test_scan_symbol_computes_and_passes_adx_to_detect_setup(monkeypatch):
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
     seen = {}
 
@@ -350,7 +355,7 @@ def test_scan_symbol_computes_and_passes_adx_to_detect_setup(monkeypatch):
         seen["adx14"] = adx14
         return None
 
-    monkeypatch.setattr(run_module, "detect_setup", capture_detect)
+    monkeypatch.setattr(scan_module, "detect_setup", capture_detect)
     llm = FakeLLM(reply='{"rationale": "flat"}')
 
     scan_symbol("BTCUSDT", _config(), llm)
@@ -361,9 +366,9 @@ def test_scan_symbol_computes_and_passes_adx_to_detect_setup(monkeypatch):
 
 
 def test_scan_symbol_passes_htf_trend_when_confluence_timeframe_given(monkeypatch):
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
-    monkeypatch.setattr(run_module, "_fetch_htf_trend",
+    monkeypatch.setattr(market_data_module, "_fetch_htf_trend",
                         lambda symbol, timeframe, cfg, session=None: "up")
     seen = {}
 
@@ -372,7 +377,7 @@ def test_scan_symbol_passes_htf_trend_when_confluence_timeframe_given(monkeypatc
         seen["htf_trend"] = htf_trend
         return None
 
-    monkeypatch.setattr(run_module, "detect_setup", capture_detect)
+    monkeypatch.setattr(scan_module, "detect_setup", capture_detect)
     llm = FakeLLM(reply='{"rationale": "flat"}')
 
     scan_symbol("BTCUSDT", _config(), llm, confluence_timeframe="1h")
@@ -381,13 +386,13 @@ def test_scan_symbol_passes_htf_trend_when_confluence_timeframe_given(monkeypatc
 
 
 def test_scan_symbol_skips_htf_fetch_without_confluence_timeframe(monkeypatch):
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: _flat_candles())
 
     def must_not_fetch(symbol, timeframe, cfg, session=None):
         raise AssertionError("no confluence_timeframe given; HTF trend must not be fetched")
 
-    monkeypatch.setattr(run_module, "_fetch_htf_trend", must_not_fetch)
+    monkeypatch.setattr(market_data_module, "_fetch_htf_trend", must_not_fetch)
     seen = {}
 
     def capture_detect(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
@@ -395,7 +400,7 @@ def test_scan_symbol_skips_htf_fetch_without_confluence_timeframe(monkeypatch):
         seen["htf_trend"] = htf_trend
         return None
 
-    monkeypatch.setattr(run_module, "detect_setup", capture_detect)
+    monkeypatch.setattr(scan_module, "detect_setup", capture_detect)
     llm = FakeLLM(reply='{"rationale": "flat"}')
 
     scan_symbol("BTCUSDT", _config(), llm)
@@ -405,7 +410,7 @@ def test_scan_symbol_skips_htf_fetch_without_confluence_timeframe(monkeypatch):
 
 def test_scan_symbol_returns_candles_for_reuse(monkeypatch):
     candles = _flat_candles(n=200)
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs: candles)
     _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"rationale": "flat"}')
@@ -426,10 +431,10 @@ def test_scan_symbol_threads_session_through_fetches(monkeypatch):
     def capture_save(signal, supabase_url, service_key, session=None):
         sessions_seen["save"] = session
 
-    monkeypatch.setattr(run_module, "fetch_candles", capture_candles)
-    monkeypatch.setattr(run_module, "detect_setup",
+    monkeypatch.setattr(market_data_module, "fetch_candles", capture_candles)
+    monkeypatch.setattr(scan_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
-    monkeypatch.setattr(run_module, "save_signal", capture_save)
+    monkeypatch.setattr(scan_module, "save_signal", capture_save)
     _capture_ai_events(monkeypatch)
     llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 80, "rationale": "ok"}')
 
@@ -446,12 +451,12 @@ def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
 
     settings = BotSettings(
         symbols=("BTCUSDT", "ETHUSDT", "PAXGUSDT"))
-    monkeypatch.setattr(run_module, "load_config", _config)
-    monkeypatch.setattr(run_module, "fetch_bot_settings",
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
                         lambda url, key, session=None: settings)
-    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
                         lambda *a, **k: set())
-    monkeypatch.setattr(run_module, "track_open_signals",
+    monkeypatch.setattr(engine_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
 
     # 3 symbols per session; the barrier is reused across the two sessions'
@@ -468,18 +473,18 @@ def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
         # finishes — proves the loop is parallel, not sequential.
         started.wait()
         scanned.append((symbol, timeframe))
-        return run_module.ScanResult()
+        return ScanResult()
 
-    monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
+    monkeypatch.setattr(engine_module, "scan_symbol", fake_scan)
     runs = []
-    monkeypatch.setattr(run_module, "save_engine_run",
+    monkeypatch.setattr(engine_module, "save_engine_run",
                         lambda run, url, key, session=None: runs.append(run))
 
-    run_module.main()
+    engine_module.main()
 
     assert sorted(scanned) == sorted(
         (symbol, trading_session.timeframe)
-        for trading_session in run_module.TRADING_SESSIONS
+        for trading_session in TRADING_SESSIONS
         for symbol in settings.symbols
     )
     assert len(runs) == 1
@@ -488,27 +493,27 @@ def test_main_scans_run_in_parallel_and_keep_symbol_order(monkeypatch):
 def test_main_reports_expired_signals_in_run_summary(monkeypatch):
     _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))
-    monkeypatch.setattr(run_module, "load_config", _config)
-    monkeypatch.setattr(run_module, "fetch_bot_settings",
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
                         lambda url, key, session=None: settings)
-    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
                         lambda *a, **k: set())
     monkeypatch.setattr(
-        run_module, "scan_symbol",
+        engine_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
         session=None, recent_events=None, recent_signals=None,
         open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
-        run_module.ScanResult())
+        ScanResult())
 
     expired_row = {"symbol": "ETHUSDT", "direction": "long", "entry": 100.0}
-    monkeypatch.setattr(run_module, "track_open_signals",
+    monkeypatch.setattr(engine_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None:
                         [(expired_row, "expired")])
     runs = []
-    monkeypatch.setattr(run_module, "save_engine_run",
+    monkeypatch.setattr(engine_module, "save_engine_run",
                         lambda run, url, key, session=None: runs.append(run))
 
-    run_module.main()
+    engine_module.main()
 
     outcomes = runs[0]["outcomes"]
     assert {"symbol": "ETHUSDT", "status": "EXPIRED",
@@ -519,17 +524,17 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
     _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))
     candles = _flat_candles(n=5)
-    monkeypatch.setattr(run_module, "load_config", _config)
-    monkeypatch.setattr(run_module, "fetch_bot_settings",
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
                         lambda url, key, session=None: settings)
-    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
                         lambda *a, **k: set())
     monkeypatch.setattr(
-        run_module, "scan_symbol",
+        engine_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
         session=None, recent_events=None, recent_signals=None,
         open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
-        run_module.ScanResult(candles=candles))
+        ScanResult(candles=candles))
 
     seen = {}
 
@@ -537,11 +542,11 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
         seen["prefetched"] = prefetched
         return []
 
-    monkeypatch.setattr(run_module, "track_open_signals", capture_track)
-    monkeypatch.setattr(run_module, "save_engine_run",
+    monkeypatch.setattr(engine_module, "track_open_signals", capture_track)
+    monkeypatch.setattr(engine_module, "save_engine_run",
                         lambda run, url, key, session=None: None)
 
-    run_module.main()
+    engine_module.main()
 
     assert seen["prefetched"] == {
         ("BTCUSDT", "5m"): candles,
@@ -587,8 +592,8 @@ def test_scan_symbol_uses_the_session_timeframe(monkeypatch):
         seen["interval"] = interval
         return _flat_candles()
 
-    monkeypatch.setattr(run_module, "fetch_candles", capture_candles)
-    monkeypatch.setattr(run_module, "detect_setup",
+    monkeypatch.setattr(market_data_module, "fetch_candles", capture_candles)
+    monkeypatch.setattr(scan_module, "detect_setup",
                         lambda *args, **kwargs: SETUP)
     saved = _capture_saves(monkeypatch)
     events = _capture_ai_events(monkeypatch)
@@ -613,12 +618,12 @@ def test_already_signaled_dedup_window_scales_with_timeframe(monkeypatch):
         captured.setdefault("timeframes", []).append(timeframe)
         return {"direction": "long", "created_at": stored_at.isoformat()}
 
-    monkeypatch.setattr(run_module, "latest_signal", fake_latest)
+    monkeypatch.setattr(dedup_module, "latest_signal", fake_latest)
 
     # 1h bars: dedup window 3h -> still a duplicate.
-    assert run_module.already_signaled(SETUP, _config(), timeframe="1h") is True
+    assert already_signaled(SETUP, _config(), timeframe="1h") is True
     # 15m bars: dedup window 45m -> 50 minutes ago is a fresh setup again.
-    assert run_module.already_signaled(SETUP, _config(), timeframe="15m") is False
+    assert already_signaled(SETUP, _config(), timeframe="15m") is False
     # The lookup itself must be per-timeframe so sessions don't block each other.
     assert captured["timeframes"] == ["1h", "15m"]
 
@@ -629,16 +634,16 @@ def test_recently_evaluated_uses_prefetched_map_without_querying(monkeypatch):
     def boom(*a, **k):
         raise AssertionError("per-symbol query must be skipped when recent_events is given")
 
-    monkeypatch.setattr(run_module, "latest_ai_event_time", boom)
+    monkeypatch.setattr(dedup_module, "latest_ai_event_time", boom)
 
     recent = datetime.now(timezone.utc) - timedelta(minutes=20)
     recent_events = {"BTCUSDT": recent.isoformat()}
 
     # 20 minutes ago is inside swing's (1h) throttle window.
-    assert run_module._recently_evaluated(
+    assert dedup_module._recently_evaluated(
         "BTCUSDT", "1h", _config(), recent_events=recent_events) is True
     # A symbol absent from the map is treated as never evaluated.
-    assert run_module._recently_evaluated(
+    assert dedup_module._recently_evaluated(
         "ETHUSDT", "1h", _config(), recent_events=recent_events) is False
 
 
@@ -646,54 +651,54 @@ def test_already_signaled_uses_prefetched_map_without_querying(monkeypatch):
     def boom(*a, **k):
         raise AssertionError("per-symbol query must be skipped when recent_signals is given")
 
-    monkeypatch.setattr(run_module, "latest_signal", boom)
+    monkeypatch.setattr(dedup_module, "latest_signal", boom)
 
     from datetime import datetime, timezone
     recent_signals = {
         "BTCUSDT": {"direction": "long", "created_at": datetime.now(timezone.utc).isoformat()},
     }
 
-    assert run_module.already_signaled(
+    assert already_signaled(
         SETUP, _config(), timeframe="1h", recent_signals=recent_signals) is True
     # A symbol absent from the map behaves like "no prior signal".
     other_setup = CandidateSetup(
         symbol="ETHUSDT", direction="long", entry=100.0,
         stop_loss=98.0, take_profit=104.0, indicators={})
-    assert run_module.already_signaled(
+    assert already_signaled(
         other_setup, _config(), timeframe="1h", recent_signals=recent_signals) is False
 
 
 def test_main_prefetches_recent_maps_once_per_session_not_per_symbol(monkeypatch):
     _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT", "ETHUSDT", "PAXGUSDT"))
-    monkeypatch.setattr(run_module, "load_config", _config)
-    monkeypatch.setattr(run_module, "fetch_bot_settings",
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
                         lambda url, key, session=None: settings)
-    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
                         lambda *a, **k: set())
-    monkeypatch.setattr(run_module, "track_open_signals",
+    monkeypatch.setattr(engine_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
     monkeypatch.setattr(
-        run_module, "scan_symbol",
+        engine_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
         session=None, recent_events=None, recent_signals=None,
         open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
-        run_module.ScanResult())
-    monkeypatch.setattr(run_module, "save_engine_run",
+        ScanResult())
+    monkeypatch.setattr(engine_module, "save_engine_run",
                         lambda run, url, key, session=None: None)
 
     events_calls = []
     signals_calls = []
     monkeypatch.setattr(
-        run_module, "latest_ai_event_times_since",
+        dedup_module, "latest_ai_event_times_since",
         lambda symbols, timeframe, since, url, key, session=None:
         events_calls.append((tuple(symbols), timeframe)) or {})
     monkeypatch.setattr(
-        run_module, "latest_signals_since",
+        dedup_module, "latest_signals_since",
         lambda symbols, timeframe, since, url, key, session=None:
         signals_calls.append((tuple(symbols), timeframe)) or {})
 
-    run_module.main()
+    engine_module.main()
 
     # One batched call per scanned session, each covering all 3 symbols —
     # not one call per symbol.
@@ -712,21 +717,21 @@ def test_main_prefetches_recent_maps_once_per_session_not_per_symbol(monkeypatch
 def test_main_passes_prefetched_maps_into_scan_symbol(monkeypatch):
     _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))
-    monkeypatch.setattr(run_module, "load_config", _config)
-    monkeypatch.setattr(run_module, "fetch_bot_settings",
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
                         lambda url, key, session=None: settings)
-    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
                         lambda *a, **k: set())
-    monkeypatch.setattr(run_module, "track_open_signals",
+    monkeypatch.setattr(engine_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
-    monkeypatch.setattr(run_module, "save_engine_run",
+    monkeypatch.setattr(engine_module, "save_engine_run",
                         lambda run, url, key, session=None: None)
 
     sentinel_events = {"BTCUSDT": "2026-07-09T00:00:00+00:00"}
     sentinel_signals = {"BTCUSDT": {"direction": "long", "created_at": "2026-07-09T00:00:00+00:00"}}
-    monkeypatch.setattr(run_module, "latest_ai_event_times_since",
+    monkeypatch.setattr(dedup_module, "latest_ai_event_times_since",
                         lambda *a, **k: sentinel_events)
-    monkeypatch.setattr(run_module, "latest_signals_since",
+    monkeypatch.setattr(dedup_module, "latest_signals_since",
                         lambda *a, **k: sentinel_signals)
 
     seen = []
@@ -736,11 +741,11 @@ def test_main_passes_prefetched_maps_into_scan_symbol(monkeypatch):
                   open_symbols=None, confluence_timeframe=None,
                   min_store_confidence=0):
         seen.append((recent_events, recent_signals))
-        return run_module.ScanResult()
+        return ScanResult()
 
-    monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
+    monkeypatch.setattr(engine_module, "scan_symbol", fake_scan)
 
-    run_module.main()
+    engine_module.main()
 
     assert all(pair == (sentinel_events, sentinel_signals) for pair in seen)
 
@@ -748,12 +753,12 @@ def test_main_passes_prefetched_maps_into_scan_symbol(monkeypatch):
 def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
     _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT", "ETHUSDT"))
-    monkeypatch.setattr(run_module, "load_config", _config)
-    monkeypatch.setattr(run_module, "fetch_bot_settings",
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
                         lambda url, key, session=None: settings)
-    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
                         lambda *a, **k: set())
-    monkeypatch.setattr(run_module, "track_open_signals",
+    monkeypatch.setattr(engine_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
 
     scanned = []
@@ -763,14 +768,14 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
                   recent_signals=None, open_symbols=None,
                   confluence_timeframe=None, min_store_confidence=0):
         scanned.append((symbol, timeframe))
-        return run_module.ScanResult()
+        return ScanResult()
 
-    monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
+    monkeypatch.setattr(engine_module, "scan_symbol", fake_scan)
     runs = []
-    monkeypatch.setattr(run_module, "save_engine_run",
+    monkeypatch.setattr(engine_module, "save_engine_run",
                         lambda run, url, key, session=None: runs.append(run))
 
-    run_module.main()
+    engine_module.main()
 
     assert sorted(scanned) == [
         ("BTCUSDT", "15m"), ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
@@ -789,12 +794,12 @@ def test_main_skips_retired_gbpusd_even_when_in_bot_settings(monkeypatch):
     session even if an old bot_settings row still lists it."""
     _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT", "GBPUSD"))
-    monkeypatch.setattr(run_module, "load_config", _config)
-    monkeypatch.setattr(run_module, "fetch_bot_settings",
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
                         lambda url, key, session=None: settings)
-    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
                         lambda *a, **k: set())
-    monkeypatch.setattr(run_module, "track_open_signals",
+    monkeypatch.setattr(engine_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
 
     scanned = []
@@ -805,16 +810,16 @@ def test_main_skips_retired_gbpusd_even_when_in_bot_settings(monkeypatch):
                   recent_events=None, recent_signals=None, open_symbols=None,
                   confluence_timeframe=None, min_store_confidence=0):
         scanned.append((symbol, timeframe))
-        return run_module.ScanResult()
+        return ScanResult()
 
-    monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
+    monkeypatch.setattr(engine_module, "scan_symbol", fake_scan)
     monkeypatch.setattr(
-        run_module, "_prefetch_recent_events",
+        engine_module, "_prefetch_recent_events",
         lambda symbols, tf, cfg, session=None: prefetched.append((tuple(symbols), tf)) or {})
-    monkeypatch.setattr(run_module, "save_engine_run",
+    monkeypatch.setattr(engine_module, "save_engine_run",
                         lambda run, url, key, session=None: None)
 
-    run_module.main()
+    engine_module.main()
 
     assert sorted(scanned) == [
         ("BTCUSDT", "15m"), ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
@@ -830,14 +835,14 @@ def test_main_skips_retired_gbpusd_even_when_in_bot_settings(monkeypatch):
 def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypatch):
     _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))
-    monkeypatch.setattr(run_module, "load_config", _config)
-    monkeypatch.setattr(run_module, "fetch_bot_settings",
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
                         lambda url, key, session=None: settings)
-    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
                         lambda *a, **k: set())
-    monkeypatch.setattr(run_module, "track_open_signals",
+    monkeypatch.setattr(engine_module, "track_open_signals",
                         lambda cfg, prefetched=None, session=None: [])
-    monkeypatch.setattr(run_module, "save_engine_run",
+    monkeypatch.setattr(engine_module, "save_engine_run",
                         lambda run, url, key, session=None: None)
 
     seen = []
@@ -847,11 +852,11 @@ def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypat
                   open_symbols=None, confluence_timeframe=None,
                   min_store_confidence=0):
         seen.append((timeframe, confluence_timeframe))
-        return run_module.ScanResult()
+        return ScanResult()
 
-    monkeypatch.setattr(run_module, "scan_symbol", fake_scan)
+    monkeypatch.setattr(engine_module, "scan_symbol", fake_scan)
 
-    run_module.main()
+    engine_module.main()
 
     assert sorted(seen) == [("15m", None), ("1h", "4h"), ("5m", "15m")]
 
@@ -860,17 +865,17 @@ def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
     _patch_engine_lock(monkeypatch)
     settings = BotSettings(symbols=("BTCUSDT",))
     candles = _flat_candles(n=5)
-    monkeypatch.setattr(run_module, "load_config", _config)
-    monkeypatch.setattr(run_module, "fetch_bot_settings",
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
                         lambda url, key, session=None: settings)
-    monkeypatch.setattr(run_module, "_prefetch_open_symbols",
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
                         lambda *a, **k: set())
     monkeypatch.setattr(
-        run_module, "scan_symbol",
+        engine_module, "scan_symbol",
         lambda symbol, cfg, llm, *, strategy, timeframe, feed_titles=None, calendar_events=None,
         session=None, recent_events=None, recent_signals=None,
         open_symbols=None, confluence_timeframe=None, min_store_confidence=0:
-        run_module.ScanResult(candles=candles))
+        ScanResult(candles=candles))
 
     seen = {}
 
@@ -878,11 +883,11 @@ def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
         seen["prefetched"] = prefetched
         return []
 
-    monkeypatch.setattr(run_module, "track_open_signals", capture_track)
-    monkeypatch.setattr(run_module, "save_engine_run",
+    monkeypatch.setattr(engine_module, "track_open_signals", capture_track)
+    monkeypatch.setattr(engine_module, "save_engine_run",
                         lambda run, url, key, session=None: None)
 
-    run_module.main()
+    engine_module.main()
 
     assert seen["prefetched"] == {
         ("BTCUSDT", "5m"): candles,
@@ -895,18 +900,18 @@ def test_scan_symbol_skips_when_recently_evaluated_this_session(monkeypatch):
     from datetime import datetime, timedelta, timezone
 
     recent = datetime.now(timezone.utc) - timedelta(minutes=20)
-    monkeypatch.setattr(run_module, "latest_ai_event_time",
+    monkeypatch.setattr(dedup_module, "latest_ai_event_time",
                         lambda symbol, timeframe, url, key, session=None:
                         recent.isoformat())
     fetch_called = []
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda *a, **k: fetch_called.append(1) or _flat_candles())
 
     # 20 minutes ago is well inside swing's (1h) throttle window.
     result = scan_symbol("BTCUSDT", _config(), FakeLLM(reply="{}"),
                          timeframe="1h")
 
-    assert result == run_module.ScanResult()
+    assert result == ScanResult()
     assert fetch_called == []  # market data isn't even fetched — no LLM spam
 
 
@@ -914,10 +919,10 @@ def test_scan_symbol_runs_when_throttle_window_has_elapsed(monkeypatch):
     from datetime import datetime, timedelta, timezone
 
     stale = datetime.now(timezone.utc) - timedelta(hours=2)
-    monkeypatch.setattr(run_module, "latest_ai_event_time",
+    monkeypatch.setattr(dedup_module, "latest_ai_event_time",
                         lambda symbol, timeframe, url, key, session=None:
                         stale.isoformat())
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs:
                         _flat_candles())
     _capture_ai_events(monkeypatch)
@@ -929,9 +934,9 @@ def test_scan_symbol_runs_when_throttle_window_has_elapsed(monkeypatch):
 
 
 def test_scan_symbol_runs_when_never_evaluated_before(monkeypatch):
-    monkeypatch.setattr(run_module, "latest_ai_event_time",
+    monkeypatch.setattr(dedup_module, "latest_ai_event_time",
                         lambda symbol, timeframe, url, key, session=None: None)
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs:
                         _flat_candles())
     _capture_ai_events(monkeypatch)
@@ -946,8 +951,8 @@ def test_scan_symbol_skips_when_throttle_lookup_fails(monkeypatch):
     def boom(symbol, timeframe, url, key, session=None):
         raise RuntimeError("db down")
 
-    monkeypatch.setattr(run_module, "latest_ai_event_time", boom)
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(dedup_module, "latest_ai_event_time", boom)
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs:
                         _flat_candles())
     _capture_ai_events(monkeypatch)
@@ -965,10 +970,10 @@ def test_scan_symbol_scalp_throttle_is_shorter_than_swing(monkeypatch):
 
     # 20 minutes ago: outside scalp's (15m) throttle window, inside swing's (1h).
     stamp = datetime.now(timezone.utc) - timedelta(minutes=20)
-    monkeypatch.setattr(run_module, "latest_ai_event_time",
+    monkeypatch.setattr(dedup_module, "latest_ai_event_time",
                         lambda symbol, timeframe, url, key, session=None:
                         stamp.isoformat())
-    monkeypatch.setattr(run_module, "fetch_candles",
+    monkeypatch.setattr(market_data_module, "fetch_candles",
                         lambda symbol, interval, limit, session=None, **kwargs:
                         _flat_candles())
     _capture_ai_events(monkeypatch)
@@ -978,7 +983,7 @@ def test_scan_symbol_scalp_throttle_is_shorter_than_swing(monkeypatch):
     scalp_result = scan_symbol("BTCUSDT", _config(), FakeLLM(reply='{"rationale": "x"}'),
                                timeframe="15m")
 
-    assert swing_result == run_module.ScanResult()  # still throttled
+    assert swing_result == ScanResult()  # still throttled
     assert scalp_result.no_signal is not None  # 20 min clears the 15m window
 
 
@@ -987,13 +992,13 @@ def test_scan_symbol_scalp_throttle_is_shorter_than_swing(monkeypatch):
 def test_shadow_sampling_is_off_by_default():
     """A shadow row is unsafe until the RLS migration is applied and verified,
     so the experiment must not start merely by deploying the code."""
-    import signals.run as run
+    import signals.pipeline.scan as run
     assert run.SHADOW_SAMPLE_RATE == 0.0
     assert run._shadow_sampled() is False
 
 
 def test_save_shadow_records_a_rejected_setup(monkeypatch):
-    import signals.run as run
+    import signals.pipeline.scan as run
     from signals.models import CandidateSetup, Confirmation
 
     saved = []
@@ -1010,7 +1015,7 @@ def test_save_shadow_records_a_rejected_setup(monkeypatch):
 
 
 def test_save_shadow_skips_when_not_sampled(monkeypatch):
-    import signals.run as run
+    import signals.pipeline.scan as run
     from signals.models import CandidateSetup, Confirmation
 
     saved = []
@@ -1025,7 +1030,7 @@ def test_save_shadow_skips_when_not_sampled(monkeypatch):
 
 
 def test_shadow_save_failure_never_breaks_the_scan(monkeypatch):
-    import signals.run as run
+    import signals.pipeline.scan as run
     from signals.models import CandidateSetup, Confirmation
 
     def _boom(*a, **k):
@@ -1044,7 +1049,7 @@ def test_shadow_sampling_cannot_be_keyed_on_trade_attributes():
     measured. Enforced structurally: the sampler receives no arguments, so it
     has nothing to bias on."""
     import inspect
-    import signals.run as run
+    import signals.pipeline.scan as run
     assert list(inspect.signature(run._shadow_sampled).parameters) == []
 
 
@@ -1052,12 +1057,12 @@ def test_shadow_sampling_cannot_be_keyed_on_trade_attributes():
 
 def test_paper_sr_limit_is_off_by_default():
     """A paper trial must not begin merely by deploying the code."""
-    import signals.run as run
+    import signals.pipeline.scan as run
     assert run.PAPER_SR_LIMIT is False
 
 
 def test_paper_sr_limit_does_nothing_when_disabled(monkeypatch):
-    import signals.run as run
+    import signals.pipeline.scan as run
     saved = []
     monkeypatch.setattr(run, "PAPER_SR_LIMIT", False)
     monkeypatch.setattr(run, "save_signal", lambda *a, **k: saved.append(a))
@@ -1068,7 +1073,7 @@ def test_paper_sr_limit_does_nothing_when_disabled(monkeypatch):
 
 def test_paper_sr_limit_only_runs_on_its_own_timeframe(monkeypatch):
     """Only 1h measured net positive; 15m limit entry still loses."""
-    import signals.run as run
+    import signals.pipeline.scan as run
     saved = []
     monkeypatch.setattr(run, "PAPER_SR_LIMIT", True)
     monkeypatch.setattr(run, "save_signal", lambda *a, **k: saved.append(a))
@@ -1078,7 +1083,7 @@ def test_paper_sr_limit_only_runs_on_its_own_timeframe(monkeypatch):
 
 
 def test_paper_sr_limit_records_shadow_tagged_with_its_experiment(monkeypatch):
-    import signals.run as run
+    import signals.pipeline.scan as run
     from signals.models import CandidateSetup
 
     captured = {}
@@ -1102,7 +1107,7 @@ def test_paper_sr_limit_records_shadow_tagged_with_its_experiment(monkeypatch):
 
 
 def test_paper_failure_never_breaks_the_scan(monkeypatch):
-    import signals.run as run
+    import signals.pipeline.scan as run
 
     def _boom(*a, **k):
         raise RuntimeError("down")
@@ -1130,9 +1135,9 @@ def test_fifteen_minute_session_runs_cloud_mss():
 
 
 def test_cloud_mss_has_raised_store_confidence_floor():
-    assert run_module.effective_min_store_confidence("cloud_mss", 0) >= 70
-    assert run_module.effective_min_store_confidence("cloud_mss", 80) == 80
-    assert run_module.effective_min_store_confidence("ict_fvg", 0) == 0
+    assert scan_module.effective_min_store_confidence("cloud_mss", 0) >= 70
+    assert scan_module.effective_min_store_confidence("cloud_mss", 80) == 80
+    assert scan_module.effective_min_store_confidence("ict_fvg", 0) == 0
 
 
 def test_load_market_data_fetches_h1_for_cloud_mss(monkeypatch):
@@ -1147,8 +1152,8 @@ def test_load_market_data_fetches_h1_for_cloud_mss(monkeypatch):
         return [Candle(i * 900_000, 100.0, 100.5, 99.5, 100.0, 1.0)
                 for i in range(limit)]
 
-    monkeypatch.setattr(run_module, "fetch_candles", fake_fetch)
-    market, _ = run_module._load_market_data(
+    monkeypatch.setattr(market_data_module, "fetch_candles", fake_fetch)
+    market, _ = market_data_module._load_market_data(
         "BTCUSDT", "15m", "cloud_mss", _config(), session=None)
 
     assert market is not None
@@ -1161,7 +1166,7 @@ def test_cloud_mss_candle_limit_clears_its_own_minimum():
     detector that can never fire — silently, with no error anywhere."""
     from signals.strategies.cloud_mss.detector import MIN_CANDLES
 
-    limit = run_module._candle_limit_for("cloud_mss", _config())
+    limit = market_data_module._candle_limit_for("cloud_mss", _config())
     # _load_market_data drops the still-forming bar.
     assert limit - 1 > MIN_CANDLES
 
@@ -1171,7 +1176,7 @@ def test_no_setup_indicators_for_cloud_mss_are_relevant():
     through to the ema_cross default would record EMA/RSI/MACD for a strategy
     that uses none of them — misleading rows in ai_events."""
     n = 30
-    indicators = run_module._no_setup_indicators(
+    indicators = scan_module._no_setup_indicators(
         "cloud_mss", [2.0] * n, [25.0] * n, "up",
         [1.0] * n, [1.0] * n, [50.0] * n, [0.0] * n,
     )

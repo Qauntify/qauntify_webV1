@@ -13,17 +13,12 @@ import requests
 
 from signals.chart.pipeline import attach_chart
 from signals.config import Config, load_floor_config
-from signals.debate import FloorAgents, run_debate
+from signals.pipeline.debate import FloorAgents, run_debate
 from signals.clients.llm import SeaLionClient
 from signals.clients.market import is_gold_symbol, setup_stop_risk_ok
 from signals.models import Confirmation, make_signal
-from signals.run import (
-    _load_market_data,
-    _snap_gold_setup_to_live,
-    already_signaled,
-    resolve_gold_live_price,
-    with_retry,
-)
+from signals.pipeline.dedup import already_signaled, with_retry
+from signals.pipeline.market_data import _load_market_data, _snap_gold_setup_to_live, resolve_gold_live_price
 from signals.persistence.events import save_debate
 from signals.persistence.mt5 import fetch_mt5_last_tick
 from signals.persistence.signals import save_signal
