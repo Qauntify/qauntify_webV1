@@ -82,13 +82,13 @@ def test_ict_fvg_messages_use_actual_tp_r_labels():
         take_profit_2=4110.0, take_profit_3=4115.0,
         indicators={
             "strategy": "ict_fvg", "structure": "bullish_sweep_reclaim",
-            "sweep_level": 4092.0, "atr": 3.0, "tp_r": [0.5, 1.0, 1.5],
+            "sweep_level": 4092.0, "atr": 3.0, "tp_r": [0.5, 1.0, 2.0],
         },
     )
     user = build_messages(setup, strategy="ict_fvg", timeframe="5m")[1]["content"]
     assert "Take profit 1 (0.5R)" in user
     assert "Take profit 2 (1.0R)" in user or "Take profit 2 (1R)" in user
-    assert "Take profit 3 (1.5R)" in user
+    assert "Take profit 3 (2.0R)" in user or "Take profit 3 (2R)" in user
     assert "reclaim" in user.lower() or "sweep" in user.lower()
 
 

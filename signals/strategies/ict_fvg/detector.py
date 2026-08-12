@@ -6,7 +6,7 @@ Entry priority:
 3. Sweep reclaim alone (close back through the swept level) — volume fallback
 
 No killzone / session-time filter. SL sits just beyond the sweep extreme;
-TP1/TP2/TP3 use short R multiples (0.5 / 1.0 / 1.5).
+TP1/TP2/TP3 use short R multiples (0.5 / 1.0 / 2.0).
 """
 from signals.models import (
     SUPER_SCALP_TP1_R,

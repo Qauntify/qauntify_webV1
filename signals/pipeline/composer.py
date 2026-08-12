@@ -320,7 +320,7 @@ def build_messages(setup: CandidateSetup,
         structure = ind.get("structure") or "ict_fvg"
         strategy_line = (
             f"- Strategy: ICT 5m scalp ({structure}; paths: FVG retest, "
-            f"sweep+CHoCH, or sweep reclaim; tight 0.5R/1R/1.5R targets)\n"
+            f"sweep+CHoCH, or sweep reclaim; tight 0.5R/1R/2R targets)\n"
         )
     elif active == "sr_zone":
         strategy_line = (

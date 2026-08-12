@@ -14,7 +14,7 @@ PLAYBOOK_CHUNKS = (
             "(1) liquidity sweep + CHoCH + FVG retest, (2) sweep + CHoCH "
             "without FVG, or (3) sweep reclaim alone. Prefer 15m HTF "
             "agreement but soft disagreement is not a hard veto. Tight "
-            "targets (0.5R/1R/1.5R) — reject if stop is invalid vs entry or "
+            "targets (0.5R/1R/2R) — reject if stop is invalid vs entry or "
             "targets sit on the wrong side. No session killzone requirement; "
             "structure quality matters more than clock. Missing FVG alone is "
             "not a reject when CHoCH or reclaim is present. When borderline "

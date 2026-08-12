@@ -11,7 +11,7 @@ TP3_R = 3.0
 # Super-scalp (5m ICT+FVG): shorter targets for quicker exits.
 SUPER_SCALP_TP1_R = 0.5
 SUPER_SCALP_TP2_R = 1.0
-SUPER_SCALP_TP3_R = 1.5
+SUPER_SCALP_TP3_R = 2.0
 
 
 def take_profits_from_risk(
