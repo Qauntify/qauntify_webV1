@@ -1,8 +1,10 @@
 """Unit tests for ICT 5m FVG super-scalp detector."""
 from signals.models import Candle, SUPER_SCALP_TP1_R, SUPER_SCALP_TP2_R, SUPER_SCALP_TP3_R
 from signals.strategies.ict_fvg.detector import (
+    _select_bullish_fvg,
     detect_setup,
     find_bullish_fvg,
+    list_bullish_fvgs,
 )
 
 
@@ -47,6 +49,74 @@ def test_find_bullish_fvg():
     assert i == 2
     assert bottom == 100.5
     assert top == 101.2
+
+
+def test_list_bullish_fvgs_finds_multiple():
+    candles = [
+        _c(0, 100, 100.5, 99.5, 100),
+        _c(1, 100, 102, 100, 101.5),
+        _c(2, 101.5, 103, 101.2, 102.5),  # FVG vs 0 → [100.5, 101.2]
+        _c(3, 102.5, 104, 102.5, 103.5),
+        _c(4, 103.5, 105, 103.0, 104.0),  # FVG vs 2 → [103, 103] no — 2.high=103, 4.low=103 not <
+        _c(5, 104.0, 106, 104.5, 105.5),  # FVG vs 3 → 3.high=104 < 104.5
+    ]
+    fvgs = list_bullish_fvgs(candles, 0, 5)
+    assert len(fvgs) >= 2
+    assert fvgs[0][0] == 2
+    assert any(i == 5 for i, _, _ in fvgs)
+
+
+def test_select_bullish_fvg_prefers_choch_displacement_over_newer_noise():
+    """Newest gap is noise; CHoCH-linked unfilled gap wins."""
+    candles = [
+        _c(0, 100, 100.5, 99.5, 100),
+        _c(1, 100, 101.0, 99.8, 100.4),
+        _c(2, 100.4, 100.8, 100.0, 100.5),
+        _c(3, 100.5, 103.5, 100.2, 103.0),  # choch_i ≈ 3
+        _c(4, 103.0, 104.0, 101.2, 103.5),  # FVG vs 2: 100.8 < 101.2
+        _c(5, 103.5, 105.0, 103.2, 104.5),
+        _c(6, 104.5, 106.0, 104.0, 105.0),
+        _c(7, 105.0, 107.0, 105.5, 106.0),  # newer FVG vs 5: 105.0 < 105.5
+    ]
+    chosen = _select_bullish_fvg(candles, 2, 7, choch_i=3, price=105.0)
+    assert chosen is not None
+    assert chosen[0] == 4
+    assert chosen[1] == 100.8
+    assert chosen[2] == 101.2
+
+
+def test_select_bullish_fvg_skips_fully_filled_gap():
+    candles = [
+        _c(0, 100, 100.5, 99.5, 100),
+        _c(1, 100, 101.0, 99.8, 100.4),
+        _c(2, 100.4, 100.8, 100.0, 100.5),
+        _c(3, 100.5, 103.5, 100.2, 103.0),
+        _c(4, 103.0, 104.0, 101.2, 103.5),  # FVG [100.8, 101.2]
+        _c(5, 103.0, 103.2, 100.5, 101.0),  # fills through bottom 100.8
+        _c(6, 101.0, 102.0, 100.8, 101.5),
+        _c(7, 101.5, 103.0, 101.2, 102.5),  # new FVG vs 5: 103.2 < 101.2? no
+        _c(8, 102.5, 104.0, 102.0, 103.0),
+        _c(9, 103.0, 105.0, 103.5, 104.0),  # FVG vs 7: 103.0 < 103.5
+    ]
+    chosen = _select_bullish_fvg(candles, 2, 9, choch_i=3, price=104.0)
+    assert chosen is not None
+    assert chosen[0] == 9  # filled gap at 4 skipped
+
+
+def test_detect_rejects_tiny_noise_sweep():
+    """Wick under 0.10 ATR past the swing is not a liquidity sweep."""
+    candles = []
+    for i in range(20):
+        candles.append(_c(i, 100, 100.5, 99.5, 100))
+    candles.append(_c(20, 99.5, 100.0, 98.0, 99.0))
+    candles.append(_c(21, 99.0, 100.2, 98.8, 99.8))
+    candles.append(_c(22, 99.8, 100.5, 99.2, 100.0))
+    # Tiny dip under 98 (0.05) with ATR=4 → 0.0125 ATR << 0.10 floor.
+    candles.append(_c(23, 99.5, 100.0, 97.95, 99.2))
+    candles.append(_c(24, 99.2, 99.8, 98.8, 99.4))
+    candles.append(_c(25, 99.4, 100.0, 99.0, 99.6))
+    atr14 = [4.0] * len(candles)
+    assert detect_setup("BTCUSDT", candles, atr14) is None
 
 
 def test_detect_ict_fvg_bullish():

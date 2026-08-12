@@ -7,6 +7,10 @@ Entry priority:
 
 No killzone / session-time filter. SL sits just beyond the sweep extreme;
 TP1/TP2/TP3 use short R multiples (0.5 / 1.0 / 2.0).
+
+Sweeps use real swings (pivot 2) and a meaningful wick floor. When several
+FVGs exist after the impulse, pick the unfilled gap tied to the CHoCH
+displacement (else the nearest unfilled gap to price) — never just "newest."
 """
 from signals.models import (
     SUPER_SCALP_TP1_R,
@@ -22,13 +26,13 @@ from signals.strategies.ict_smc.detector import (
     pivot_lows,
 )
 
-# Hot volume overrides — deliberately loose vs swing ict_smc.
-PIVOT_LEFT = 1
-PIVOT_RIGHT = 1
+# Hot volume — still looser than swing ict_smc, but not noise-level.
+PIVOT_LEFT = 2
+PIVOT_RIGHT = 2
 STRUCTURE_LOOKBACK = 80
 CHOCH_LOOKBACK = 20
 MAX_BARS_SINCE_CHOCH = 20
-MIN_SWEEP_ATR_FRACTION = 0.03
+MIN_SWEEP_ATR_FRACTION = 0.10
 ATR_STOP_BUFFER = 0.25
 MAX_STOP_ATR = 4.0
 MIN_CANDLES = 25
@@ -36,32 +40,104 @@ SWEEP_LOOKBACK = 30
 MAX_BARS_SINCE_RETEST = 12
 # Sweep-reclaim fallback: sweep bar itself must still be relatively fresh.
 MAX_BARS_SINCE_SWEEP = 8
+# Displacement FVG usually prints on/near the CHoCH candle.
+CHOCH_FVG_NEAR_BARS = 2
 
 
-def find_bullish_fvg(candles, start: int, end: int) -> tuple[int, float, float] | None:
-    """Newest 3-candle bullish FVG in [start, end]: high[i-2] < low[i]."""
+def list_bullish_fvgs(candles, start: int, end: int) -> list[tuple[int, float, float]]:
+    """All 3-candle bullish FVGs in [start, end]: high[i-2] < low[i]."""
     start = max(start, 2)
-    for i in range(end, start - 1, -1):
+    out: list[tuple[int, float, float]] = []
+    for i in range(start, end + 1):
         if i < 2 or i >= len(candles):
             continue
         bottom = candles[i - 2].high
         top = candles[i].low
         if bottom < top:
-            return i, bottom, top
-    return None
+            out.append((i, bottom, top))
+    return out
 
 
-def find_bearish_fvg(candles, start: int, end: int) -> tuple[int, float, float] | None:
-    """Newest 3-candle bearish FVG in [start, end]: low[i-2] > high[i]."""
+def list_bearish_fvgs(candles, start: int, end: int) -> list[tuple[int, float, float]]:
+    """All 3-candle bearish FVGs in [start, end]: low[i-2] > high[i]."""
     start = max(start, 2)
-    for i in range(end, start - 1, -1):
+    out: list[tuple[int, float, float]] = []
+    for i in range(start, end + 1):
         if i < 2 or i >= len(candles):
             continue
         top = candles[i - 2].low
         bottom = candles[i].high
         if top > bottom:
-            return i, bottom, top
-    return None
+            out.append((i, bottom, top))
+    return out
+
+
+def find_bullish_fvg(candles, start: int, end: int) -> tuple[int, float, float] | None:
+    """Newest bullish FVG in range (compat helper)."""
+    fvgs = list_bullish_fvgs(candles, start, end)
+    return fvgs[-1] if fvgs else None
+
+
+def find_bearish_fvg(candles, start: int, end: int) -> tuple[int, float, float] | None:
+    """Newest bearish FVG in range (compat helper)."""
+    fvgs = list_bearish_fvgs(candles, start, end)
+    return fvgs[-1] if fvgs else None
+
+
+def _bullish_fvg_filled(candles, fvg_i: int, gap_bottom: float, until_i: int) -> bool:
+    """True once price trades fully through the gap (low <= bottom)."""
+    for j in range(fvg_i + 1, until_i + 1):
+        if candles[j].low <= gap_bottom:
+            return True
+    return False
+
+
+def _bearish_fvg_filled(candles, fvg_i: int, gap_top: float, until_i: int) -> bool:
+    """True once price trades fully through the gap (high >= top)."""
+    for j in range(fvg_i + 1, until_i + 1):
+        if candles[j].high >= gap_top:
+            return True
+    return False
+
+
+def _select_bullish_fvg(candles, start: int, end: int, choch_i: int,
+                        price: float) -> tuple[int, float, float] | None:
+    """Unfilled bullish FVG: prefer CHoCH displacement, else nearest to price."""
+    unfilled = [
+        fvg for fvg in list_bullish_fvgs(candles, start, end)
+        if not _bullish_fvg_filled(candles, fvg[0], fvg[1], end)
+    ]
+    if not unfilled:
+        return None
+    near = [f for f in unfilled if abs(f[0] - choch_i) <= CHOCH_FVG_NEAR_BARS]
+    pool = near if near else unfilled
+
+    def _rank(fvg):
+        fvg_i, bottom, top = fvg
+        mid = (bottom + top) / 2.0
+        return (abs(fvg_i - choch_i), abs(mid - price))
+
+    return min(pool, key=_rank)
+
+
+def _select_bearish_fvg(candles, start: int, end: int, choch_i: int,
+                        price: float) -> tuple[int, float, float] | None:
+    """Unfilled bearish FVG: prefer CHoCH displacement, else nearest to price."""
+    unfilled = [
+        fvg for fvg in list_bearish_fvgs(candles, start, end)
+        if not _bearish_fvg_filled(candles, fvg[0], fvg[2], end)
+    ]
+    if not unfilled:
+        return None
+    near = [f for f in unfilled if abs(f[0] - choch_i) <= CHOCH_FVG_NEAR_BARS]
+    pool = near if near else unfilled
+
+    def _rank(fvg):
+        fvg_i, bottom, top = fvg
+        mid = (bottom + top) / 2.0
+        return (abs(fvg_i - choch_i), abs(mid - price))
+
+    return min(pool, key=_rank)
 
 
 def _retest_bullish(candles, fvg_i: int, gap_bottom: float, gap_top: float,
@@ -153,7 +229,10 @@ def detect_setup(symbol, candles, atr14, htf_trend=None):
                         choch_i = None
 
             if choch_i is not None:
-                fvg = find_bullish_fvg(window, max(sweep_i + 1, choch_i - 2), last_i)
+                fvg_start = max(sweep_i + 1, choch_i - 2)
+                fvg = _select_bullish_fvg(
+                    window, fvg_start, last_i, choch_i, entry,
+                )
                 retest_i = None
                 gap_bottom = gap_top = None
                 fvg_i = None
@@ -233,7 +312,10 @@ def detect_setup(symbol, candles, atr14, htf_trend=None):
                         choch_i = None
 
             if choch_i is not None:
-                fvg = find_bearish_fvg(window, max(sweep_i + 1, choch_i - 2), last_i)
+                fvg_start = max(sweep_i + 1, choch_i - 2)
+                fvg = _select_bearish_fvg(
+                    window, fvg_start, last_i, choch_i, entry,
+                )
                 retest_i = None
                 gap_bottom = gap_top = None
                 fvg_i = None
