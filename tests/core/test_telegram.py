@@ -77,6 +77,35 @@ def test_format_alert_short_uses_red_and_escapes_html():
     assert "a&lt;b&gt;&amp;c" in text           # rationale escaped
 
 
+def _confluence_signal():
+    setup = CandidateSetup(
+        symbol="BTCUSDT", direction="long", entry=108240.0,
+        stop_loss=106900.0, take_profit=110920.0,
+        indicators={"strategy": "cloud_mss",
+                    "confluence_of": ["cloud_mss@15m", "msnr@1h"],
+                    "source_timeframe": "15m"},
+    )
+    confirmation = Confirmation("confirm", 75, "Two strategies agree.")
+    return make_signal(setup, confirmation, [], timeframe="confluence")
+
+
+def test_format_alert_shows_confluence_badge_when_tagged():
+    text = format_alert(_confluence_signal())
+    assert "CONFLUENCE" in text
+    assert "cloud_mss@15m" in text
+    assert "msnr@1h" in text
+
+
+def test_format_alert_omits_confluence_badge_for_normal_signal():
+    text = format_alert(_signal())
+    assert "CONFLUENCE" not in text
+
+
+def test_format_caption_shows_confluence_badge_when_tagged():
+    text = format_caption(_confluence_signal())
+    assert "CONFLUENCE" in text
+
+
 def test_format_outcome_alert_tp_hit_is_positive():
     row = {"symbol": "BTCUSD", "direction": "long", "entry": 100.0,
            "stop_loss": 99.0, "take_profit_1": 102.0,

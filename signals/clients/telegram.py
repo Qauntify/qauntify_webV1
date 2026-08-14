@@ -39,6 +39,16 @@ def _confidence_bar(pct: int, segments: int = 10) -> str:
     return "▰" * filled + "▱" * (segments - filled)
 
 
+def _confluence_badge(signal: Signal) -> str:
+    """A short banner line when `signal` is a confluence publish -- empty
+    string for every ordinary signal."""
+    tags = (signal.indicators or {}).get("confluence_of")
+    if not tags:
+        return ""
+    names = " + ".join(_esc(str(t)) for t in tags)
+    return f"\U0001F525 <b>CONFLUENCE</b>  {names}\n\n"
+
+
 def _risk_reward(entry: float, stop: float, target: float) -> str:
     risk = abs(entry - stop)
     if risk == 0:
@@ -61,8 +71,9 @@ def format_alert(signal: Signal) -> str:
     timeframe = _esc(signal.timeframe)
     tp2 = signal.take_profit_2 or signal.take_profit
     tp3 = signal.take_profit_3 or signal.take_profit
+    badge = _confluence_badge(signal)
     return (
-        f"{dot} <b>{direction} SIGNAL</b>\n"
+        f"{badge}{dot} <b>{direction} SIGNAL</b>\n"
         f"{_DIVIDER}\n"
         f"💹 <b>{symbol}</b>  ·  <code>{timeframe}</code>\n"
         f"\n"
@@ -92,8 +103,9 @@ def format_caption(signal: Signal) -> str:
     dot = _direction_dot(signal.direction)
     tp2 = signal.take_profit_2 or signal.take_profit
     tp3 = signal.take_profit_3 or signal.take_profit
+    badge = _confluence_badge(signal)
     return (
-        f"{dot} <b>{direction} SIGNAL</b>\n"
+        f"{badge}{dot} <b>{direction} SIGNAL</b>\n"
         f"💹 <b>{_esc(signal.symbol)}</b> · <code>{_esc(signal.timeframe)}</code>\n"
         f"🎯 Confidence {signal.confidence}%\n"
         f"📍 Entry {_price(signal.entry)}  🛑 SL {_price(signal.stop_loss)}\n"
