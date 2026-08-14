@@ -133,3 +133,34 @@ def test_detect_confluence_skips_signal_with_no_strategy_tag(monkeypatch):
 
     assert published == []
     assert called == []
+
+
+def test_detect_confluence_isolates_failures_between_signals(monkeypatch):
+    # First signal's processing blows up with a transient error; the second,
+    # independent signal must still be checked and published.
+    failing = _signal(symbol="BTCUSD", strategy="cloud_mss", timeframe="15m")
+    ok = _signal(symbol="ETHUSD", strategy="cloud_mss", timeframe="15m")
+
+    def fake_open_signals_same_direction(symbol, *a, **k):
+        if symbol == "BTCUSD":
+            raise RuntimeError("transient supabase error")
+        return [{"timeframe": "1h", "indicators": {"strategy": "msnr"}}]
+
+    monkeypatch.setattr(confluence_module, "open_signals_same_direction",
+                        fake_open_signals_same_direction)
+    monkeypatch.setattr(confluence_module, "has_open_confluence_signal",
+                        lambda *a, **k: False)
+    saved = []
+    monkeypatch.setattr(confluence_module, "save_signal",
+                        lambda sig, *a, **k: saved.append(sig))
+    sent = []
+    monkeypatch.setattr(confluence_module, "maybe_send_alert",
+                        lambda sig, *a, **k: sent.append(sig))
+
+    published = confluence_module.detect_confluence(
+        [failing, ok], {}, _settings(), _config())
+
+    assert len(published) == 1
+    assert published[0].symbol == "ETHUSD"
+    assert saved == published
+    assert sent == published

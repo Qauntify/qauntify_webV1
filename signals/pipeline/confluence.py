@@ -25,7 +25,7 @@ def _build_confluence_signal(signal: Signal, other: dict) -> Signal:
     strategy = signal.indicators.get("strategy", "unknown")
     other_strategy = (other.get("indicators") or {}).get("strategy", "unknown")
     tag_new = f"{strategy}@{signal.timeframe}"
-    tag_other = f"{other_strategy}@{other.get('timeframe')}"
+    tag_other = f"{other_strategy}@{other.get('timeframe', 'unknown')}"
 
     indicators = dict(signal.indicators)
     indicators["confluence_of"] = [tag_new, tag_other]
@@ -59,32 +59,41 @@ def detect_confluence(newly_confirmed: list, candles_by_symbol: dict,
     """
     published = []
     for signal in newly_confirmed:
-        strategy = signal.indicators.get("strategy")
-        if not strategy:
-            continue
-        others = open_signals_same_direction(
-            signal.symbol, signal.direction, exclude_strategy=strategy,
-            supabase_url=cfg.supabase_url, service_key=cfg.supabase_service_key,
-            session=session,
-        )
-        if not others:
-            continue
-        if has_open_confluence_signal(
-            signal.symbol, cfg.supabase_url, cfg.supabase_service_key,
-            session=session,
-        ):
-            continue
-
-        confluence = _build_confluence_signal(signal, others[0])
-        candles = candles_by_symbol.get((signal.symbol, signal.timeframe))
-        if candles:
-            confluence = attach_chart(
-                confluence, candles,
+        try:
+            strategy = signal.indicators.get("strategy")
+            if not strategy:
+                continue
+            others = open_signals_same_direction(
+                signal.symbol, signal.direction, exclude_strategy=strategy,
                 supabase_url=cfg.supabase_url,
                 service_key=cfg.supabase_service_key, session=session,
             )
-        save_signal(confluence, cfg.supabase_url, cfg.supabase_service_key,
-                    session=session)
-        maybe_send_alert(confluence, settings, cfg)
-        published.append(confluence)
+            if not others:
+                continue
+            if has_open_confluence_signal(
+                signal.symbol, cfg.supabase_url, cfg.supabase_service_key,
+                session=session,
+            ):
+                continue
+
+            confluence = _build_confluence_signal(signal, others[0])
+            candles = candles_by_symbol.get((signal.symbol, signal.timeframe))
+            if candles:
+                confluence = attach_chart(
+                    confluence, candles,
+                    supabase_url=cfg.supabase_url,
+                    service_key=cfg.supabase_service_key, session=session,
+                )
+            save_signal(confluence, cfg.supabase_url, cfg.supabase_service_key,
+                        session=session)
+            maybe_send_alert(confluence, settings, cfg)
+            published.append(confluence)
+        except Exception as exc:
+            # Each signal's confluence check is independent -- one failure
+            # (e.g. a transient Supabase error) must not skip the rest of
+            # this cycle's batch. The engine-level try/except around the
+            # whole detect_confluence() call only protects the three real
+            # sessions' own delivery, not sibling signals within this loop.
+            print(f"[{signal.symbol}] confluence check failed "
+                  f"({type(exc).__name__}), continuing")
     return published
