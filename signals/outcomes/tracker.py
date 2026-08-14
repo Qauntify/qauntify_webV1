@@ -360,7 +360,11 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
         fetch_timeframe = timeframe
         if timeframe == "confluence":
             fetch_timeframe = (row.get("indicators") or {}).get(
-                "source_timeframe", "1h")
+                "source_timeframe")
+            if not fetch_timeframe:
+                print(f"[{symbol}] confluence row missing source_timeframe, "
+                      "defaulting to 1h")
+                fetch_timeframe = "1h"
         # A limit fill needs its own entry bar in the window. Reach back two
         # bars rather than one so the fetch lands before that bar's open
         # whatever the delay between bar close and row write; _scan_start then
@@ -413,7 +417,11 @@ def backfill_missing_outcome_charts(cfg, session=None, limit=20) -> int:
         fetch_timeframe = timeframe
         if timeframe == "confluence":
             fetch_timeframe = (row.get("indicators") or {}).get(
-                "source_timeframe", "1h")
+                "source_timeframe")
+            if not fetch_timeframe:
+                print(f"[{symbol}] confluence row missing source_timeframe, "
+                      "defaulting to 1h")
+                fetch_timeframe = "1h"
         created_ms = datetime.fromisoformat(row["created_at"]).timestamp() * 1000
         try:
             candles = fetch_candles(symbol, fetch_timeframe, HISTORY_LIMIT,

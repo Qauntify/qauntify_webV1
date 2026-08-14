@@ -395,18 +395,99 @@ def test_track_confluence_row_keeps_its_own_14_day_expiry(monkeypatch):
     # source_timeframe=5m would normally expire in 1 day (super_scalp's
     # window) -- the confluence row itself must keep the registered
     # confluence session's 14-day window regardless of which session
-    # triggered it.
+    # triggered it. Captures the fetched interval (rather than using the
+    # shared `_track()` helper, whose stub ignores the interval argument
+    # entirely) so this test actually fails if the fetch reverts to the
+    # literal "confluence" string instead of the real 5m interval.
     row = _live_row(
         days_old=10, timeframe="confluence", id="conf-2",
         indicators={"strategy": "ict_fvg", "source_timeframe": "5m"},
     )
-    quiet = _candles_from(
-        datetime.now(timezone.utc) - timedelta(days=10), hours=48)
+    intervals = []
 
-    closed, fetches, closes, _ = _track(
-        monkeypatch, [row], fetched_candles=quiet)
+    monkeypatch.setattr(outcome_tracker, "list_open_signals",
+                        lambda url, key, session=None: [row])
 
+    def fake_fetch(symbol, interval, limit, start_time=None, session=None):
+        intervals.append(interval)
+        return _candles_from(
+            datetime.now(timezone.utc) - timedelta(days=10), hours=48)
+
+    monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
+    closes = []
+
+    def fake_update(sig_id, status, closed_at, url, key, session=None,
+                    terminal=True, expected_status=None):
+        closes.append((sig_id, status))
+        return True
+
+    monkeypatch.setattr(outcome_tracker, "update_signal_outcome", fake_update)
+
+    track_open_signals(_config())
+
+    assert intervals == ["5m"]
     assert closes == []  # still open at 10 days; would be "expired" at 1 day
+
+
+@pytest.mark.parametrize("indicators", [
+    None,
+    {"strategy": "cloud_mss"},  # dict present, but no source_timeframe key
+])
+def test_track_confluence_row_missing_source_timeframe_falls_back_to_1h(
+        monkeypatch, capsys, indicators):
+    # source_timeframe is always set by _build_confluence_signal today, so
+    # this fallback is currently unreachable in production -- but it must
+    # still resolve to a real interval (not the literal "confluence" string,
+    # which fetch_candles rejects) and log loudly, since confluence rows
+    # have no realtime-watcher fallback to catch a silently stuck row.
+    row = _live_row(
+        days_old=1, timeframe="confluence", id="conf-3",
+        indicators=indicators,
+    )
+    intervals = []
+
+    monkeypatch.setattr(outcome_tracker, "list_open_signals",
+                        lambda url, key, session=None: [row])
+
+    def fake_fetch(symbol, interval, limit, start_time=None, session=None):
+        intervals.append(interval)
+        return _candles_from(
+            datetime.now(timezone.utc) - timedelta(days=1), hours=24)
+
+    monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
+    monkeypatch.setattr(outcome_tracker, "update_signal_outcome",
+                        lambda *a, **k: True)
+
+    track_open_signals(_config())
+
+    assert intervals == ["1h"]
+    out = capsys.readouterr().out
+    assert "BTCUSDT" in out and "missing source_timeframe" in out
+
+
+def test_backfill_confluence_row_missing_source_timeframe_falls_back_to_1h(
+        monkeypatch, capsys):
+    row = _chart_backfill_row(timeframe="confluence", indicators=None)
+    monkeypatch.setattr(outcome_tracker, "list_signals_missing_outcome_chart",
+                        lambda *a, **k: [row])
+    intervals = []
+
+    def fake_fetch(symbol, timeframe, limit, start_time=None, session=None):
+        intervals.append(timeframe)
+        return [Candle(open_time=0, open=100, high=103, low=98,
+                       close=101, volume=0.0)]
+
+    monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
+    monkeypatch.setattr(outcome_tracker, "attach_outcome_chart",
+                        lambda *a, **k: "http://x/s1-outcome.png")
+    monkeypatch.setattr(outcome_tracker, "set_outcome_chart_url",
+                        lambda *a, **k: None)
+
+    outcome_tracker.backfill_missing_outcome_charts(_BackfillCfg())
+
+    assert intervals == ["1h"]
+    out = capsys.readouterr().out
+    assert "XAUUSD" in out and "missing source_timeframe" in out
 
 
 def test_backfill_missing_outcome_charts_uses_source_timeframe_for_confluence(monkeypatch):
