@@ -90,7 +90,8 @@ def list_signals_missing_outcome_chart(supabase_url: str, service_key: str,
         "&outcome_chart_url=is.null"
         "&select=id,symbol,timeframe,direction,entry,stop_loss,"
         "take_profit,take_profit_1,take_profit_2,take_profit_3,"
-        "tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at,closed_at"
+        "tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at,closed_at,"
+        "indicators"
         f"&order=closed_at.desc&limit={limit}",
         headers={
             "apikey": service_key,

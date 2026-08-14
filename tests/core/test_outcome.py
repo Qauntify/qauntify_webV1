@@ -357,6 +357,83 @@ def test_track_prefetch_key_includes_timeframe(monkeypatch):
     assert fetches == []  # right-timeframe prefetch is used
 
 
+def test_track_uses_source_timeframe_for_confluence_rows(monkeypatch):
+    row = _live_row(
+        days_old=1, timeframe="confluence", id="conf-1",
+        indicators={"strategy": "cloud_mss", "source_timeframe": "15m"},
+    )
+    intervals = []
+
+    monkeypatch.setattr(outcome_tracker, "list_open_signals",
+                        lambda url, key, session=None: [row])
+
+    def fake_fetch(symbol, interval, limit, start_time=None, session=None):
+        intervals.append(interval)
+        return _candles_from(
+            datetime.now(timezone.utc) - timedelta(days=1), hours=24,
+            high=111.0)
+
+    monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
+    closes = []
+
+    def fake_update(sig_id, status, closed_at, url, key, session=None,
+                    terminal=True, expected_status=None):
+        closes.append((sig_id, status))
+        return True
+
+    monkeypatch.setattr(outcome_tracker, "update_signal_outcome", fake_update)
+
+    track_open_signals(_config())
+
+    # Must fetch the real interval, never the literal "confluence" string --
+    # fetch_candles raises ValueError on any interval it doesn't recognize.
+    assert intervals == ["15m"]
+    assert closes == [("conf-1", "tp_hit")]
+
+
+def test_track_confluence_row_keeps_its_own_14_day_expiry(monkeypatch):
+    # source_timeframe=5m would normally expire in 1 day (super_scalp's
+    # window) -- the confluence row itself must keep the registered
+    # confluence session's 14-day window regardless of which session
+    # triggered it.
+    row = _live_row(
+        days_old=10, timeframe="confluence", id="conf-2",
+        indicators={"strategy": "ict_fvg", "source_timeframe": "5m"},
+    )
+    quiet = _candles_from(
+        datetime.now(timezone.utc) - timedelta(days=10), hours=48)
+
+    closed, fetches, closes, _ = _track(
+        monkeypatch, [row], fetched_candles=quiet)
+
+    assert closes == []  # still open at 10 days; would be "expired" at 1 day
+
+
+def test_backfill_missing_outcome_charts_uses_source_timeframe_for_confluence(monkeypatch):
+    row = _chart_backfill_row(
+        timeframe="confluence",
+        indicators={"strategy": "msnr", "source_timeframe": "1h"},
+    )
+    monkeypatch.setattr(outcome_tracker, "list_signals_missing_outcome_chart",
+                        lambda *a, **k: [row])
+    intervals = []
+
+    def fake_fetch(symbol, timeframe, limit, start_time=None, session=None):
+        intervals.append(timeframe)
+        return [Candle(open_time=0, open=100, high=103, low=98,
+                       close=101, volume=0.0)]
+
+    monkeypatch.setattr(outcome_tracker, "fetch_candles", fake_fetch)
+    monkeypatch.setattr(outcome_tracker, "attach_outcome_chart",
+                        lambda *a, **k: "http://x/s1-outcome.png")
+    monkeypatch.setattr(outcome_tracker, "set_outcome_chart_url",
+                        lambda *a, **k: None)
+
+    outcome_tracker.backfill_missing_outcome_charts(_BackfillCfg())
+
+    assert intervals == ["1h"]
+
+
 LIMIT_INDICATORS = {"strategy": "sr_limit", "entry_style": "limit"}
 
 

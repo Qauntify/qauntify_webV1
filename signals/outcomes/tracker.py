@@ -349,14 +349,26 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
         created = datetime.fromisoformat(row["created_at"])
         created_ms = created.timestamp() * 1000
         expires_at = created + max_open
+        # Confluence rows carry a synthetic "confluence" timeframe (so they
+        # never collide with a real session's one-open-per-symbol lock), but
+        # their entry/SL/TP came from a real interval stashed at creation
+        # time -- candle fetches must use that real interval, or every
+        # fetch_candles call raises and the row never settles (not even
+        # expiry -- see the design doc's Delivery section). Expiry itself
+        # still uses the registered `confluence` session's own max_open,
+        # from `timeframe` above, not the source interval's.
+        fetch_timeframe = timeframe
+        if timeframe == "confluence":
+            fetch_timeframe = (row.get("indicators") or {}).get(
+                "source_timeframe", "1h")
         # A limit fill needs its own entry bar in the window. Reach back two
         # bars rather than one so the fetch lands before that bar's open
         # whatever the delay between bar close and row write; _scan_start then
         # trims to the exact bar by position.
         include_entry_bar = fills_intrabar(row)
-        bar_ms = TIMEFRAME_MINUTES.get(timeframe, 60) * 60_000
+        bar_ms = TIMEFRAME_MINUTES.get(fetch_timeframe, 60) * 60_000
         from_ms = created_ms - 2 * bar_ms if include_entry_bar else created_ms
-        candles = candles_covering(symbol, timeframe, from_ms)
+        candles = candles_covering(symbol, fetch_timeframe, from_ms)
         if candles is None:
             continue
         expiry_ms = expires_at.timestamp() * 1000
@@ -398,9 +410,13 @@ def backfill_missing_outcome_charts(cfg, session=None, limit=20) -> int:
     for row in rows:
         symbol = row["symbol"]
         timeframe = row.get("timeframe") or "1h"
+        fetch_timeframe = timeframe
+        if timeframe == "confluence":
+            fetch_timeframe = (row.get("indicators") or {}).get(
+                "source_timeframe", "1h")
         created_ms = datetime.fromisoformat(row["created_at"]).timestamp() * 1000
         try:
-            candles = fetch_candles(symbol, timeframe, HISTORY_LIMIT,
+            candles = fetch_candles(symbol, fetch_timeframe, HISTORY_LIMIT,
                                     start_time=int(created_ms), session=session)
         except Exception as exc:
             print(f"[{symbol}] chart backfill fetch failed "
