@@ -143,6 +143,9 @@ const EXCLUDE_BBMA_FROM_1H =
 // excludes the raw, no-AI-gate BBMA EA feed (both its timeframe=bbma rows
 // and the legacy 1h rows tagged indicators.source=mt5_ea).
 const EXCLUDE_BBMA_LANE = `&timeframe=neq.bbma${EXCLUDE_BBMA_FROM_1H}`;
+// Confluence signals (timeframe=confluence) are Telegram + track-record
+// only in v1 -- no dashboard tab queries for them yet. See
+// docs/superpowers/specs/2026-08-14-strategy-confluence-signal-design.md.
 
 export type SignalLane = "default" | "bbma" | "ai";
 
