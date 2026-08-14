@@ -577,6 +577,16 @@ def test_trading_sessions_define_all_three_streams():
     assert len(timeframes) == len(set(timeframes))
 
 
+def test_confluence_session_is_registered():
+    from signals.models import ALL_SESSIONS, AUXILIARY_SESSIONS
+
+    by_name = {s.name: s for s in AUXILIARY_SESSIONS}
+    assert "confluence" in by_name
+    assert by_name["confluence"].timeframe == "confluence"
+    assert by_name["confluence"].max_open_days == 14
+    assert by_name["confluence"] in ALL_SESSIONS
+
+
 def test_sr_zone_is_never_scanned_again():
     """sr_zone lost 0.415R per trade over 16,157 trades at 15m. The slot is
     scanned again, but by cloud_mss — sr_zone must not creep back into it."""

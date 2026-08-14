@@ -206,6 +206,18 @@ AUXILIARY_SESSIONS = (
         name="bbma", timeframe="bbma", max_open_days=14,
         strategy="bbma_reentry",
     ),
+    # Cross-strategy confirmation: fires when 2+ independent strategies from
+    # the three main sessions are simultaneously open on the same
+    # symbol+direction. Its own entry/SL/TP are copied from whichever setup
+    # triggered it (see signals/pipeline/confluence.py), so 14 days --
+    # matching swing, the longest of the three -- is a safe upper bound
+    # regardless of which session triggered it. The real underlying interval
+    # is stashed in indicators["source_timeframe"] for outcome tracking; see
+    # docs/superpowers/specs/2026-08-14-strategy-confluence-signal-design.md.
+    TradingSession(
+        name="confluence", timeframe="confluence", max_open_days=14,
+        strategy=None,
+    ),
 )
 
 # Every declared session. Use this — not TRADING_SESSIONS — for any lookup
