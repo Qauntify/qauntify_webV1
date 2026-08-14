@@ -36,6 +36,13 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # LLM confirmation-gate A/B, same experiment as the main engine
+          # (signals-engine.yml) — see docs/superpowers/specs/2026-07-26-ai-gate-ab-design.md.
+          # This workflow was missed when the experiment was switched on: 96%
+          # of genuine LLM-verdict rejects happen on this 1m scan, so without
+          # this the shadow arm never accumulates (confirmed via ai_events —
+          # 53 of 55 genuine rejects over 14 days were on 1m, 0 sampled).
+          SHADOW_SAMPLE_RATE: "0.25"
         run: |
           for i in $(seq 1 58); do
             echo "--- scan $i/58 ---"
