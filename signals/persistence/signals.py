@@ -288,3 +288,59 @@ def list_closed_signals(supabase_url: str, service_key: str, session=None,
     )
     response.raise_for_status()
     return response.json()
+
+
+def open_signals_same_direction(symbol: str, direction: str, *,
+                                exclude_strategy: str,
+                                supabase_url: str, service_key: str,
+                                session=None) -> list:
+    """Open (non-shadow) signals for `symbol`+`direction` from a strategy
+    other than `exclude_strategy` -- the confluence pass's "does an
+    independent strategy already agree" check.
+
+    `timeframe=neq.confluence` keeps an already-published confluence row
+    from ever counting toward a later confluence check (no chaining). The
+    strategy filter itself happens in Python: PostgREST can't easily filter
+    JSONB `indicators->>strategy` alongside these other conditions in one
+    readable query here.
+    """
+    session = session or requests.Session()
+    response = session.get(
+        f"{supabase_url}/rest/v1/signals"
+        f"?symbol=eq.{quote(symbol)}&direction=eq.{quote(direction)}"
+        "&status=in.(open,tp1_hit,tp2_hit)&shadow=is.false"
+        "&timeframe=neq.confluence"
+        "&select=timeframe,indicators"
+        "&order=created_at.desc",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    rows = response.json()
+    return [
+        row for row in rows
+        if (row.get("indicators") or {}).get("strategy") != exclude_strategy
+    ]
+
+
+def has_open_confluence_signal(symbol: str, supabase_url: str,
+                               service_key: str, session=None) -> bool:
+    """Whether `symbol` already has an open confluence signal -- guards
+    against publishing a second one while the first is still live."""
+    session = session or requests.Session()
+    response = session.get(
+        f"{supabase_url}/rest/v1/signals"
+        f"?symbol=eq.{quote(symbol)}&timeframe=eq.confluence"
+        "&status=in.(open,tp1_hit,tp2_hit)&shadow=is.false"
+        "&select=id&limit=1",
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+    return bool(response.json())

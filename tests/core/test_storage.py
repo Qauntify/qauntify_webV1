@@ -659,3 +659,61 @@ def test_delete_rows_older_than_raises_on_http_error():
         delete_rows_older_than("ai_events", "created_at", 90,
                                "https://abc.supabase.co", "bad-key",
                                session=session)
+
+
+def test_open_signals_same_direction_excludes_matching_strategy():
+    from signals.persistence.signals import open_signals_same_direction
+
+    session = FakeGetSession(payload=[
+        {"timeframe": "1h", "indicators": {"strategy": "msnr"}},
+        {"timeframe": "15m", "indicators": {"strategy": "cloud_mss"}},
+    ])
+
+    result = open_signals_same_direction(
+        "BTCUSD", "long", exclude_strategy="cloud_mss",
+        supabase_url="https://abc.supabase.co", service_key="key",
+        session=session,
+    )
+
+    assert result == [{"timeframe": "1h", "indicators": {"strategy": "msnr"}}]
+    assert "symbol=eq.BTCUSD" in session.last_url
+    assert "direction=eq.long" in session.last_url
+    assert "timeframe=neq.confluence" in session.last_url
+    assert "shadow=is.false" in session.last_url
+
+
+def test_open_signals_same_direction_empty_when_only_same_strategy_open():
+    from signals.persistence.signals import open_signals_same_direction
+
+    session = FakeGetSession(payload=[
+        {"timeframe": "5m", "indicators": {"strategy": "ict_fvg"}},
+    ])
+
+    result = open_signals_same_direction(
+        "XAUUSD", "short", exclude_strategy="ict_fvg",
+        supabase_url="https://abc.supabase.co", service_key="key",
+        session=session,
+    )
+
+    assert result == []
+
+
+def test_has_open_confluence_signal_true_when_row_exists():
+    from signals.persistence.signals import has_open_confluence_signal
+
+    session = FakeGetSession(payload=[{"id": "sig-1"}])
+
+    assert has_open_confluence_signal(
+        "BTCUSD", "https://abc.supabase.co", "key", session=session,
+    ) is True
+    assert "timeframe=eq.confluence" in session.last_url
+
+
+def test_has_open_confluence_signal_false_when_none_open():
+    from signals.persistence.signals import has_open_confluence_signal
+
+    session = FakeGetSession(payload=[])
+
+    assert has_open_confluence_signal(
+        "BTCUSD", "https://abc.supabase.co", "key", session=session,
+    ) is False
