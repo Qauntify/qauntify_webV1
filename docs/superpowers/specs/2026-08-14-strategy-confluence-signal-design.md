@@ -93,6 +93,8 @@ def detect_confluence(newly_confirmed: list[ConfirmedSetup], cfg, session):
   `["msnr@1h", "cloud_mss@15m"]`, and the rationale text names both
   strategies explicitly (e.g. *"cloud_mss (15m) confirms long, agreeing with
   an already-open msnr (1h) long — confluence signal."*).
+- **`indicators["source_timeframe"]`** is also set to the triggering setup's
+  *real* interval (e.g. `"15m"`) — required by outcome tracking, see below.
 - **Chart:** reuse the triggering setup's own candles via the existing
   `attach_chart`.
 
@@ -116,9 +118,9 @@ signals for free — no new tracking code.
 ## Data model
 
 **Zero migrations.** No new columns. `timeframe="confluence"` plus the
-`confluence_of` key inside the existing `indicators` JSON is enough — the
-same technique `war_room` and `bbma` already use to carry strategy-specific
-data without schema changes.
+`confluence_of` / `source_timeframe` keys inside the existing `indicators`
+JSON is enough — the same technique `war_room` and `bbma` already use to
+carry strategy-specific data without schema changes.
 
 ## Delivery & outcome tracking
 
@@ -128,12 +130,31 @@ data without schema changes.
   a small formatting addition so a confluence alert is visually distinct
   (e.g. a "🔥 CONFLUENCE" prefix naming both contributing strategies) —
   everything else about the send path is unchanged.
-- Outcome tracking (`track_open_signals`), `/track-record`, `/signals`, and
-  the admin scans page pick it up automatically **if** they don't hard-filter
-  to a known timeframe list. This needs an explicit check early in
-  implementation, not an assumption — several places in the codebase key
-  behavior off timeframe strings (`SESSION_SYMBOLS`, dedup queries, session
-  clock helpers).
+- **Outcome tracking requires one targeted change**, not a free ride.
+  `signals/outcomes/tracker.py::track_open_signals` fetches candles via
+  `fetch_candles(symbol, row["timeframe"], ...)` to check TP/SL —
+  `fetch_candles` only understands real broker intervals (1m/5m/15m/1h/4h/
+  1d), so `"confluence"` fails there, exactly like `"floor"`/`"bbma"` already
+  silently fail on that call (caught, logged, skipped — those two rely
+  instead on the separate realtime MT5-tick watcher to settle, which
+  confluence has no equivalent of). Without a fix, a confluence signal would
+  never settle — not TP, not SL, not even expiry, since the failed fetch
+  causes an early `continue` that skips the expiry check too.
+
+  **Fix:** when `row["timeframe"] == "confluence"`, fetch candles using
+  `row["indicators"]["source_timeframe"]` (the real interval stored at
+  creation, above) instead of the literal `"confluence"` string, both for
+  the TP/SL check and for `bar_ms` precision. The registered `confluence`
+  session's `max_open_days=14` still governs expiry. This is a small,
+  targeted addition to `track_open_signals` (and, for consistency,
+  `backfill_missing_outcome_charts`, which has the identical call) — not
+  purely additive like the rest of this design, but there is no working
+  alternative.
+- `/track-record`, `/signals`, and the admin scans page pick it up
+  automatically **if** they don't hard-filter to a known timeframe list.
+  This needs an explicit check early in implementation, not an assumption —
+  several places in the codebase key behavior off timeframe strings
+  (`SESSION_SYMBOLS`, dedup queries, session clock helpers).
 
 ## Error handling
 
@@ -150,7 +171,8 @@ signals from delivering. Logged and continued, never raised.
 | `signals/pipeline/confluence.py` | New: detection + signal construction |
 | `signals/persistence/signals.py` | New query: open signals by symbol+direction, excluding a strategy/timeframe |
 | `signals/pipeline/engine.py` | Call `confluence.detect_confluence(...)` after the session loop, wrapped in try/except |
-| `signals/clients/telegram.py` (or wherever alert formatting lives) | Confluence badge/formatting in the alert template |
+| `signals/clients/telegram.py` | Confluence badge/formatting in `format_alert`/`format_caption` |
+| `signals/outcomes/tracker.py` | Use `indicators["source_timeframe"]` instead of the literal row timeframe when fetching candles for a `confluence` row (both `track_open_signals` and `backfill_missing_outcome_charts`) |
 | `web/src/lib/signals.ts`, `web/src/lib/track-record.ts` | Verify (and fix if needed) that a `confluence` timeframe isn't silently dropped or mis-grouped |
 | `tests/core/test_confluence.py` | New: matching logic + one engine-level integration test |
 
@@ -183,13 +205,11 @@ signals from delivering. Logged and continued, never raised.
   given symbol at a time (in expectation), confluence events may be
   infrequent — this is a real trade-off of requiring genuinely independent
   strategies rather than a looser definition.
-- **Strategy tag reliability.** Detection depends on `indicators["strategy"]`
-  being set consistently on every stored signal from all three sessions.
-  `signals/pipeline/composer.py` already reads `indicators.get("strategy",
-  strategy)` with a fallback, suggesting this isn't uniformly guaranteed
-  today — the implementation plan should verify this for `msnr`, `cloud_mss`,
-  and `ict_fvg` specifically before relying on it for the "different
-  strategy" check.
+- **Strategy tag reliability — verified.** Detection depends on
+  `indicators["strategy"]` being set on every stored signal from all three
+  sessions. Confirmed directly in each detector: `msnr/detector.py:120`,
+  `cloud_mss/detector.py:79`, and `ict_fvg/detector.py:180` all set it
+  explicitly.
 
 ## Out of scope (v1)
 
