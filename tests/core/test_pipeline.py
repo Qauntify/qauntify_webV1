@@ -555,6 +555,113 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
     }
 
 
+def test_main_calls_detect_confluence_with_newly_confirmed_signals(monkeypatch):
+    from signals.models import CandidateSetup, Confirmation, make_signal
+
+    _patch_engine_lock(monkeypatch)
+    settings = BotSettings(symbols=("BTCUSDT",))
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
+    monkeypatch.setattr(engine_module, "track_open_signals",
+                        lambda cfg, prefetched=None, session=None: [])
+    monkeypatch.setattr(engine_module, "save_engine_run",
+                        lambda run, url, key, session=None: None)
+    monkeypatch.setattr(engine_module, "maybe_send_alert", lambda *a, **k: None)
+
+    confirmed = make_signal(
+        CandidateSetup("BTCUSDT", "long", 100.0, 98.0, 104.0,
+                       {"strategy": "cloud_mss"}),
+        Confirmation("confirm", 80, "ok"), [], timeframe="15m")
+
+    def fake_scan(symbol, cfg, llm, *, strategy, timeframe,
+                  session=None, recent_events=None, recent_signals=None,
+                  open_symbols=None, confluence_timeframe=None,
+                  min_store_confidence=0):
+        if timeframe == "15m":
+            return ScanResult(signal=confirmed)
+        return ScanResult()
+
+    monkeypatch.setattr(engine_module, "scan_symbol", fake_scan)
+
+    captured = {}
+
+    def fake_detect(newly_confirmed, candles_by_symbol, settings_arg, cfg,
+                    session=None):
+        captured["signals"] = newly_confirmed
+        return []
+
+    monkeypatch.setattr(engine_module, "detect_confluence", fake_detect)
+
+    engine_module.main()
+
+    assert captured["signals"] == [confirmed]
+
+
+def test_main_folds_published_confluence_signals_into_run_summary(monkeypatch):
+    from signals.models import CandidateSetup, Confirmation, make_signal
+
+    _patch_engine_lock(monkeypatch)
+    settings = BotSettings(symbols=("BTCUSDT",))
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
+    monkeypatch.setattr(engine_module, "track_open_signals",
+                        lambda cfg, prefetched=None, session=None: [])
+    monkeypatch.setattr(engine_module, "scan_symbol",
+                        lambda *a, **k: ScanResult())
+    monkeypatch.setattr(engine_module, "maybe_send_alert", lambda *a, **k: None)
+
+    confluence_signal = make_signal(
+        CandidateSetup("BTCUSDT", "long", 100.0, 98.0, 104.0,
+                       {"strategy": "cloud_mss",
+                        "confluence_of": ["cloud_mss@15m", "msnr@1h"]}),
+        Confirmation("confirm", 75, "confluence"), [], timeframe="confluence")
+    monkeypatch.setattr(engine_module, "detect_confluence",
+                        lambda *a, **k: [confluence_signal])
+
+    runs = []
+    monkeypatch.setattr(engine_module, "save_engine_run",
+                        lambda run, url, key, session=None: runs.append(run))
+
+    engine_module.main()
+
+    outcomes = runs[0]["outcomes"]
+    assert any(o["timeframe"] == "confluence" and o["status"] == "CONFIRMED"
+              for o in outcomes)
+    assert runs[0]["stored_count"] == 1
+
+
+def test_main_confluence_failure_does_not_block_run(monkeypatch):
+    _patch_engine_lock(monkeypatch)
+    settings = BotSettings(symbols=("BTCUSDT",))
+    monkeypatch.setattr(engine_module, "load_config", _config)
+    monkeypatch.setattr(engine_module, "fetch_bot_settings",
+                        lambda url, key, session=None: settings)
+    monkeypatch.setattr(engine_module, "_prefetch_open_symbols",
+                        lambda *a, **k: set())
+    monkeypatch.setattr(engine_module, "track_open_signals",
+                        lambda cfg, prefetched=None, session=None: [])
+    monkeypatch.setattr(engine_module, "scan_symbol",
+                        lambda *a, **k: ScanResult())
+
+    def boom(*a, **k):
+        raise RuntimeError("supabase down")
+
+    monkeypatch.setattr(engine_module, "detect_confluence", boom)
+    runs = []
+    monkeypatch.setattr(engine_module, "save_engine_run",
+                        lambda run, url, key, session=None: runs.append(run))
+
+    engine_module.main()  # must not raise
+
+    assert len(runs) == 1
+
+
 def test_trading_sessions_define_all_three_streams():
     from signals.models import ALL_SESSIONS, TRADING_SESSIONS
 

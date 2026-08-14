@@ -19,6 +19,7 @@ from signals.pipeline.dedup import (
     _prefetch_recent_signals,
     with_retry,
 )
+from signals.pipeline.confluence import detect_confluence
 from signals.pipeline.deliver import maybe_send_alert
 from signals.pipeline.market_data import resolve_gold_live_price
 from signals.pipeline.scan import effective_min_store_confidence, scan_symbol
@@ -66,6 +67,7 @@ def main(sessions=None):
     stored = 0
     outcomes: list[dict] = []
     candles_by_symbol: dict = {}
+    newly_confirmed_signals: list = []
     session_label = "+".join(s.timeframe for s in trading_sessions)
     try:
         # Housekeeping before scans so drifted gold opens free the unique slot.
@@ -169,6 +171,7 @@ def main(sessions=None):
                     candles_by_symbol[(symbol, trading_session.timeframe)] = result.candles
                 if result.signal is not None:
                     stored += 1
+                    newly_confirmed_signals.append(result.signal)
                     maybe_send_alert(result.signal, settings, cfg)
                     outcomes.append({
                         "symbol": symbol,
@@ -200,6 +203,26 @@ def main(sessions=None):
                         "status": "SKIPPED",
                         "extra": "No change (dedup) or missing indicators/data",
                     })
+
+        # Cross-strategy confirmation: runs once, after every session has
+        # scanned, so it sees the full picture of what just got confirmed.
+        # Never allowed to block the three real sessions' delivery, which
+        # has already completed by this point.
+        try:
+            for confluence_signal in detect_confluence(
+                newly_confirmed_signals, candles_by_symbol, settings, cfg,
+                session=db_session,
+            ):
+                stored += 1
+                outcomes.append({
+                    "symbol": confluence_signal.symbol,
+                    "timeframe": "confluence",
+                    "status": "CONFIRMED",
+                    "extra": f"{confluence_signal.direction.upper()} "
+                             f"{confluence_signal.confidence}% (confluence)",
+                })
+        except Exception as exc:
+            print(f"confluence detection failed ({type(exc).__name__}), continuing")
 
         # After scanning both sessions, settle open signals whose TP or SL has
         # been hit and expire stale ones (per-session window), reusing this
