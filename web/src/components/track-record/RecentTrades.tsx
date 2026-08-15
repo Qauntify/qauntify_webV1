@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import type { ClosedTrade } from "@/lib/track-record";
 import { tradeR } from "@/lib/track-record";
 import { formatPrice } from "@/lib/format";
@@ -23,11 +25,13 @@ function ClosedTradeCard({ trade }: { trade: ClosedTrade }) {
     <>
       {trade.outcomeChartUrl ? (
         <div className="relative aspect-[16/9] overflow-hidden border-b border-line bg-paper">
-          <img
+          <Image
             src={trade.outcomeChartUrl}
             alt={`${trade.symbol} outcome chart`}
             loading="lazy"
-            className="h-full w-full object-cover"
+            fill
+            sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+            className="object-cover"
           />
         </div>
       ) : (

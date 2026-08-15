@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
+import { memo, useCallback, useEffect, useState } from "react";
 
 import type { Signal } from "@/lib/signals";
 import { formatDateTime, formatPrice, formatRelativeTime, formatTimeframe } from "@/lib/format";
@@ -183,7 +184,7 @@ function ConfidenceBar({ value, compact = false }: { value: number; compact?: bo
   );
 }
 
-export function SignalCard({
+export const SignalCard = memo(function SignalCard({
   signal,
   onSelect,
   adminSlot,
@@ -216,11 +217,13 @@ export function SignalCard({
 
       {chartSrc ? (
         <div className="relative aspect-[16/9] overflow-hidden border-b border-line bg-paper">
-          <img
+          <Image
             src={chartSrc}
             alt={`${signal.symbol} ${formatTimeframe(signal.timeframe)} ${signal.direction} chart`}
             loading="lazy"
-            className="h-full w-full object-cover"
+            fill
+            sizes="(min-width: 1536px) 20vw, (min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+            className="object-cover"
           />
         </div>
       ) : (
@@ -299,7 +302,7 @@ export function SignalCard({
       </div>
     </Component>
   );
-}
+});
 
 function DetailRow({
   label,
@@ -420,11 +423,13 @@ function SignalDetailModal({
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">
                 គំនូសតាងការរៀបចំ
               </p>
-              <img
+              <Image
                 src={signal.chartUrl}
                 alt={`${signal.symbol} ${signal.timeframe} ${signal.direction} setup`}
                 loading="lazy"
-                className="w-full rounded-lg border border-slate/15"
+                width={1280}
+                height={720}
+                className="w-full h-auto rounded-lg border border-slate/15"
               />
             </div>
           )}
@@ -434,11 +439,13 @@ function SignalDetailModal({
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate/70 mb-1">
                 លទ្ធផល
               </p>
-              <img
+              <Image
                 src={signal.outcomeChartUrl}
                 alt={`${signal.symbol} ${signal.timeframe} ${signal.direction} outcome`}
                 loading="lazy"
-                className="w-full rounded-lg border border-slate/15"
+                width={1280}
+                height={720}
+                className="w-full h-auto rounded-lg border border-slate/15"
               />
             </div>
           )}

@@ -47,7 +47,11 @@ describe("SignalsGrid", () => {
       />,
     );
     const img = screen.getByAltText(/btcusdt 1h long chart/i);
-    expect(img.getAttribute("src")).toBe("https://example.com/setup.png");
+    // next/image proxies the src through its optimizer, so assert on the
+    // encoded original URL rather than an exact match.
+    expect(decodeURIComponent(img.getAttribute("src") ?? "")).toContain(
+      "https://example.com/setup.png",
+    );
   });
 
   it("prefers the outcome chart over the setup chart on the card", () => {
@@ -61,7 +65,9 @@ describe("SignalsGrid", () => {
       />,
     );
     const img = screen.getByAltText(/btcusdt 1h long chart/i);
-    expect(img.getAttribute("src")).toBe("https://example.com/outcome.png");
+    expect(decodeURIComponent(img.getAttribute("src") ?? "")).toContain(
+      "https://example.com/outcome.png",
+    );
   });
 
   it("opens detail modal when a card is clicked", () => {
