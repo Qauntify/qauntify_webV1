@@ -111,10 +111,21 @@ class RealtimeWatcher:
                 continue
 
             timeframe = row.get("timeframe") or "1h"
+            # Confluence rows carry a synthetic "confluence" timeframe --
+            # fetch_candles only understands real broker intervals, so use
+            # the real interval stashed at creation time instead. Same fix
+            # as signals/outcomes/tracker.py's track_open_signals.
+            fetch_timeframe = timeframe
+            if timeframe == "confluence":
+                fetch_timeframe = (row.get("indicators") or {}).get("source_timeframe")
+                if not fetch_timeframe:
+                    print(f"[{symbol}] confluence row missing source_timeframe, "
+                          "defaulting to 1h")
+                    fetch_timeframe = "1h"
             try:
                 # Real history for the outcome chart -- a single tick can't
                 # render one. Only fetched on an actual hit, not per tick.
-                window = fetch_candles(symbol, timeframe, HISTORY_LIMIT,
+                window = fetch_candles(symbol, fetch_timeframe, HISTORY_LIMIT,
                                        session=self.session)[:-1]
             except Exception as exc:
                 print(f"[{symbol}] realtime chart fetch failed "

@@ -94,6 +94,58 @@ def test_handle_tick_applies_events_and_updates_cache_when_still_open(monkeypatc
     assert watcher.cache["BTCUSD"] == [updated_row]
 
 
+def test_handle_tick_uses_source_timeframe_for_confluence_rows(monkeypatch):
+    row = _row(timeframe="confluence",
+              indicators={"strategy": "cloud_mss", "source_timeframe": "15m"})
+    monkeypatch.setattr(realtime_watcher, "check_outcome_events",
+                        lambda r, candles: [("tp1_hit", "2026-08-04T12:00:00+00:00")])
+    intervals = []
+
+    def fake_fetch(symbol, interval, limit, session=None):
+        intervals.append(interval)
+        return [1, 2, 3]
+
+    monkeypatch.setattr(realtime_watcher, "fetch_candles", fake_fetch)
+    monkeypatch.setattr(
+        realtime_watcher, "apply_events",
+        lambda r, events, window, cfg, session=None:
+        ({**r, "status": "tp1_hit"}, "tp1_hit"))
+
+    watcher = realtime_watcher.RealtimeWatcher(_cfg())
+    watcher.cache = {"BTCUSD": [row]}
+
+    watcher.handle_tick("BTCUSD", 106.0, 1_700_000_000_000)
+
+    # Must fetch the real interval, never the literal "confluence" string --
+    # fetch_candles raises ValueError on any interval it doesn't recognize.
+    assert intervals == ["15m"]
+
+
+def test_handle_tick_confluence_row_missing_source_timeframe_falls_back_to_1h(monkeypatch, capsys):
+    row = _row(timeframe="confluence", indicators={"strategy": "cloud_mss"})
+    monkeypatch.setattr(realtime_watcher, "check_outcome_events",
+                        lambda r, candles: [("tp1_hit", "2026-08-04T12:00:00+00:00")])
+    intervals = []
+
+    def fake_fetch(symbol, interval, limit, session=None):
+        intervals.append(interval)
+        return [1, 2, 3]
+
+    monkeypatch.setattr(realtime_watcher, "fetch_candles", fake_fetch)
+    monkeypatch.setattr(
+        realtime_watcher, "apply_events",
+        lambda r, events, window, cfg, session=None:
+        ({**r, "status": "tp1_hit"}, "tp1_hit"))
+
+    watcher = realtime_watcher.RealtimeWatcher(_cfg())
+    watcher.cache = {"BTCUSD": [row]}
+
+    watcher.handle_tick("BTCUSD", 106.0, 1_700_000_000_000)
+
+    assert intervals == ["1h"]
+    assert "missing source_timeframe" in capsys.readouterr().out
+
+
 def test_handle_tick_removes_from_cache_once_terminal(monkeypatch):
     row = _row()
     monkeypatch.setattr(realtime_watcher, "check_outcome_events",

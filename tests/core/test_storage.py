@@ -678,8 +678,36 @@ def test_open_signals_same_direction_excludes_matching_strategy():
     assert result == [{"timeframe": "1h", "indicators": {"strategy": "msnr"}}]
     assert "symbol=eq.BTCUSD" in session.last_url
     assert "direction=eq.long" in session.last_url
-    assert "timeframe=neq.confluence" in session.last_url
+    assert "timeframe=in.(5m,15m,1h)" in session.last_url
     assert "shadow=is.false" in session.last_url
+
+
+def test_open_signals_same_direction_excludes_auxiliary_session_timeframes():
+    from signals.persistence.signals import open_signals_same_direction
+
+    # xau_scalp (1m) and war_room (floor) reuse ict_fvg/cloud_mss -- the same
+    # strategy tags as two of the three main sessions. Without excluding
+    # their timeframes explicitly, an auxiliary signal could pass the
+    # "different strategy" check and trigger a confluence publish the design
+    # doc scopes out (rule 4: "the three main sessions only").
+    session = FakeGetSession(payload=[
+        {"timeframe": "1m", "indicators": {"strategy": "ict_fvg"}},
+        {"timeframe": "floor", "indicators": {"strategy": "cloud_mss"}},
+        {"timeframe": "bbma", "indicators": {"strategy": "bbma_reentry"}},
+    ])
+
+    result = open_signals_same_direction(
+        "XAUUSD", "long", exclude_strategy="msnr",
+        supabase_url="https://abc.supabase.co", service_key="key",
+        session=session,
+    )
+
+    # The PostgREST filter itself excludes these rows before they'd ever
+    # reach the Python strategy filter -- FakeGetSession returns whatever
+    # payload it's given regardless of the URL, so this test's real
+    # assertion is on the URL: confirm the query is scoped to only the three
+    # main-session timeframes.
+    assert "timeframe=in.(5m,15m,1h)" in session.last_url
 
 
 def test_open_signals_same_direction_empty_when_only_same_strategy_open():
