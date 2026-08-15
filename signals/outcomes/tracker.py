@@ -5,6 +5,7 @@ Signals are never deleted. Multi-TP ladder:
   sl_hit / expired can end the trade from any non-terminal state.
 Telegram fires once per newly crossed level.
 """
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from signals.chart.outcome_pipeline import attach_outcome_chart
@@ -24,6 +25,9 @@ _SESSION_BY_TIMEFRAME = {s.timeframe: s for s in ALL_SESSIONS}
 _DEFAULT_MAX_OPEN = next(
     s.max_open for s in ALL_SESSIONS if s.timeframe == "1h")
 HISTORY_LIMIT = 1000
+# Open-position candle fetches are independent reads (one per symbol/
+# timeframe/creation-time), same reasoning as engine.py's MAX_SCAN_WORKERS.
+MAX_OUTCOME_FETCH_WORKERS = 4
 
 _TP_ORDER = ("tp1_hit", "tp2_hit", "tp3_hit")
 # Terminal outcomes. tp1_hit / tp2_hit are also terminal when closed_at is set
@@ -307,6 +311,19 @@ def apply_events(row: dict, events: list[tuple[str, str]], window: list,
     return row, latest
 
 
+def _fetch_window(symbol, timeframe, from_ms):
+    """Runs on a background thread — opens its own requests.Session (via
+    fetch_candles' own fallback) rather than sharing the caller's across
+    threads."""
+    try:
+        return fetch_candles(
+            symbol, timeframe, HISTORY_LIMIT, start_time=int(from_ms),
+        )[:-1]
+    except Exception as exc:
+        print(f"[{symbol}] outcome check skipped, no market data: {exc}")
+        return None
+
+
 def track_open_signals(cfg, prefetched=None, session=None) -> list:
     """Advance every open/partially-hit signal; return (row, latest_status) pairs."""
     try:
@@ -321,26 +338,12 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
         return []
 
     prefetched = prefetched or {}
-    fetch_cache: dict = {}
 
-    def candles_covering(symbol, timeframe, from_ms):
-        pre = prefetched.get((symbol, timeframe))
-        if pre and pre[0].open_time <= from_ms:
-            return pre
-        key = (symbol, timeframe, from_ms)
-        if key not in fetch_cache:
-            try:
-                fetch_cache[key] = fetch_candles(
-                    symbol, timeframe, HISTORY_LIMIT,
-                    start_time=int(from_ms), session=session,
-                )[:-1]
-            except Exception as exc:
-                print(f"[{symbol}] outcome check skipped, no market data: {exc}")
-                fetch_cache[key] = None
-        return fetch_cache[key]
-
-    now = datetime.now(timezone.utc)
-    closed = []
+    # Pass 1 (no network): work out what each row needs, and collect the
+    # distinct (symbol, timeframe, from_ms) fetches not already covered by
+    # this run's prefetched candles.
+    plans = []
+    fetch_keys: set = set()
     for row in open_rows:
         symbol = row["symbol"]
         timeframe = row.get("timeframe") or "1h"
@@ -372,7 +375,43 @@ def track_open_signals(cfg, prefetched=None, session=None) -> list:
         include_entry_bar = fills_intrabar(row)
         bar_ms = TIMEFRAME_MINUTES.get(fetch_timeframe, 60) * 60_000
         from_ms = created_ms - 2 * bar_ms if include_entry_bar else created_ms
-        candles = candles_covering(symbol, fetch_timeframe, from_ms)
+        plans.append((row, fetch_timeframe, from_ms, expires_at,
+                     include_entry_bar, bar_ms))
+
+        pre = prefetched.get((symbol, fetch_timeframe))
+        if not (pre and pre[0].open_time <= from_ms):
+            fetch_keys.add((symbol, fetch_timeframe, from_ms))
+
+    # Pass 2 (network, parallel): these are independent reads -- unlike a
+    # single scan session's symbol list (already parallelized in engine.py),
+    # open-position count isn't bounded by MAX_SCAN_WORKERS, so it's worth
+    # its own pool here rather than settling one row at a time.
+    fetched: dict = {}
+    if fetch_keys:
+        with ThreadPoolExecutor(
+            max_workers=min(len(fetch_keys), MAX_OUTCOME_FETCH_WORKERS),
+        ) as pool:
+            futures = {
+                pool.submit(_fetch_window, symbol, timeframe, from_ms):
+                    (symbol, timeframe, from_ms)
+                for symbol, timeframe, from_ms in fetch_keys
+            }
+            for future, key in futures.items():
+                fetched[key] = future.result()
+
+    def candles_covering(symbol, timeframe, from_ms):
+        pre = prefetched.get((symbol, timeframe))
+        if pre and pre[0].open_time <= from_ms:
+            return pre
+        return fetched.get((symbol, timeframe, from_ms))
+
+    # Pass 3 (sequential): apply each row's events and write its outcome in
+    # the original row order -- settlement writes stay one at a time, same
+    # as before.
+    now = datetime.now(timezone.utc)
+    closed = []
+    for row, fetch_timeframe, from_ms, expires_at, include_entry_bar, bar_ms in plans:
+        candles = candles_covering(row["symbol"], fetch_timeframe, from_ms)
         if candles is None:
             continue
         expiry_ms = expires_at.timestamp() * 1000

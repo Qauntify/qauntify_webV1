@@ -1,4 +1,5 @@
 """Candle/indicator fetching, higher-timeframe trend, and gold live-price snap."""
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from typing import NamedTuple
 
@@ -75,26 +76,70 @@ def _candle_limit_for(strategy, cfg):
     return max(cfg.candle_limit, EXTRA_HISTORY.get(strategy, 0))
 
 
+def _fetch_h1(symbol, cfg):
+    h1_raw = with_retry(
+        lambda: fetch_candles(
+            symbol, "1h", max(cfg.candle_limit, 80),
+            supabase_url=cfg.supabase_url,
+            service_key=cfg.supabase_service_key,
+        )
+    )
+    return h1_raw[:-1]
+
+
 def _load_market_data(symbol, timeframe, strategy, cfg, *,
                       confluence_timeframe=None, session=None):
     """Fetch closed candles + indicators (+ H1 for ce_lwma / HTF trend for
     confluence). Returns (MarketData, candles) on success, (None, None) when the
     initial candle fetch fails, or (None, candles) when a required H1/HTF fetch
-    fails after candles were already fetched."""
-    candle_limit = _candle_limit_for(strategy, cfg)
-    try:
-        candles = with_retry(
-            lambda: fetch_candles(
-                symbol, timeframe, candle_limit, session=session,
-                supabase_url=cfg.supabase_url,
-                service_key=cfg.supabase_service_key,
-            )
-        )
-    except Exception as exc:
-        print(f"[{symbol}] market data unavailable, skipping: {exc}")
-        return None, None
+    fails after candles were already fetched.
 
-    candles = candles[:-1]
+    The primary candle fetch and the H1/HTF-trend fetch are independent reads,
+    so when the strategy or confluence setting needs the second one, it runs
+    on a background thread while the primary fetch runs here. The background
+    fetch opens its own requests.Session (fetch_candles' own fallback) rather
+    than sharing the caller's `session` across threads.
+    """
+    candle_limit = _candle_limit_for(strategy, cfg)
+    needs_h1 = strategy in NEEDS_H1
+    needs_htf = not needs_h1 and bool(confluence_timeframe)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        secondary = None
+        if needs_h1:
+            secondary = pool.submit(_fetch_h1, symbol, cfg)
+        elif needs_htf:
+            secondary = pool.submit(_fetch_htf_trend, symbol,
+                                    confluence_timeframe, cfg)
+
+        try:
+            candles = with_retry(
+                lambda: fetch_candles(
+                    symbol, timeframe, candle_limit, session=session,
+                    supabase_url=cfg.supabase_url,
+                    service_key=cfg.supabase_service_key,
+                )
+            )
+        except Exception as exc:
+            print(f"[{symbol}] market data unavailable, skipping: {exc}")
+            return None, None
+        candles = candles[:-1]
+
+        htf_trend = None
+        h1_candles = None
+        if secondary is not None:
+            try:
+                result = secondary.result()
+            except Exception as exc:
+                kind = "H1 CE data" if needs_h1 else "HTF confluence required but"
+                print(f"[{symbol}] {kind} unavailable ({type(exc).__name__}), "
+                      "skipping")
+                return None, candles
+            if needs_h1:
+                h1_candles = result
+            else:
+                htf_trend = result
+
     closes = [c.close for c in candles]
     highs = [c.high for c in candles]
     lows = [c.low for c in candles]
@@ -104,31 +149,6 @@ def _load_market_data(symbol, timeframe, strategy, cfg, *,
     macd_hist = macd_histogram(closes)
     atr14 = atr(highs, lows, closes, 14)
     adx14 = adx(highs, lows, closes, 14)
-    htf_trend = None
-    h1_candles = None
-    if strategy in NEEDS_H1:
-        try:
-            h1_raw = with_retry(
-                lambda: fetch_candles(
-                    symbol, "1h", max(cfg.candle_limit, 80),
-                    session=session,
-                    supabase_url=cfg.supabase_url,
-                    service_key=cfg.supabase_service_key,
-                )
-            )
-            h1_candles = h1_raw[:-1]
-        except Exception as exc:
-            print(f"[{symbol}] H1 CE data unavailable ({type(exc).__name__}), "
-                  "skipping")
-            return None, candles
-    elif confluence_timeframe:
-        try:
-            htf_trend = _fetch_htf_trend(symbol, confluence_timeframe, cfg,
-                                         session=session)
-        except Exception as exc:
-            print(f"[{symbol}] HTF confluence required but unavailable "
-                  f"({type(exc).__name__}), skipping")
-            return None, candles
 
     return MarketData(candles=candles, ema9=ema9, ema21=ema21, rsi14=rsi14,
                       macd_hist=macd_hist, atr14=atr14, adx14=adx14,

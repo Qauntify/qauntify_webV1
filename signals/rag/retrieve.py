@@ -4,6 +4,7 @@ Outcomes + prior rationales: SQL filters on existing tables.
 Playbook: pgvector match when seeded; in-repo keyword fallback otherwise.
 Soft-fails to an empty / partial block so RAG never blocks a scan.
 """
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
@@ -162,6 +163,45 @@ def _playbook_query(setup, strategy: str, timeframe: str) -> str:
     )
 
 
+def _fetch_outcomes_bucket(setup, strategy, timeframe, supabase_url,
+                           service_key, *, session=None) -> list:
+    try:
+        return fetch_similar_outcomes(
+            setup.symbol, timeframe, setup.direction, strategy,
+            supabase_url, service_key, session=session,
+        )
+    except Exception as exc:
+        print(f"[{setup.symbol}] RAG outcomes unavailable ({type(exc).__name__})")
+        return []
+
+
+def _fetch_rationales_bucket(setup, timeframe, supabase_url, service_key) -> list:
+    try:
+        return fetch_similar_rationales(
+            setup.symbol, timeframe, setup.direction,
+            supabase_url, service_key,
+        )
+    except Exception as exc:
+        print(f"[{setup.symbol}] RAG rationales unavailable ({type(exc).__name__})")
+        return []
+
+
+def _fetch_playbook_bucket(setup, strategy, query, supabase_url,
+                           service_key, llm) -> list:
+    try:
+        if llm is not None and hasattr(llm, "embed"):
+            embedding = llm.embed(query)
+            chunks = match_playbook_chunks(
+                embedding, strategy, supabase_url, service_key,
+            )
+            if chunks:
+                return chunks
+    except Exception as exc:
+        print(f"[{setup.symbol}] RAG playbook vector unavailable "
+              f"({type(exc).__name__}), using local rules")
+    return local_playbook_chunks(strategy, query)
+
+
 def retrieve_context(
     setup,
     *,
@@ -172,41 +212,29 @@ def retrieve_context(
     llm=None,
     session=None,
 ) -> str:
-    """Build the RAG prompt block; soft-fail each bucket independently."""
-    outcomes: list = []
-    rationales: list = []
-    playbook: list = []
+    """Build the RAG prompt block; soft-fail each bucket independently.
 
-    try:
-        outcomes = fetch_similar_outcomes(
-            setup.symbol, timeframe, setup.direction, strategy,
-            supabase_url, service_key, session=session,
-        )
-    except Exception as exc:
-        print(f"[{setup.symbol}] RAG outcomes unavailable ({type(exc).__name__})")
-
-    try:
-        rationales = fetch_similar_rationales(
-            setup.symbol, timeframe, setup.direction,
-            supabase_url, service_key, session=session,
-        )
-    except Exception as exc:
-        print(f"[{setup.symbol}] RAG rationales unavailable ({type(exc).__name__})")
-
+    The three buckets are independent reads, so rationales and playbook run
+    on background threads — each opens its own requests.Session rather than
+    sharing the caller's `session`, since Session objects aren't safe to use
+    from more than one thread at once — while outcomes runs on this thread
+    reusing `session`. Wall time is ~the slowest bucket instead of the sum
+    of all three.
+    """
     query = _playbook_query(setup, strategy, timeframe)
-    try:
-        if llm is not None and hasattr(llm, "embed"):
-            embedding = llm.embed(query)
-            playbook = match_playbook_chunks(
-                embedding, strategy, supabase_url, service_key, session=session,
-            )
-    except Exception as exc:
-        print(f"[{setup.symbol}] RAG playbook vector unavailable "
-              f"({type(exc).__name__}), using local rules")
-        playbook = []
-
-    if not playbook:
-        playbook = local_playbook_chunks(strategy, query)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        rationales_future = pool.submit(
+            _fetch_rationales_bucket, setup, timeframe, supabase_url, service_key,
+        )
+        playbook_future = pool.submit(
+            _fetch_playbook_bucket, setup, strategy, query, supabase_url,
+            service_key, llm,
+        )
+        outcomes = _fetch_outcomes_bucket(
+            setup, strategy, timeframe, supabase_url, service_key, session=session,
+        )
+        rationales = rationales_future.result()
+        playbook = playbook_future.result()
 
     return format_rag_block(
         outcomes=outcomes, rationales=rationales, playbook=playbook,
