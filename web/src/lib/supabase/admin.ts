@@ -53,6 +53,12 @@ export const SIGNAL_STRATEGIES = [
     description:
       "MA5 escapes the Bollinger band, then price rejects back inside and retests MA5. Backtested at −0.15R per trade over 8.87 years.",
   },
+  {
+    id: "orb_rvol",
+    label: "Opening Range Breakout + Relative Volume",
+    description:
+      "Trades the first breakout of a session's opening range (Asia/London/NY) in the range's own direction, gated on abnormal volume vs. that anchor's own history. Not yet backtested over long history — see docs/orb-rvol-backtest-results.md once available.",
+  },
 ] as const;
 
 export type AiEvent = {

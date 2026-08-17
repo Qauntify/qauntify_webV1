@@ -120,7 +120,7 @@ SIGNAL_STRATEGIES = ("ema_cross", "ict_smc", "ce_lwma", "ict_fvg", "sr_zone",
 # Swing now pins `msnr`, so the admin toggle is unused for live 1h delivery —
 # keep the selectable set for paper/legacy settings writes.
 ADMIN_SELECTABLE_STRATEGIES = ("ema_cross", "ict_smc", "sr_zone",
-                               "bbma_reentry", "bbma_extreme")
+                               "bbma_reentry", "bbma_extreme", "orb_rvol")
 
 DEFAULT_SIGNAL_STRATEGY = "ema_cross"
 
