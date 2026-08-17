@@ -114,3 +114,11 @@ def test_confirm_setup_passes_rag_into_llm():
 def test_playbook_covers_all_strategies():
     strategies = {c["strategy"] for c in PLAYBOOK_CHUNKS}
     assert strategies >= {"ict_fvg", "ce_lwma", "ict_smc", "ema_cross"}
+
+
+def test_playbook_covers_orb_rvol():
+    chunks = [c for c in PLAYBOOK_CHUNKS if c["strategy"] == "orb_rvol"]
+    assert len(chunks) == 2
+    titles = {c["title"].lower() for c in chunks}
+    assert any("confirm" in t for t in titles)
+    assert any("reject" in t for t in titles)

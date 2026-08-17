@@ -144,4 +144,34 @@ PLAYBOOK_CHUNKS = (
             "body touches, or when stop distance is extreme vs ATR."
         ),
     },
+    {
+        "strategy": "orb_rvol",
+        "title": "15m Opening Range Breakout confirm gate",
+        "body": (
+            "orb_rvol: trades the first breakout of a session opening range "
+            "(Asia 00:00 / London 07:00 / NY 13:30 UTC, first 30 minutes), "
+            "in the direction the range itself moved -- a bullish range only "
+            "permits longs, bearish only shorts, a doji range no trade. "
+            "Fires only when the opening range traded on relative volume "
+            ">= 1.0x its own anchor's recent history; this filter is the "
+            "entire source of the strategy's edge (SSRN 4729284) -- plain "
+            "ORB without it underperforms buy-and-hold. Stop sits at the "
+            "opposite edge of the range plus an ATR buffer; wide 2R/4R/6R "
+            "targets since the edge depends on runners. Confirm when "
+            "direction, RVOL and the breakout close all agree."
+        ),
+    },
+    {
+        "strategy": "orb_rvol",
+        "title": "15m Opening Range Breakout reject cues",
+        "body": (
+            "Reject orb_rvol when relative volume is at or below its own "
+            "anchor's recent average (the headline gate), when the proposed "
+            "direction contradicts the opening range's own bullish/bearish "
+            "read, when the range itself was a doji, or when the stop is "
+            "farther than 2.5 ATR from entry. Do not reject solely for "
+            "missing higher-timeframe agreement -- this strategy takes no "
+            "HTF gate by design (the opening range is its own thesis)."
+        ),
+    },
 )
