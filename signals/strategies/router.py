@@ -7,6 +7,7 @@ from signals.strategies.ema_cross import detect_setup as detect_ema_setup
 from signals.strategies.ict_fvg import detect_setup as detect_ict_fvg_setup
 from signals.strategies.ict_smc import detect_setup as detect_ict_setup
 from signals.strategies.msnr import detect_setup as detect_msnr_setup
+from signals.strategies.orb_rvol import detect_setup as detect_orb_rvol_setup
 from signals.strategies.sr_zone import detect_setup as detect_sr_setup
 
 
@@ -50,6 +51,10 @@ def detect_setup(strategy, symbol, candles, ema9, ema21, rsi14, macd_hist,
         )
     if strategy == "sr_zone":
         return detect_sr_setup(
+            symbol, candles, atr14, adx14=adx14, htf_trend=htf_trend,
+        )
+    if strategy == "orb_rvol":
+        return detect_orb_rvol_setup(
             symbol, candles, atr14, adx14=adx14, htf_trend=htf_trend,
         )
     if strategy != "ema_cross":
