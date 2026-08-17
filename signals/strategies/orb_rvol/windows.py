@@ -23,7 +23,14 @@ MIN_RVOL_SAMPLES = 3  # minimum priors before RVOL is trusted
 _BAR_MS = 15 * 60_000
 _DAY_MS = 24 * 60 * 60_000
 _ANCHOR_MS = tuple((name, (h * 60 + m) * 60_000) for h, m, name in SESSION_ANCHORS_UTC)
-_WINDOW_END_MS = (OR_BARS + TRADE_WINDOW_BARS) * _BAR_MS
+
+# Elapsed ms from an anchor's own open_time at which its window (OR +
+# trade window) closes. Public so detector.py can bound its breakout scan
+# by wall-clock time instead of bar count — see current_anchor's docstring
+# and the module docstring's "matched against wall-clock open_time, not
+# counted forward" principle. windows.py owns this arithmetic; detector.py
+# just reuses the number.
+WINDOW_END_MS = (OR_BARS + TRADE_WINDOW_BARS) * _BAR_MS
 
 
 def _anchor_indices(candles):
@@ -55,7 +62,7 @@ def current_anchor(candles):
             idx, name = i, n
     if idx is None:
         return None, None
-    if last.open_time - candles[idx].open_time >= _WINDOW_END_MS:
+    if last.open_time - candles[idx].open_time >= WINDOW_END_MS:
         return None, None
     return name, idx
 

@@ -13,7 +13,11 @@ from signals.strategies.orb_rvol.detector import (
     MIN_CANDLES,
     detect_setup,
 )
-from signals.strategies.orb_rvol.windows import MIN_RVOL_SAMPLES, OR_BARS
+from signals.strategies.orb_rvol.windows import (
+    MIN_RVOL_SAMPLES,
+    OR_BARS,
+    WINDOW_END_MS,
+)
 
 DAY0 = int(datetime(2024, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
 ATR = 1.0
@@ -189,3 +193,57 @@ def test_no_setup_without_an_atr():
     atr14 = _atr14(candles)
     atr14[-1] = None
     assert detect_setup("BTCUSD", candles, atr14) is None
+
+
+def test_rvol_exactly_at_minimum_still_fires():
+    """The gate is `rvol < MIN_RVOL`, so rvol == MIN_RVOL (1.0) must still
+    fire -- consistent with the spec's ">= 1.0x" language. rvol_multiplier=1.0
+    makes today's OR volume exactly equal to the mean of the priors, so
+    relative_volume computes to exactly 1.0 (not just close to it)."""
+    candles, _, _ = _asia_scenario(rvol_multiplier=1.0)
+    setup = detect_setup("BTCUSD", candles, _atr14(candles))
+    assert setup is not None
+    assert setup.indicators["rvol"] == 1.0
+
+
+def test_breakout_window_tracks_wall_clock_time_not_bar_count():
+    """windows.py's own docstring is explicit that anchors -- and therefore
+    everything downstream of them -- are matched against wall-clock
+    open_time, "not counted forward from the start of candles," precisely so
+    a gap in the candle feed (a missing bar, which real MT5 feeds produce)
+    doesn't silently change how much real time a window covers.
+
+    This scenario puts 16 quiet bars 10 minutes apart (not the usual 15)
+    right after the OR closes, then the real breakout as the 17th
+    trade-window bar. That breakout sits at bar-index anchor+OR_BARS+16 --
+    one past a bar-COUNT cap of TRADE_WINDOW_BARS (16) -- but only 190
+    minutes after the anchor, comfortably inside WINDOW_END_MS (270 min). A
+    scan bounded by raw bar count would stop at the 16th (quiet) bar and
+    never see it; a time-based scan correctly keeps going and fires."""
+    prior_volume = 10.0
+    candles = []
+    for day in range(1, MIN_RVOL_SAMPLES + 1):
+        start = day * 24 * 60
+        candles.append(_bar(start, volume=prior_volume))
+        candles.append(_bar(start + 15, volume=prior_volume))
+    today = (MIN_RVOL_SAMPLES + 1) * 24 * 60
+    or_volume = prior_volume * 10.0
+    candles.append(_bar(today, open_=100.0, high=100.5, low=99.5, close=100.2,
+                        volume=or_volume))
+    candles.append(_bar(today + 15, open_=100.2, high=101.0, low=100.0,
+                        close=100.8, volume=or_volume))
+    or_high = 101.0
+    for k in range(16):
+        candles.append(_bar(today + 30 + k * 10, close=100.0, volume=or_volume))
+    breakout_minutes = today + 30 + 16 * 10
+    elapsed_ms = (breakout_minutes - today) * 60_000
+    assert elapsed_ms < WINDOW_END_MS  # sanity: still inside the real window
+    candles.append(_bar(breakout_minutes, open_=100.8, high=102.0, low=100.7,
+                        close=101.5, volume=or_volume))
+    pad = _padding(max(0, MIN_CANDLES - len(candles)))
+    candles = pad + candles
+    setup = detect_setup("BTCUSD", candles, _atr14(candles))
+    assert setup is not None
+    assert setup.direction == "long"
+    assert setup.entry == 101.5
+    assert or_high < setup.entry  # confirms this really is the breakout bar

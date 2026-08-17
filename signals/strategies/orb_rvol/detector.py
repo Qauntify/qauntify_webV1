@@ -11,7 +11,7 @@ IS the directional thesis (see the spec's "Deliberate omissions").
 from signals.models import CandidateSetup, take_profits_from_risk
 from signals.strategies.orb_rvol.windows import (
     OR_BARS,
-    TRADE_WINDOW_BARS,
+    WINDOW_END_MS,
     current_anchor,
     opening_range,
     relative_volume,
@@ -27,11 +27,21 @@ TP1_R, TP2_R, TP3_R = 2.0, 4.0, 6.0  # wide ladder — the edge depends on runne
 def _first_breakout_index(candles, anchor_index, direction, or_high, or_low):
     """Index of the FIRST bar in the trade window that closes beyond the OR
     edge in `direction`, or None if none has yet (or ever will, once the
-    window has closed)."""
+    window has closed).
+
+    Bounded by wall-clock time (anchor open_time + WINDOW_END_MS), not raw
+    bar count, so a gap in the candle feed (a missing bar) can't silently
+    shrink or stretch how much real time this scan covers — the same
+    principle windows.py's own anchor-matching applies. windows.py owns the
+    time arithmetic (WINDOW_END_MS); this just walks forward until it runs
+    out of window or out of candles.
+    """
+    anchor_time = candles[anchor_index].open_time
     start = anchor_index + OR_BARS
-    end = min(len(candles), start + TRADE_WINDOW_BARS)
-    for i in range(start, end):
+    for i in range(start, len(candles)):
         bar = candles[i]
+        if bar.open_time - anchor_time >= WINDOW_END_MS:
+            break
         if direction == "long" and bar.close > or_high:
             return i
         if direction == "short" and bar.close < or_low:
