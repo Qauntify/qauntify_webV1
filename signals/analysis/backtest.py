@@ -34,6 +34,7 @@ STRATEGY_TIMEFRAMES = {
     "sr_zone": "1h",
     "bbma_extreme": "1h",
     "bbma_reentry": "1h",
+    "orb_rvol": "15m",
 }
 DEFAULT_WARMUP = 60
 DEFAULT_SYMBOLS = ("BTCUSD", "ETHUSD", "XAUUSD")
@@ -51,6 +52,44 @@ CONFLUENCE_TIMEFRAMES = {
     "bbma_reentry": "4h",
 }
 TF_MINUTES = {"5m": 5, "15m": 15, "1h": 60, "4h": 240}
+
+from datetime import datetime, timezone
+
+
+def fetch_extended_history(symbol, timeframe, total_bars, *, session=None):
+    """Page `fetch_candles` backward via `start_time` to assemble more
+    history than a single request returns.
+
+    Kraken caps OHLC at ~720 bars/request and offers no deeper history;
+    Yahoo (gold) caps intraday depth too. This pages forward from
+    `now - total_bars * interval`, using each batch's newest `open_time` as
+    the next page's `start_time`, de-duplicating by `open_time`, and
+    stopping once a page returns nothing new. Bounded by what the provider
+    actually has — takes what is available rather than failing.
+    """
+    from signals.clients.market import fetch_candles
+
+    minutes = TF_MINUTES.get(timeframe)
+    if minutes is None:
+        raise ValueError(f"unknown timeframe {timeframe!r}")
+    interval_ms = minutes * 60_000
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    cursor = now_ms - total_bars * interval_ms
+
+    session = session or __import__("requests").Session()
+    seen: dict[int, object] = {}
+    while cursor < now_ms:
+        page = fetch_candles(symbol, timeframe, 720, start_time=cursor,
+                             session=session)
+        new = [c for c in page if c.open_time not in seen]
+        if not new:
+            break
+        for c in new:
+            seen[c.open_time] = c
+        cursor = max(c.open_time for c in new) + interval_ms
+
+    candles = sorted(seen.values(), key=lambda c: c.open_time)
+    return candles[-total_bars:] if len(candles) > total_bars else candles
 
 
 def htf_trend_series(primary_candles, htf_candles, htf_minutes):
@@ -355,9 +394,14 @@ def main():
         htf_minutes = TF_MINUTES.get(htf_tf) if htf_tf else None
         for symbol in DEFAULT_SYMBOLS:
             try:
-                candles = fetch_candles(
-                    symbol, timeframe, DEFAULT_CANDLE_LIMIT, session=session,
-                )[:-1]  # drop the still-forming last bar
+                if strategy == "orb_rvol":
+                    candles = fetch_extended_history(
+                        symbol, timeframe, 3000, session=session,
+                    )[:-1]
+                else:
+                    candles = fetch_candles(
+                        symbol, timeframe, DEFAULT_CANDLE_LIMIT, session=session,
+                    )[:-1]  # drop the still-forming last bar
                 htf_candles = None
                 if htf_tf:
                     htf_candles = fetch_candles(
