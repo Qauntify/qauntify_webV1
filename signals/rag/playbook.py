@@ -148,17 +148,17 @@ PLAYBOOK_CHUNKS = (
         "strategy": "orb_rvol",
         "title": "15m Opening Range Breakout confirm gate",
         "body": (
-            "orb_rvol: trades the first breakout of a session opening range "
-            "(Asia 00:00 / London 07:00 / NY 13:30 UTC, first 30 minutes), "
-            "in the direction the range itself moved -- a bullish range only "
-            "permits longs, bearish only shorts, a doji range no trade. "
-            "Fires only when the opening range traded on relative volume "
-            ">= 1.0x its own anchor's recent history; this filter is the "
-            "entire source of the strategy's edge (SSRN 4729284) -- plain "
-            "ORB without it underperforms buy-and-hold. Stop sits at the "
-            "opposite edge of the range plus an ATR buffer; wide 2R/4R/6R "
-            "targets since the edge depends on runners. Confirm when "
-            "direction, RVOL and the breakout close all agree."
+            "Opening Range Breakout orb_rvol: trades the opening range's "
+            "first breakout (Asia/London/NY, UTC, first 30 minutes) in the "
+            "range's own direction — bullish longs only, bearish shorts "
+            "only, doji no trade. Requires relative volume >= 1.0x the same "
+            "anchor's recent history; this filter is the strategy's entire "
+            "edge (SSRN 4729284) — plain ORB underperforms buy-and-hold. "
+            "Stop sits at the range's opposite edge plus an ATR buffer; "
+            "wide 2R/4R/6R targets for the runners the edge depends on. "
+            "Confirm when direction, RVOL and the breakout close all agree. "
+            "When borderline but technically valid, lean confirm with "
+            "moderate confidence."
         ),
     },
     {
@@ -170,7 +170,7 @@ PLAYBOOK_CHUNKS = (
             "direction contradicts the opening range's own bullish/bearish "
             "read, when the range itself was a doji, or when the stop is "
             "farther than 2.5 ATR from entry. Do not reject solely for "
-            "missing higher-timeframe agreement -- this strategy takes no "
+            "missing higher-timeframe agreement — this strategy takes no "
             "HTF gate by design (the opening range is its own thesis)."
         ),
     },
