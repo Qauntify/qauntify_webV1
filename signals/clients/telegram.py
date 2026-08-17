@@ -332,7 +332,7 @@ def format_outcome_alert(signal_row: dict, outcome: str) -> str:
         }
         exit_price = tp_map.get(outcome) or signal_row.get("take_profit")
 
-    move = (float(exit_price) - entry) / entry * 100
+    move = float(exit_price) - entry
     if direction == "short":
         move = -move
     trend = "📈" if move >= 0 else "📉"
@@ -341,7 +341,7 @@ def format_outcome_alert(signal_row: dict, outcome: str) -> str:
         f"{emoji} <b>{title}</b>",
         _DIVIDER,
         f"{dot} <b>{symbol}</b>  ·  <b>{arrow} {direction_label}</b>  ·  "
-        f"{trend} <b>{move:+.2f}%</b>",
+        f"{trend} <b>{move:+.2f}</b>",
     ]
     if next_hint:
         lines.extend(["", f"<i>{next_hint}</i>"])

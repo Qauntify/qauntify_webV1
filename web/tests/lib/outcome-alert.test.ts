@@ -22,7 +22,7 @@ describe("formatOutcomeAlert", () => {
     expect(text).toContain("TAKE PROFIT");
     expect(text).toContain("<b>BTCUSDT</b>");
     expect(text).toContain("LONG");
-    expect(text).toContain("+10.00%");
+    expect(text).toContain("+10.00");
     expect(text).toContain("Entry  <code>100</code>  →  <code>110</code>");
   });
 

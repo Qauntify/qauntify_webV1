@@ -114,7 +114,7 @@ def test_format_outcome_alert_tp_hit_is_positive():
     assert "TP1 HIT" in text
     assert "✅" in text
     assert "🟢" in text                         # long
-    assert "+2.00%" in text
+    assert "+2.00" in text
     assert "<code>100</code>" in text and "<code>102</code>" in text
 
 
@@ -125,7 +125,7 @@ def test_format_outcome_alert_sl_hit_is_negative():
     assert "STOP LOSS" in text
     assert "🛑" in text
     assert "🔴" in text                         # short
-    assert "-2.00%" in text                     # short stopped out 2% against
+    assert "-2.00" in text                      # short stopped out 2.00 against
 
 
 def test_send_alert_posts_to_bot_api():
