@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.26"
+#property version   "1.27"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
@@ -156,9 +156,32 @@ void MaybePushClosedM1()
   {
    datetime closed = iTime(_Symbol, PERIOD_M1, 1);
    if(closed <= 0 || closed == lastClosedBar) return;
-   string arr = "[" + CandleJson(1) + "]";
-   if(PushCandlesJson(arr))
-      lastClosedBar = closed;
+
+   // OnTick only fires when a tick arrives, not on every bar boundary, so in
+   // thin-tick periods (common outside peak hours) more than one M1 bar can
+   // close between calls. Catch up on every bar since lastClosedBar, one push
+   // per bar (not batched), so shouldDispatchEngineFromM1Push in bar-close.ts
+   // -- which reads only a push's newest candle, and bails out above 5
+   // candles -- still gets a chance to see each bar that might close a
+   // 5m/15m/1h boundary, not just the latest one. Otherwise a skipped bar
+   // silently drops out of the Supabase buffer (breaks HTF resampling
+   // downstream) and can silently skip an engine dispatch too.
+   int maxCatchUp = 20; // safety cap; BackfillClosedM1 handles bigger gaps at init
+   int shift = 1;
+   while(shift < maxCatchUp)
+     {
+      datetime t = iTime(_Symbol, PERIOD_M1, shift + 1);
+      if(t <= 0 || (lastClosedBar > 0 && t <= lastClosedBar)) break;
+      shift++;
+     }
+
+   for(int s = shift; s >= 1; s--)
+     {
+      string arr = "[" + CandleJson(s) + "]";
+      if(!PushCandlesJson(arr))
+         return; // stop here; this bar (and any after it) retries next tick
+      lastClosedBar = iTime(_Symbol, PERIOD_M1, s);
+     }
   }
 
 ENUM_TIMEFRAMES PeriodFromMinutes(const int minutes)
