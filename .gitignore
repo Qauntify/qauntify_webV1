@@ -29,3 +29,6 @@ web/public/tools/cloud-mss-10/
 
 # Supabase CLI scratch state
 supabase/.temp/
+
+# Local git worktrees (superpowers:using-git-worktrees)
+.worktrees/
