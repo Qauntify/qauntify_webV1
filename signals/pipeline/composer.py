@@ -92,6 +92,13 @@ def _no_setup_reason(strategy: str, timeframe: str) -> str:
             f"structure shift setup (no H1 Chandelier/MA200 cloud rejection "
             f"with a CHoCH on the {chart})."
         )
+    if strategy == "orb_rvol":
+        return (
+            f"The rules engine found no valid opening-range breakout (need "
+            f"a session opening range with abnormally high relative volume, "
+            f"followed by the first breakout in the range's own direction, "
+            f"on the {chart})."
+        )
     if strategy in ("bbma_extreme", "bbma_reentry"):
         return (
             f"The rules engine found no valid BBMA setup (no Bollinger "
@@ -219,6 +226,25 @@ def _format_indicators(strategy: str, indicators: dict) -> str:
                 else:
                     parts.append(f"{label}={value}")
         return ", ".join(parts) if parts else "no cloud/MSS reading"
+    if active == "orb_rvol":
+        parts = []
+        for key, label in (
+            ("session", "session"),
+            ("or_high", "OR high"),
+            ("or_low", "OR low"),
+            ("or_direction", "OR direction"),
+            ("rvol", "RVOL"),
+            ("atr", "ATR"),
+            ("adx", "ADX"),
+            ("htf_trend", "HTF trend"),
+        ):
+            if key in indicators:
+                value = indicators[key]
+                if isinstance(value, float):
+                    parts.append(f"{label}={value:.4f}")
+                else:
+                    parts.append(f"{label}={value}")
+        return ", ".join(parts) if parts else "no opening-range reading"
     if active in ("bbma_extreme", "bbma_reentry"):
         parts = []
         for key, label in (
@@ -331,6 +357,13 @@ def build_messages(setup: CandidateSetup,
         strategy_line = (
             "- Strategy: Cloud rejection + market structure shift (H1 "
             "Chandelier/MA200 cloud rejection with a CHoCH)\n"
+        )
+    elif active == "orb_rvol":
+        session = ind.get("session") or "session"
+        strategy_line = (
+            f"- Strategy: Opening Range Breakout + Relative Volume "
+            f"({session} open; first breakout in the range's own direction, "
+            f"gated on abnormal volume; wide 2R/4R/6R targets)\n"
         )
     elif active == "bbma_extreme":
         strategy_line = (

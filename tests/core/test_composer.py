@@ -201,6 +201,54 @@ def test_confirm_setup_cloud_mss_calls_llm_instead_of_fail_closed_rejecting():
     assert result.verdict == "confirm"
 
 
+def test_build_messages_orb_rvol_does_not_crash_on_missing_ema9():
+    """orb_rvol indicators have no ema9/ema21/rsi/macd_hist keys — the
+    generic EMA fallback in _format_indicators must not be reached for it."""
+    setup = CandidateSetup(
+        symbol="BTCUSD", direction="long", entry=64500.0,
+        stop_loss=64100.0, take_profit=65300.0,
+        indicators={
+            "strategy": "orb_rvol", "session": "London", "or_high": 64400.0,
+            "or_low": 64200.0, "or_direction": "bullish", "rvol": 2.4,
+            "atr": 120.0, "anchor_time": 1_700_000_000_000,
+        },
+    )
+    user_content = build_messages(setup, strategy="orb_rvol")[1]["content"]
+    assert "opening range" in user_content.lower()
+    assert "rvol" in user_content.lower() or "RVOL" in user_content
+
+
+def test_confirm_setup_orb_rvol_calls_llm_instead_of_fail_closed_rejecting():
+    """Regression guard, same shape as the cloud_mss one: a broken
+    _format_indicators branch would make every orb_rvol candidate crash
+    inside build_messages, which confirm_setup silently turns into a
+    fail-closed reject without ever calling the LLM."""
+    setup = CandidateSetup(
+        symbol="BTCUSD", direction="long", entry=64500.0,
+        stop_loss=64100.0, take_profit=65300.0,
+        indicators={
+            "strategy": "orb_rvol", "session": "London", "or_high": 64400.0,
+            "or_low": 64200.0, "or_direction": "bullish", "rvol": 2.4,
+            "atr": 120.0, "anchor_time": 1_700_000_000_000,
+        },
+    )
+    llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 65, "rationale": "ok"}')
+    result = confirm_setup(setup, llm, strategy="orb_rvol")
+    assert llm.last_messages is not None
+    assert result.verdict == "confirm"
+
+
+def test_no_setup_rationale_orb_rvol():
+    from signals.pipeline.composer import no_setup_rationale
+
+    rationale = no_setup_rationale(
+        "BTCUSD", "15m",
+        {"strategy": "orb_rvol", "atr": 120.0},
+        strategy="orb_rvol",
+    )
+    assert "opening range" in rationale.lower() or "opening-range" in rationale.lower()
+
+
 def test_parse_confirmation_valid_json():
     text = '{"verdict": "confirm", "confidence": 78, "rationale": "Momentum aligns."}'
     result = parse_confirmation(text)
