@@ -18,6 +18,8 @@ Assumptions (documented so results are read correctly):
 
 Usage: python -m signals.analysis.backtest
 """
+from datetime import datetime, timezone
+
 from signals.analysis.indicators import adx, atr, ema, macd_histogram, rsi
 # Re-exported: the R model lives in signals.analysis.r_model so the live reporting
 # paths and this backtester cannot drift apart. Imported here for call-site
@@ -53,20 +55,20 @@ CONFLUENCE_TIMEFRAMES = {
 }
 TF_MINUTES = {"5m": 5, "15m": 15, "1h": 60, "4h": 240}
 
-from datetime import datetime, timezone
-
 
 def fetch_extended_history(symbol, timeframe, total_bars, *, session=None):
     """Page `fetch_candles` backward via `start_time` to assemble more
     history than a single request returns.
 
-    Kraken caps OHLC at ~720 bars/request and offers no deeper history;
-    Yahoo (gold) caps intraday depth too. This pages forward from
-    `now - total_bars * interval`, using each batch's newest `open_time` as
-    the next page's `start_time`, de-duplicating by `open_time`, and
-    stopping once a page returns nothing new. Bounded by what the provider
-    actually has — takes what is available rather than failing.
+    Kraken caps OHLC at ~720 bars/request (`DEFAULT_CANDLE_LIMIT`) and offers
+    no deeper history. This pages forward from `now - total_bars * interval`,
+    using each batch's newest `open_time` as the next page's `start_time`,
+    de-duplicating by `open_time`, and stopping once a page returns nothing
+    new. Bounded by what the provider actually has — takes what is available
+    rather than failing.
     """
+    import requests
+
     from signals.clients.market import fetch_candles
 
     minutes = TF_MINUTES.get(timeframe)
@@ -76,11 +78,11 @@ def fetch_extended_history(symbol, timeframe, total_bars, *, session=None):
     now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
     cursor = now_ms - total_bars * interval_ms
 
-    session = session or __import__("requests").Session()
+    session = session or requests.Session()
     seen: dict[int, object] = {}
     while cursor < now_ms:
-        page = fetch_candles(symbol, timeframe, 720, start_time=cursor,
-                             session=session)
+        page = fetch_candles(symbol, timeframe, DEFAULT_CANDLE_LIMIT,
+                             start_time=cursor, session=session)
         new = [c for c in page if c.open_time not in seen]
         if not new:
             break
@@ -395,6 +397,9 @@ def main():
         for symbol in DEFAULT_SYMBOLS:
             try:
                 if strategy == "orb_rvol":
+                    # ~31 days of 15m bars: RVOL_LOOKBACK=10 prior
+                    # same-anchor opens x 3 anchors/day needs ~10 opens per
+                    # anchor minimum; 3000 bars gives ~93 opens/symbol.
                     candles = fetch_extended_history(
                         symbol, timeframe, 3000, session=session,
                     )[:-1]
