@@ -15,6 +15,7 @@ The Chandelier here uses `sma_atr`, MetaTrader's simple-average true range,
 because the Pine does. `ce_lwma` uses the Wilder default and is untouched.
 """
 from signals.analysis.indicators import chandelier_exit, lwma, sma_atr
+from signals.clients.market import is_gold_symbol
 from signals.models import CandidateSetup, take_profits_from_risk
 from signals.strategies.ict_smc.detector import pivot_highs, pivot_lows
 
@@ -27,6 +28,18 @@ MA_PERIOD = 200
 # 260 and drops the forming bar, leaving 259 — comfortably above this. A test
 # in tests/core/test_pipeline.py pins that relationship.
 MIN_CANDLES = 230
+# XAUUSD's candle history comes from the MT5 EA's own push buffer, which
+# accumulates from scratch (bounded by how far back the EA has ever
+# backfilled) — unlike Binance/Kraken symbols, which can serve arbitrary
+# history instantly. So gold alone can spend real time below MIN_CANDLES
+# after a cold start (EA redeploy, VPS restart, a weekend sitting inside a
+# short buffer). 200 is not a discretionary lower bar: it is MA_PERIOD
+# itself, the hard floor below which lwma() can only return None (see
+# MA_PERIOD above) — the same formula runs at 200 as at 230, just over less
+# history. The 30-bar gap above it is headroom, not a warm-up requirement
+# the math needs, so gold gets the floor rather than sitting dark for
+# however much longer 230 takes to accumulate.
+MIN_CANDLES_XAU = MA_PERIOD
 # Chandelier needs max(period, lookback) + 1 bars before it emits a direction.
 MIN_H1_CANDLES = max(CE_ATR_PERIOD, CE_LOOKBACK) + 2
 # How many bars may sit between the cloud rejection and the structure break.
@@ -111,7 +124,8 @@ def _touch_indices(candles):
 def detect_setup(symbol, candles, atr14, h1_candles=None, adx14=None,
                  htf_trend=None):
     """Return a CandidateSetup on a confirmed cloud rejection, else None."""
-    if len(candles) < MIN_CANDLES or atr14[-1] is None:
+    min_candles = MIN_CANDLES_XAU if is_gold_symbol(symbol) else MIN_CANDLES
+    if len(candles) < min_candles or atr14[-1] is None:
         return None
     if not h1_candles or len(h1_candles) < MIN_H1_CANDLES:
         return None

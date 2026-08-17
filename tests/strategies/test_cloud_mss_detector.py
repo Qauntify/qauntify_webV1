@@ -11,6 +11,7 @@ from signals.strategies.cloud_mss import detector as mod
 from signals.strategies.cloud_mss.detector import (
     MAX_BARS_SINCE_TOUCH,
     MIN_CANDLES,
+    MIN_CANDLES_XAU,
     STOP_ATR_BUFFER,
     detect_setup,
 )
@@ -46,6 +47,17 @@ def _sell_series():
     candles[N - 3] = _c(102.0, 106.0, 101.0, 101.5, N - 3)   # wick into cloud
     candles[N - 2] = _c(101.5, 101.8, 99.8, 100.0, N - 2)
     candles[N - 1] = _c(100.0, 100.5, 98.0, 98.5, N - 1)     # CHoCH below 99.0
+    return candles
+
+
+def _sell_series_of_length(n):
+    """Same shape as _sell_series but for an arbitrary candle count."""
+    candles = [_c(100.0, 100.6, 99.4, 100.0, i) for i in range(n)]
+    candles[n - 12] = _c(99.6, 99.8, 99.0, 99.6, n - 12)     # swing low 99.0
+    candles[n - 8] = _c(101.0, 102.0, 100.8, 101.5, n - 8)   # swing high 102.0
+    candles[n - 3] = _c(102.0, 106.0, 101.0, 101.5, n - 3)   # wick into cloud
+    candles[n - 2] = _c(101.5, 101.8, 99.8, 100.0, n - 2)
+    candles[n - 1] = _c(100.0, 100.5, 98.0, 98.5, n - 1)     # CHoCH below 99.0
     return candles
 
 
@@ -188,6 +200,28 @@ def test_no_setup_below_the_minimum_candle_count(monkeypatch):
     short = _sell_series()[-(MIN_CANDLES - 1):]
     assert detect_setup("BTCUSD", short, [ATR] * len(short),
                         h1_candles=H1) is None
+
+
+def test_gold_fires_below_min_candles_on_its_own_lower_floor(monkeypatch):
+    """XAUUSD's MT5-fed buffer accumulates from scratch (cold start, weekend
+    inside a short lookback) and can sit between MIN_CANDLES_XAU and
+    MIN_CANDLES for real -- it must still fire there, where a non-gold
+    symbol must not."""
+    _patch_cloud(monkeypatch, -1)
+    n = MIN_CANDLES - 10
+    assert MIN_CANDLES_XAU <= n < MIN_CANDLES
+    candles = _sell_series_of_length(n)
+    assert detect_setup("XAUUSD", candles, [ATR] * n, h1_candles=H1) is not None
+    assert detect_setup("BTCUSD", candles, [ATR] * n, h1_candles=H1) is None
+
+
+def test_gold_still_respects_its_own_floor(monkeypatch):
+    """MIN_CANDLES_XAU is MA_PERIOD itself -- lwma() cannot produce a value
+    below it regardless of symbol, so gold must not be exempted entirely."""
+    _patch_cloud(monkeypatch, -1)
+    n = MIN_CANDLES_XAU - 1
+    candles = _sell_series_of_length(n)
+    assert detect_setup("XAUUSD", candles, [ATR] * n, h1_candles=H1) is None
 
 
 def test_no_setup_without_an_atr(monkeypatch):
