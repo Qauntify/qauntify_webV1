@@ -223,7 +223,7 @@ def _no_setup_indicators(strategy, atr14, adx14, htf_trend,
                          ema9, ema21, rsi14, macd_hist):
     """Indicators to attach to a no-setup ai_event, or None while a required
     series is still warming up (mirrors the previous per-strategy branches)."""
-    if strategy in ("ict_smc", "ict_fvg", "sr_zone", "cloud_mss"):
+    if strategy in ("ict_smc", "ict_fvg", "sr_zone", "cloud_mss", "orb_rvol"):
         if atr14[-1] is None:
             return None
         indicators = {"strategy": strategy, "atr": atr14[-1]}
