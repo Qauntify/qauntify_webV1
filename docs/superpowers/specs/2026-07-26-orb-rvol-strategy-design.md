@@ -192,23 +192,52 @@ is worth testing independently of the setup rules.
 
 ## Integration (mirrors `sr_zone` wiring)
 
+> **Updated 2026-08-17.** This section was corrected against the current repo
+> state before implementation — the file below drifted in two ways since this
+> spec was first written, both fixed in this revision:
+> 1. `_no_setup_indicators` lives in `signals/pipeline/scan.py`, not `run.py`
+>    (`run.py` is just the `python -m signals.run` CLI entrypoint that calls
+>    `pipeline.engine.main`).
+> 2. The day after this spec was written, `20260727000000_align_bot_settings_
+>    strategy_check.sql` introduced `ADMIN_SELECTABLE_STRATEGIES` — a subset of
+>    `SIGNAL_STRATEGIES` that must stay in sync across Python, the admin
+>    dropdown, and a Postgres CHECK constraint, pinned together by
+>    `tests/core/test_strategy_choices.py`. That test exists specifically
+>    because these three drifted once already and broke settings writes
+>    silently. Since `orb_rvol` is admin-selectable and not session-pinned
+>    (per this spec's Goal), it must be added to `ADMIN_SELECTABLE_STRATEGIES`,
+>    not just `SIGNAL_STRATEGIES` — the original integration table below
+>    missed this distinction because it didn't exist yet.
+
 | File | Change |
 |---|---|
 | `signals/strategies/orb_rvol/` | new `windows.py`, `detector.py`, `__init__.py` |
 | `strategies/router.py` | dispatch `orb_rvol` |
-| `models.py` | add `"orb_rvol"` to `SIGNAL_STRATEGIES`; `TRADING_SESSIONS` unchanged |
-| `run.py` | add to the `_no_setup_indicators` strategy tuple |
+| `models.py` | add `"orb_rvol"` to both `SIGNAL_STRATEGIES` and `ADMIN_SELECTABLE_STRATEGIES`; `TRADING_SESSIONS` unchanged |
+| `signals/pipeline/scan.py` | add to the `_no_setup_indicators` strategy tuple |
 | `composer.py` | no-setup reason, indicator formatting, strategy line |
 | `rag/playbook.py` | confirm-gate + reject-cues chunks |
 | `backtest.py` | `STRATEGY_TIMEFRAMES["orb_rvol"] = "15m"`; extended history helper |
-| `web/src/lib/supabase/admin.ts` | add to the admin dropdown |
+| `web/src/lib/supabase/admin.ts` | add to the `SIGNAL_STRATEGIES` dropdown array |
+| new `supabase/migrations/*.sql` | drop + re-add `bot_settings_signal_strategy_check` to include `orb_rvol`, mirroring `20260728000100_allow_bbma_strategies.sql` |
 | `tests/strategies/test_orb_rvol_detector.py` | new |
+| `tests/core/test_strategy_choices.py` | no rule changes needed — existing assertions must keep passing once the three sources above agree |
 
 No confluence timeframe is registered in `CONFLUENCE_TIMEFRAMES`, so the
 backtest passes `htf_trend=None` — consistent with the detector not gating on
 it.
 
 ## Extended backtest history
+
+> **Added 2026-08-17.** The original text below only reaches ~31 days
+> (~90 opens/symbol) via live-API pagination. RVOL's whole premise is
+> comparing today's opening-range volume against enough same-anchor history to
+> mean something — 90 opens is a dev-loop sanity check, not the kind of
+> evidence `cloud_mss` and `bbma_reentry` were actually judged on (1,202 and
+> 905 trades respectively, over 8.87 years). Kept both: the pagination helper
+> below for fast iteration during development, plus a long-history report
+> (next section) as the actual gate before this strategy is trusted with a
+> verdict.
 
 `DEFAULT_CANDLE_LIMIT = 720` on 15m is 7.5 days ≈ 22 session opens per symbol,
 and RVOL cannot compute until `MIN_RVOL_SAMPLES` priors exist — leaving roughly
@@ -224,6 +253,27 @@ returns no new bars. Target ~3,000 15m bars (~31 days, ~90 opens/symbol).
 Bounded by provider limits: Kraken returns at most ~720 OHLC bars per `since`
 request, and Yahoo caps intraday history (gold is fetched from Yahoo). The
 helper takes what is available rather than failing.
+
+## Long-history verdict (the actual gate)
+
+New `scripts/orb_rvol_report.py`, modeled directly on `bbma_history_report.py`:
+data from the same SHA256-verified Binance monthly archives
+(`scripts/history_provenance.py`), replayed through `backtest_windowed`.
+
+- **Symbols: `BTCUSD`, `ETHUSD` only.** Binance lists no gold or GBP, so
+  `XAUUSD` and `GBPUSD` stay on the ~31-day pagination sample, same caveat
+  `bbma_reentry` already carries openly in its own doc.
+- **`window=MIN_CANDLES` (400), not the 200 `bbma_history_report.py` uses.**
+  `backtest_windowed` hands the detector exactly `window` trailing bars per
+  step, matching what a live scan would see — and `orb_rvol`'s own guard
+  clause requires 400 just to evaluate. Calling it with the default 200 would
+  make the detector return `None` on every step and silently report zero
+  trades, not a losing strategy.
+- **`trends=[None] * len(candles)`** — no confluence timeframe, per this
+  spec's "Deliberate omissions."
+- Output: `docs/orb-rvol-backtest-results.md`, same shape as the cloud_mss and
+  bbma reports — headline table, per-year breakdown, honest verdict including
+  if the answer is negative.
 
 ## Testing
 
