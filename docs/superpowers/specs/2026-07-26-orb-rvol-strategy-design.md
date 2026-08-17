@@ -1,5 +1,10 @@
 # Session Opening Range Breakout on Relative Volume (`orb_rvol`)
 
+> **Implemented 2026-08-17.** See `docs/orb-rvol-backtest-results.md` for the
+> long-history verdict (not profitable — net −0.238R pooled, t = −6.89) and
+> `docs/superpowers/plans/2026-08-17-orb-rvol-strategy.md` for the
+> implementation plan. Not promoted to a live session.
+
 ## Goal
 
 Add a session Opening Range Breakout playbook to the pluggable strategy system.
