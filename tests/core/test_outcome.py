@@ -294,7 +294,7 @@ def test_format_outcome_alert_long_tp():
     assert "TAKE PROFIT" in text
     assert "<b>BTCUSDT</b>" in text
     assert "LONG" in text
-    assert "+10.00" in text
+    assert "+10.00 pips" in text
     assert "Entry  <code>100</code>  →  <code>110</code>" in text
 
 
@@ -304,7 +304,7 @@ def test_format_outcome_alert_short_sl_is_negative():
     assert "STOP LOSS" in text
     assert "<b>BTCUSDT</b>" in text
     assert "SHORT" in text
-    assert "-5.00" in text
+    assert "-5.00 pips" in text
 
 
 def test_track_fetches_candles_in_the_rows_own_timeframe(monkeypatch):

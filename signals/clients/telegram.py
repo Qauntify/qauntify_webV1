@@ -341,7 +341,7 @@ def format_outcome_alert(signal_row: dict, outcome: str) -> str:
         f"{emoji} <b>{title}</b>",
         _DIVIDER,
         f"{dot} <b>{symbol}</b>  ·  <b>{arrow} {direction_label}</b>  ·  "
-        f"{trend} <b>{move:+.2f}</b>",
+        f"{trend} <b>{move:+.2f} pips</b>",
     ]
     if next_hint:
         lines.extend(["", f"<i>{next_hint}</i>"])

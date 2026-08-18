@@ -378,7 +378,7 @@ def _outcome_title(signal_row, outcome) -> str:
     r = abs(exit_price - entry) / risk * (1 if win else -1)
     move = (exit_price - entry) * (1 if direction == "long" else -1)
     return (f"{signal_row['symbol']}  ·  {signal_row.get('timeframe', '')}  ·  "
-            f"{direction.upper()}  ·  {tag}  ·  {r:+.1f}R ({move:+.2f})")
+            f"{direction.upper()}  ·  {tag}  ·  {r:+.1f}R ({move:+.2f} pips)")
 
 
 def view_for_outcome(candles, entry_time, *, max_bars=OUTCOME_MAX_BARS,

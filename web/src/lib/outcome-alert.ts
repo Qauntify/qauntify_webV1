@@ -64,7 +64,7 @@ export function formatOutcomeAlert(row: SignalRow, outcome: string): string {
     `${emoji} <b>${title}</b>`,
     DIVIDER,
     `${dot} <b>${symbol}</b>  ·  <b>${arrow} ${directionLabel}</b>  ·  ` +
-      `${trend} <b>${move >= 0 ? "+" : ""}${move.toFixed(2)}</b>`,
+      `${trend} <b>${move >= 0 ? "+" : ""}${move.toFixed(2)} pips</b>`,
   ];
   if (nextHint) lines.push("", `<i>${nextHint}</i>`);
   lines.push("", `📍 <b>Exit</b>`, `Entry  ${price(entry)}  →  ${price(exitPrice)}`);
