@@ -95,11 +95,8 @@ def _reject(symbol, cfg, *, timeframe, report_kind, event_kind, rationale,
 # keeping storage and outcome-tracker load roughly flat.
 SHADOW_SAMPLE_RATE = float(os.environ.get("SHADOW_SAMPLE_RATE", "0.0"))
 
-# Per-strategy floor on top of admin min_store_confidence. cloud_mss is live
-# on 15m despite measured-weak expectancy — require a stronger LLM confirm
-# until forward net R earns a lower bar.
+# Per-strategy floor on top of admin min_store_confidence.
 STRATEGY_MIN_STORE_CONFIDENCE = {
-    "cloud_mss": 70,
     "ict_fvg": 72,
 }
 

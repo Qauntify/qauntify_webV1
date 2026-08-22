@@ -1251,8 +1251,8 @@ def test_fifteen_minute_session_runs_cloud_mss():
     assert len(timeframes) == len(set(timeframes))
 
 
-def test_cloud_mss_has_raised_store_confidence_floor():
-    assert scan_module.effective_min_store_confidence("cloud_mss", 0) >= 70
+def test_cloud_mss_uses_admin_store_confidence_floor_only():
+    assert scan_module.effective_min_store_confidence("cloud_mss", 0) == 0
     assert scan_module.effective_min_store_confidence("cloud_mss", 80) == 80
     assert scan_module.effective_min_store_confidence("ict_fvg", 0) == 72
     assert scan_module.effective_min_store_confidence("ict_fvg", 80) == 80
