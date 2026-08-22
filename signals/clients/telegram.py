@@ -49,6 +49,43 @@ def _confluence_badge(signal: Signal) -> str:
     return f"\U0001F525 <b>CONFLUENCE</b>  {names}\n\n"
 
 
+def _lane_badge(signal: Signal) -> str:
+    """Lane label for pro Telegram templates (Super Scalp / Swing)."""
+    ind = signal.indicators or {}
+    strat = ind.get("strategy", "")
+    tf = signal.timeframe
+    if tf == "5m" and strat == "ict_fvg":
+        return "SUPER SCALP · 5m · ICT FVG"
+    if tf == "1h" and strat == "msnr":
+        return "SWING · 1h · MSNR"
+    return ""
+
+
+def _lane_context_line(signal: Signal) -> str:
+    """Secondary lane context: structure/path, session, HTF, zone."""
+    ind = signal.indicators or {}
+    strat = ind.get("strategy", "")
+    tf = signal.timeframe
+    parts: list[str] = []
+    if tf == "5m" and strat == "ict_fvg":
+        if ind.get("structure"):
+            parts.append(f"path {_esc(str(ind['structure']))}")
+        sess = ind.get("market_session")
+        if sess:
+            parts.append(_esc(str(sess)))
+        htf = ind.get("htf_trend")
+        if htf:
+            parts.append(f"HTF 15m {_esc(str(htf))}")
+    elif tf == "1h" and strat == "msnr":
+        htf = ind.get("htf_trend")
+        if htf:
+            parts.append(f"4H bias {_esc(str(htf))}")
+        zl, zh = ind.get("zone_low"), ind.get("zone_high")
+        if zl is not None and zh is not None:
+            parts.append(f"zone {_price(float(zl))}-{_price(float(zh))}")
+    return " · ".join(parts)
+
+
 def _risk_reward(entry: float, stop: float, target: float) -> str:
     risk = abs(entry - stop)
     if risk == 0:
@@ -72,9 +109,17 @@ def format_alert(signal: Signal) -> str:
     tp2 = signal.take_profit_2 or signal.take_profit
     tp3 = signal.take_profit_3 or signal.take_profit
     badge = _confluence_badge(signal)
+    lane = _lane_badge(signal)
+    context = _lane_context_line(signal)
+    lane_block = ""
+    if lane:
+        lane_block = f"🏷 <b>{_esc(lane)}</b>\n"
+        if context:
+            lane_block += f"<i>{context}</i>\n"
+        lane_block += "\n"
     return (
         f"{badge}{dot} <b>{direction} SIGNAL</b>\n"
-        f"{_DIVIDER}\n"
+        f"{lane_block}{_DIVIDER}\n"
         f"💹 <b>{symbol}</b>  ·  <code>{timeframe}</code>\n"
         f"\n"
         f"🎯 <b>Confidence</b>  {signal.confidence}%\n"
@@ -104,8 +149,16 @@ def format_caption(signal: Signal) -> str:
     tp2 = signal.take_profit_2 or signal.take_profit
     tp3 = signal.take_profit_3 or signal.take_profit
     badge = _confluence_badge(signal)
+    lane = _lane_badge(signal)
+    context = _lane_context_line(signal)
+    lane_block = ""
+    if lane:
+        lane_block = f"🏷 <b>{_esc(lane)}</b>\n"
+        if context:
+            lane_block += f"<i>{context}</i>\n"
     return (
         f"{badge}{dot} <b>{direction} SIGNAL</b>\n"
+        f"{lane_block}"
         f"💹 <b>{_esc(signal.symbol)}</b> · <code>{_esc(signal.timeframe)}</code>\n"
         f"🎯 Confidence {signal.confidence}%\n"
         f"📍 Entry {_price(signal.entry)}  🛑 SL {_price(signal.stop_loss)}\n"

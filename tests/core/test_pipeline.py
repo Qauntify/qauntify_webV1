@@ -1258,6 +1258,60 @@ def test_cloud_mss_uses_admin_store_confidence_floor_only():
     assert scan_module.effective_min_store_confidence("ict_fvg", 80) == 80
 
 
+def _patch_market_with_htf(monkeypatch, trend):
+    from signals.pipeline import market_data as md
+
+    class Market:
+        candles = _flat_candles()
+        ema9 = ema21 = [101.0] * 200
+        rsi14 = [55.0] * 200
+        macd_hist = [0.5] * 200
+        atr14 = [2.0] * 200
+        adx14 = [25.0] * 200
+        htf_trend = trend
+        h1_candles = None
+
+    monkeypatch.setattr(md, "_load_market_data",
+                        lambda *a, **k: (Market(), Market.candles))
+
+
+def test_super_scalp_skips_outside_london_ny(monkeypatch):
+    monkeypatch.setattr(scan_module, "scalp_session_active", lambda *a, **k: False)
+    seen = {"detect": False}
+
+    def fake_detect(*a, **k):
+        seen["detect"] = True
+        return SETUP
+
+    monkeypatch.setattr(scan_module, "detect_setup", fake_detect)
+    result = scan_symbol(
+        "BTCUSDT", _config(), FakeLLM(reply="{}"),
+        timeframe="5m", strategy="ict_fvg",
+    )
+    assert result.signal is None
+    assert seen["detect"] is False
+
+
+def test_super_scalp_htf_hard_reject_blocks_opposed_long(monkeypatch):
+    _patch_market_with_htf(monkeypatch, "down")
+    monkeypatch.setattr(scan_module, "scalp_session_active", lambda *a, **k: True)
+    monkeypatch.setattr(scan_module, "detect_setup", lambda *a, **k: SETUP)
+    events = _capture_ai_events(monkeypatch)
+    llm = FakeLLM(reply='{"verdict": "confirm", "confidence": 90, "rationale": "ok"}')
+
+    result = scan_symbol(
+        "BTCUSDT", _config(), llm,
+        timeframe="5m", strategy="ict_fvg", confluence_timeframe="15m",
+    )
+
+    assert result.signal is None
+    assert result.no_signal is not None
+    assert result.no_signal.kind == "rejected"
+    assert "htf trend (down) opposes long" in result.no_signal.rationale.lower()
+    assert len(events) == 1
+    assert events[0][0]["kind"] == "reject"
+
+
 def test_load_market_data_fetches_h1_for_cloud_mss(monkeypatch):
     """cloud_mss builds its cloud from 1h candles. Without them the detector
     returns None on every bar and the session silently produces nothing."""

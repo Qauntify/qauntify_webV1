@@ -110,6 +110,24 @@ def test_non_5m_keeps_balanced_confirm_prompt():
         assert "default to confirm" not in system
 
 
+def test_swing_1h_msnr_uses_dedicated_prompt():
+    setup = CandidateSetup(
+        symbol="XAUUSD", direction="long", entry=4100.0,
+        stop_loss=4080.0, take_profit=4140.0,
+        indicators={
+            "strategy": "msnr", "side": "long",
+            "zone_low": 4090.0, "zone_high": 4095.0, "atr": 3.5,
+        },
+    )
+    messages = build_messages(setup, strategy="msnr", timeframe="1h")
+    system = messages[0]["content"].lower()
+    assert "swing" in system
+    assert "msnr" in system
+    assert "4h" in system
+    assert "do not default to confirm" in system
+    assert "lean confirm" not in system
+
+
 def test_build_messages_includes_session_context():
     messages = build_messages(
         SETUP,

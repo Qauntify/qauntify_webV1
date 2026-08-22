@@ -18,7 +18,11 @@ from signals.pipeline.market_data import (
     _snap_gold_setup_to_live,
     resolve_gold_live_price,
 )
-from signals.analysis.session_clock import describe_market_session
+from signals.analysis.session_clock import (
+    describe_market_session,
+    scalp_session_active,
+    sessions_at,
+)
 from signals.models import (
     DEFAULT_SIGNAL_STRATEGY,
     Confirmation,
@@ -103,6 +107,25 @@ STRATEGY_MIN_STORE_CONFIDENCE = {
 
 def effective_min_store_confidence(strategy: str, admin_floor: int) -> int:
     return max(int(admin_floor or 0), STRATEGY_MIN_STORE_CONFIDENCE.get(strategy, 0))
+
+
+def _super_scalp_session_gate(timeframe: str, strategy: str, symbol: str) -> bool:
+    """True when a 5m ict_fvg scan should run (London/NY liquid hours)."""
+    if timeframe != "5m" or strategy != "ict_fvg":
+        return True
+    if scalp_session_active():
+        return True
+    print(f"[{symbol}] skip 5m super scalp outside London/NY liquid session")
+    return False
+
+
+def _htf_opposes_setup(direction: str, htf_trend: str | None) -> bool:
+    """Hard reject when higher-timeframe trend directly conflicts."""
+    if htf_trend == "down" and direction == "long":
+        return True
+    if htf_trend == "up" and direction == "short":
+        return True
+    return False
 
 
 def _shadow_sampled() -> bool:
@@ -260,6 +283,9 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     """
     timeframe = timeframe or cfg.timeframe
 
+    if not _super_scalp_session_gate(timeframe, strategy, symbol):
+        return ScanResult()
+
     if not skip_recency and _recently_evaluated(
             symbol, timeframe, cfg, session=session, recent_events=recent_events):
         print(f"[{symbol}] {timeframe} evaluated recently, skipping this run")
@@ -314,6 +340,32 @@ def scan_symbol(symbol, cfg, llm, *, strategy=DEFAULT_SIGNAL_STRATEGY,
     tp1, tp2, tp3 = setup.resolved_take_profits()
     print(f"[{symbol}] candidate {setup.direction}: entry={setup.entry} "
           f"SL={setup.stop_loss} TP1={tp1} TP2={tp2} TP3={tp3}")
+
+    active_sessions = sessions_at()
+    ind = dict(setup.indicators)
+    ind["market_session"] = (
+        " / ".join(active_sessions) if active_sessions else "off-hours"
+    )
+    if htf_trend is not None:
+        ind["htf_trend"] = htf_trend
+    setup = replace(setup, indicators=ind)
+
+    if (
+        timeframe == "5m"
+        and strategy == "ict_fvg"
+        and _htf_opposes_setup(setup.direction, htf_trend)
+    ):
+        rationale = (
+            f"15m HTF trend ({htf_trend}) opposes {setup.direction} setup — "
+            "Super Scalp hard gate."
+        )
+        print(f"[{symbol}] HTF reject: {rationale}")
+        return _reject(
+            symbol, cfg, timeframe=timeframe, report_kind="rejected",
+            event_kind="reject", rationale=rationale,
+            indicators=setup.indicators, candles=candles, setup=setup,
+            session=session,
+        )
 
     if already_signaled(setup, cfg, timeframe=timeframe, session=session,
                         recent_signals=recent_signals,

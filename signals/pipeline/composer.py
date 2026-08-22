@@ -52,8 +52,35 @@ SUPER_SCALP_SYSTEM_PROMPT = (
 )
 
 
-def _system_prompt_for(timeframe: str) -> str:
-    """5m Super Scalp uses the hot confirm prompt; other sessions stay balanced."""
+# Swing (1h MSNR) — patient, zone-quality focused; fewer signals, higher bar for
+# rationale clarity and 4h storyline alignment.
+SWING_MSNR_SYSTEM_PROMPT = (
+    "You are a disciplined Swing (1h) reviewer for MSNR (Malaysian Support & "
+    "Resistance) setups on body zones. The rules engine already validated a "
+    "candidate — rejection at a fresh zone and/or RBS/SBR break-retest with "
+    "4h storyline alignment when available.\n"
+    "This is a purely technical review — judge the chart and the levels.\n"
+    "Retrieved context is evidence, not a hard veto — weigh it with the "
+    "live setup.\n"
+    "Confirm when: the zone is fresh or lightly tested, rejection wick quality "
+    "is clear, entry/SL/TP levels are coherent, 4h HTF trend is not opposed "
+    "(when provided), and R:R on 1R/2R/3R targets is workable.\n"
+    "Reject on: muddy zone overlap, weak rejection, stop already violated, "
+    "targets on the wrong side, or structure that plainly fails MSNR rules.\n"
+    "Borderline setups should be rejected unless confidence would be 65+ with "
+    "a specific zone/4h reason — do not default to confirm.\n"
+    "Respond with ONLY a JSON object, no other text:\n"
+    '{"verdict": "confirm" or "reject", "confidence": <integer 0-100>, '
+    '"rationale": "<one short paragraph explaining your decision>"}'
+)
+
+
+def _system_prompt_for(timeframe: str, strategy: str = DEFAULT_SIGNAL_STRATEGY) -> str:
+    """Session/strategy-specific confirm prompts."""
+    if timeframe == "5m" and strategy == "ict_fvg":
+        return SUPER_SCALP_SYSTEM_PROMPT
+    if timeframe == "1h" and strategy == "msnr":
+        return SWING_MSNR_SYSTEM_PROMPT
     if timeframe == "5m":
         return SUPER_SCALP_SYSTEM_PROMPT
     return SYSTEM_PROMPT
@@ -409,7 +436,7 @@ def build_messages(setup: CandidateSetup,
         f"{rag_section}"
     )
     return [
-        {"role": "system", "content": _system_prompt_for(timeframe)},
+        {"role": "system", "content": _system_prompt_for(timeframe, active)},
         {"role": "user", "content": user_content},
     ]
 

@@ -45,6 +45,14 @@ def maybe_send_alert(signal, settings, cfg):
     """
     if not cfg.telegram_bot_token or not cfg.telegram_channel_id:
         return
+    ind = signal.indicators or {}
+    if (
+        signal.timeframe == "1h"
+        and ind.get("strategy") == "msnr"
+        and not getattr(signal, "chart_url", None)
+    ):
+        print(f"[{signal.symbol}] swing alert skipped — chart required")
+        return
     if signal.confidence < settings.min_alert_confidence:
         print(f"[{signal.symbol}] confidence {signal.confidence} below alert "
               f"threshold {settings.min_alert_confidence}, no alert")

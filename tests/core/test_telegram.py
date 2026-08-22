@@ -184,6 +184,58 @@ def test_maybe_send_alert_sends_at_threshold(monkeypatch):
     assert len(calls) == 1
 
 
+def test_maybe_send_alert_skips_swing_without_chart(monkeypatch):
+    from dataclasses import replace
+
+    calls = []
+    monkeypatch.setattr("signals.pipeline.deliver.send_alert",
+                        lambda *a, **k: calls.append(a))
+    setup = CandidateSetup(
+        symbol="XAUUSD", direction="long", entry=4100.0,
+        stop_loss=4080.0, take_profit=4140.0,
+        indicators={"strategy": "msnr"},
+    )
+    sig = make_signal(setup, Confirmation("confirm", 80, "ok"), [], timeframe="1h")
+    sig = replace(sig, chart_url=None)
+    maybe_send_alert(sig, BotSettings(), _cfg())
+    assert calls == []
+
+
+def test_format_alert_shows_super_scalp_lane():
+    setup = CandidateSetup(
+        symbol="XAUUSD", direction="long", entry=2000.0,
+        stop_loss=1995.0, take_profit=2005.0,
+        indicators={
+            "strategy": "ict_fvg", "structure": "bullish_choch_fvg",
+            "market_session": "London", "htf_trend": "up",
+        },
+    )
+    sig = make_signal(setup, Confirmation("confirm", 75, "Clean FVG."), [], timeframe="5m")
+    text = format_alert(sig)
+    assert "SUPER SCALP" in text
+    assert "ICT FVG" in text
+    assert "bullish_choch_fvg" in text
+    assert "HTF 15m up" in text
+
+
+def test_format_alert_shows_swing_msnr_lane():
+    setup = CandidateSetup(
+        symbol="XAUUSD", direction="short", entry=4100.0,
+        stop_loss=4110.0, take_profit=4080.0,
+        indicators={
+            "strategy": "msnr", "htf_trend": "down",
+            "zone_low": 4095.0, "zone_high": 4105.0,
+        },
+    )
+    sig = make_signal(setup, Confirmation("confirm", 70, "Zone rejection."), [],
+                      timeframe="1h")
+    text = format_alert(sig)
+    assert "SWING" in text
+    assert "MSNR" in text
+    assert "4H bias down" in text
+    assert "4095" in text and "4105" in text
+
+
 def test_maybe_send_alert_swallows_send_failure(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("telegram down")
