@@ -1,3 +1,5 @@
+import type { EngineHtf } from "@/lib/bar-close";
+
 const DEFAULT_REPO = "Qauntify/qauntify_webV1";
 const ENGINE_WORKFLOW_FILE = "engine.yml";
 
@@ -49,11 +51,25 @@ async function dispatchResult(response: Response): Promise<DispatchResult> {
   };
 }
 
+export type EngineDispatchOptions = {
+  /** When set, only scan sessions whose timeframe closed (5m / 15m / 1h). */
+  due?: EngineHtf[];
+};
+
 /** workflow_dispatch on engine.yml (cron-job.org primary path). */
-export async function dispatchEngineWorkflow(): Promise<DispatchResult> {
+export async function dispatchEngineWorkflow(
+  opts?: EngineDispatchOptions,
+): Promise<DispatchResult> {
   const target = resolveGithubTarget();
   if ("error" in target) return target.error;
   const { token, owner, name } = target;
+
+  const payload: { ref: string; inputs?: { sessions: string } } = {
+    ref: "main",
+  };
+  if (opts?.due?.length) {
+    payload.inputs = { sessions: opts.due.join(",") };
+  }
 
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${name}/actions/workflows/${ENGINE_WORKFLOW_FILE}/dispatches`,
@@ -65,7 +81,7 @@ export async function dispatchEngineWorkflow(): Promise<DispatchResult> {
         "X-GitHub-Api-Version": "2022-11-28",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ref: "main" }),
+      body: JSON.stringify(payload),
       cache: "no-store",
     },
   );

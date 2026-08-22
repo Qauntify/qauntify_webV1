@@ -17,7 +17,7 @@ import urllib.request
 
 
 DEFAULT_REPO = "Qauntify/qauntify_webV1"
-DEFAULT_WEB_URL = "https://web-seven-pi-76.vercel.app/api/cron/trigger-engine"
+DEFAULT_WEB_URL = "https://qauntify-web.vercel.app/api/cron/trigger-engine"
 
 
 def _github_dispatch(token: str, repo: str) -> None:

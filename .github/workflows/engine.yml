@@ -2,7 +2,13 @@ name: Signals engine
 
 on:
   # Scheduled by cron-job.org → /api/cron/trigger-engine (no GitHub cron).
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      sessions:
+        description: "Comma-separated timeframes to scan (5m,15m,1h). Empty = all."
+        required: false
+        type: string
+        default: ""
   repository_dispatch:
     types: [run-engine]
 
@@ -24,6 +30,7 @@ jobs:
       - name: Scan markets
         run: python -m signals.run
         env:
+          ENGINE_SESSIONS: ${{ inputs.sessions }}
           SEALION_API_KEY: ${{ secrets.SEALION_API_KEY }}
           SEALION_API_KEY1: ${{ secrets.SEALION_API_KEY1 }}
           SEALION_API_KEY2: ${{ secrets.SEALION_API_KEY2 }}

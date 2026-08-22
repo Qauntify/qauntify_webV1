@@ -100,6 +100,7 @@ SHADOW_SAMPLE_RATE = float(os.environ.get("SHADOW_SAMPLE_RATE", "0.0"))
 # until forward net R earns a lower bar.
 STRATEGY_MIN_STORE_CONFIDENCE = {
     "cloud_mss": 70,
+    "ict_fvg": 72,
 }
 
 

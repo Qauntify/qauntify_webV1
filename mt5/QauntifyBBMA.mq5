@@ -16,8 +16,8 @@
 #property version   "1.05"
 
 input string AppSymbol       = "XAUUSD";
-input string SignalApiUrl    = "https://web-seven-pi-76.vercel.app/api/mt5/signal";
-input string ChartApiUrl     = "https://web-seven-pi-76.vercel.app/api/mt5/chart";
+input string SignalApiUrl    = "https://qauntify-web.vercel.app/api/mt5/signal";
+input string ChartApiUrl     = "https://qauntify-web.vercel.app/api/mt5/chart";
 input string WebhookSecret   = "906f61d7dbd1aa2c72cc19a7a0382ce61434f8bd5d6d6c65466912d9808097e4";
 input bool   UploadChartShot = true;  // ChartScreenShot → site chart_url after publish
 input int    ChartWidth      = 1280;

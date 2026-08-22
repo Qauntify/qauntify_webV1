@@ -117,7 +117,7 @@ export async function POST(request: Request) {
   let engine: "skipped" | "dispatched" | "failed" = "skipped";
   if (due.length > 0) {
     try {
-      const result = await dispatchEngineWorkflow();
+      const result = await dispatchEngineWorkflow({ due });
       engine = result.ok ? "dispatched" : "failed";
     } catch {
       engine = "failed";

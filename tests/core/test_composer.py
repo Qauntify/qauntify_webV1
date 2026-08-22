@@ -63,16 +63,17 @@ def test_system_prompt_leans_confirm_on_borderline_setups():
     assert "reject only" in system
 
 
-def test_super_scalp_5m_uses_hot_confirm_prompt():
+def test_super_scalp_5m_uses_strict_confirm_prompt():
     messages = build_messages(SETUP, timeframe="5m")
     system = messages[0]["content"].lower()
     assert "super scalp" in system
-    assert "default to confirm" in system
-    assert "50–65" in system or "50-65" in system
+    assert "disciplined" in system
+    assert "do not default to confirm" in system
+    assert "68+" in system
     assert "lean confirm" not in system  # balanced prompt phrasing
     # Must match ict_fvg priority: FVG retest OR sweep+CHoCH OR reclaim.
     assert "reclaim" in system
-    assert "no fvg" in system or "without fvg" in system
+    assert "choch" in system
 
 
 def test_ict_fvg_messages_use_actual_tp_r_labels():

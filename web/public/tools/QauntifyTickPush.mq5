@@ -15,10 +15,10 @@
 #property version   "1.26"
 
 input string AppSymbol         = "XAUUSD";
-input string ApiUrl            = "https://web-seven-pi-76.vercel.app/api/mt5/tick";
-input string CandleApiUrl      = "https://web-seven-pi-76.vercel.app/api/mt5/candles";
-input string ChartPendingUrl   = "https://web-seven-pi-76.vercel.app/api/mt5/charts/pending";
-input string ChartUploadUrl    = "https://web-seven-pi-76.vercel.app/api/mt5/chart";
+input string ApiUrl            = "https://qauntify-web.vercel.app/api/mt5/tick";
+input string CandleApiUrl      = "https://qauntify-web.vercel.app/api/mt5/candles";
+input string ChartPendingUrl   = "https://qauntify-web.vercel.app/api/mt5/charts/pending";
+input string ChartUploadUrl    = "https://qauntify-web.vercel.app/api/mt5/chart";
 input string WebhookSecret     = "906f61d7dbd1aa2c72cc19a7a0382ce61434f8bd5d6d6c65466912d9808097e4";
 input int    MinIntervalMs     = 150;
 input double MinPriceMove      = 0.0;

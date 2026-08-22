@@ -34,6 +34,16 @@ describe("dispatchEngineWorkflow", () => {
       expect.objectContaining({ method: "POST" }),
     );
   });
+
+  it("passes due sessions to workflow inputs", async () => {
+    process.env.GITHUB_DISPATCH_TOKEN = "ghp_test";
+    const fetchMock = vi.fn().mockResolvedValue({ status: 204, text: async () => "" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await dispatchEngineWorkflow({ due: ["5m", "15m"] });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.inputs).toEqual({ sessions: "5m,15m" });
+  });
 });
 
 describe("dispatchXauScalperRestart", () => {

@@ -226,6 +226,17 @@ AUXILIARY_SESSIONS = (
 # not scan is never treated as an unknown timeframe.
 ALL_SESSIONS = TRADING_SESSIONS + AUXILIARY_SESSIONS
 
+def sessions_for_timeframes(timeframes) -> tuple[TradingSession, ...]:
+    """Resolve TRADING_SESSIONS entries for comma-separated timeframes (5m/15m/1h).
+
+    Unknown tokens are ignored. Returns empty when nothing matches — the engine
+    then skips the run instead of scanning every session by accident.
+    """
+    wanted = {str(raw).strip().lower() for raw in timeframes if str(raw).strip()}
+    if not wanted:
+        return ()
+    return tuple(s for s in TRADING_SESSIONS if s.timeframe in wanted)
+
 
 # Symbols the engine must never scan (even if still listed in bot_settings).
 # Historical signal rows stay in the DB for track record / outcome settlement.

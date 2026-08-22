@@ -1254,7 +1254,8 @@ def test_fifteen_minute_session_runs_cloud_mss():
 def test_cloud_mss_has_raised_store_confidence_floor():
     assert scan_module.effective_min_store_confidence("cloud_mss", 0) >= 70
     assert scan_module.effective_min_store_confidence("cloud_mss", 80) == 80
-    assert scan_module.effective_min_store_confidence("ict_fvg", 0) == 0
+    assert scan_module.effective_min_store_confidence("ict_fvg", 0) == 72
+    assert scan_module.effective_min_store_confidence("ict_fvg", 80) == 80
 
 
 def test_load_market_data_fetches_h1_for_cloud_mss(monkeypatch):
