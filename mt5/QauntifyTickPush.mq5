@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.27"
+#property version   "1.28"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://qauntify-web.vercel.app/api/mt5/tick";
@@ -20,7 +20,9 @@ input string CandleApiUrl      = "https://qauntify-web.vercel.app/api/mt5/candle
 input string ChartPendingUrl   = "https://qauntify-web.vercel.app/api/mt5/charts/pending";
 input string ChartUploadUrl    = "https://qauntify-web.vercel.app/api/mt5/chart";
 input string WebhookSecret     = "906f61d7dbd1aa2c72cc19a7a0382ce61434f8bd5d6d6c65466912d9808097e4";
-input int    MinIntervalMs     = 150;
+// 500ms keeps SL/TP responsive on gold while cutting Vercel tick flood ~3×.
+// MinPriceMove stays 0 so any move in the window still posts (no missed levels).
+input int    MinIntervalMs     = 500;
 input double MinPriceMove      = 0.0;
 input int    BackfillBars      = 2000;  // closed M1 bars sent on init (chunked)
 input bool   UploadPendingCharts = false; // gold charts come from Python now

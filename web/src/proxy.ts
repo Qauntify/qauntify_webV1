@@ -6,6 +6,8 @@ import { isAdminEmail } from "@/lib/admin-emails";
 // Refreshes the Supabase session cookie on every page request so Server
 // Components always see a valid (non-expired) access token. Also gates
 // /admin so pages do not need a second Auth API round-trip.
+// Matcher excludes /api/* — high-frequency MT5/cron routes must not pay for
+// session refresh.
 export async function proxy(request: NextRequest) {
   try {
     let response = NextResponse.next({ request });
@@ -54,6 +56,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip static assets; run on all pages and route handlers.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // Pages only — skip static assets and /api/* (MT5 webhooks / cron already
+  // authenticate with bearer secrets; running getUser() on every tick burns
+  // Edge + Auth quota for no benefit).
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

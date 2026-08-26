@@ -13,6 +13,11 @@ import { authorizedBySecret } from "@/lib/webhook-guard";
 
 export const dynamic = "force-dynamic";
 
+/** Engine gold gate needs a fresh mid (≤45s). When no open trades, writing
+ * every tick wastes Vercel/Supabase — keep mid fresh enough without flooding. */
+const FLAT_TICK_UPSERT_MIN_MS = 2000;
+const lastFlatUpsertAt = new Map<string, number>();
+
 type TickBody = {
   symbol: string;
   time: number;
@@ -37,6 +42,15 @@ function parseQuotes(body: TickBody): { bid: number; ask: number; mid: number } 
   return { bid, ask, mid };
 }
 
+function shouldUpsertWhenFlat(symbol: string): boolean {
+  const key = symbol.trim().toUpperCase();
+  const now = Date.now();
+  const prev = lastFlatUpsertAt.get(key) ?? 0;
+  if (now - prev < FLAT_TICK_UPSERT_MIN_MS) return false;
+  lastFlatUpsertAt.set(key, now);
+  return true;
+}
+
 export async function POST(request: Request) {
   if (!authorizedBySecret(request, "MT5_WEBHOOK_SECRET")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -58,11 +72,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 
-  // Always persist broker quotes so the engine can require a fresh MT5 mid.
-  await upsertMt5LastTick(symbol, quotes, time);
-
+  // Open trades first: SL/TP must see every tick the EA sends.
   const rows = await getOpenSignalsForSymbol(symbol);
-  if (!rows || rows.length === 0) {
+  const hasOpen = Array.isArray(rows) && rows.length > 0;
+  // Lookup failure (null) → still persist mid so the engine is not starved.
+  if (hasOpen || rows === null || shouldUpsertWhenFlat(symbol)) {
+    await upsertMt5LastTick(symbol, quotes, time);
+  }
+
+  if (!hasOpen) {
     return NextResponse.json({ ok: true, checked: 0, closed: 0 });
   }
 

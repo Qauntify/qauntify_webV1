@@ -527,6 +527,9 @@ const OPEN_SIGNAL_COLUMNS =
   "take_profit_2,take_profit_3,tp1_hit_at,tp2_hit_at,tp3_hit_at,status,created_at";
 
 const OPEN_SIGNALS_CACHE_TTL_MS = 3000;
+/** When flat, refresh less often — new opens are rare; SL path still uses
+ * the short TTL as soon as any open row is cached. */
+const OPEN_SIGNALS_EMPTY_CACHE_TTL_MS = 8000;
 const openSignalsCache = new Map<string, { rows: SignalRow[]; expiresAt: number }>();
 
 /** Open/tp1/tp2 rows for one symbol — same filter shape as
@@ -558,7 +561,9 @@ export async function getOpenSignalsForSymbol(
     );
     if (!response.ok) return null;
     const rows = (await response.json()) as SignalRow[];
-    openSignalsCache.set(symbol, { rows, expiresAt: Date.now() + OPEN_SIGNALS_CACHE_TTL_MS });
+    const ttl =
+      rows.length === 0 ? OPEN_SIGNALS_EMPTY_CACHE_TTL_MS : OPEN_SIGNALS_CACHE_TTL_MS;
+    openSignalsCache.set(symbol, { rows, expiresAt: Date.now() + ttl });
     return rows;
   } catch {
     return null;
