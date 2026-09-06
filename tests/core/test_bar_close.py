@@ -37,8 +37,9 @@ def test_sessions_due_fires_once_per_bar():
     last_fired: dict[str, int] = {}
     due = sessions_due(now_ms, TRADING_SESSIONS, last_fired)
     names = {s.name for s in due}
-    # 13:00 is a 5m, 15m, and 1h boundary
-    assert "super_scalp" in names
+    # 13:00 is a 15m and 1h boundary. (super_scalp/5m was pulled to
+    # AUXILIARY_SESSIONS -- see docs/ict-fvg-backtest-results.md -- so it's
+    # not part of TRADING_SESSIONS to be due here.)
     assert "scalp" in names
     assert "swing" in names
     # Second call in the same window must not re-fire

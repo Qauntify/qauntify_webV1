@@ -119,6 +119,22 @@ def test_detect_rejects_tiny_noise_sweep():
     assert detect_setup("BTCUSDT", candles, atr14) is None
 
 
+def test_detect_rejects_stop_collapsed_onto_entry():
+    """Long-history replay found real cases where the swept bar's stop level
+    (anchored up to SWEEP_LOOKBACK bars back) sits almost exactly on the
+    current close used as entry -- risk/ATR ~0.0001, which blows up the
+    R-multiple model on a setup that is not a real edge. Engineer that exact
+    geometry: stop = sweep_low - ATR_STOP_BUFFER*atr, and make the final
+    close land a hair away from it."""
+    candles = _bullish_ict_fvg_series()
+    atr14 = [4.0] * len(candles)
+    sweep_low = min(c.low for c in candles[16:23])
+    stop = sweep_low - 0.25 * 4.0
+    last = candles[-1]
+    candles[-1] = _c(last.open_time, last.open, last.high, last.low, stop + 0.0006)
+    assert detect_setup("BTCUSDT", candles, atr14) is None
+
+
 def test_detect_ict_fvg_bullish():
     candles = _bullish_ict_fvg_series()
     atr14 = [4.0] * len(candles)

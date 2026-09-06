@@ -6,12 +6,14 @@ import requests
 
 from signals.models import Signal, TRADING_SESSIONS
 
-# The confluence pass only considers signals from the three main sessions as
-# independent confirmation -- auxiliary sessions (xau_scalp/1m, war_room/
-# floor, bbma) are explicitly out of scope (design doc "Definition of
-# confluence" rule 4), and two of them reuse main-session strategy tags
+# The confluence pass only considers signals from the currently-scanned main
+# sessions as independent confirmation -- auxiliary sessions (xau_scalp/1m,
+# war_room/floor, bbma) are explicitly out of scope (design doc "Definition
+# of confluence" rule 4), and two of them reuse main-session strategy tags
 # (ict_fvg, cloud_mss), so excluding them requires a timeframe filter, not
-# just the strategy filter.
+# just the strategy filter. Tied directly to TRADING_SESSIONS so a session
+# being paused (e.g. super_scalp, docs/ict-fvg-backtest-results.md) or added
+# moves this automatically instead of drifting out of sync.
 _CONFLUENCE_ELIGIBLE_TIMEFRAMES = ",".join(s.timeframe for s in TRADING_SESSIONS)
 
 

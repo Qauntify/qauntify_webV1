@@ -13,9 +13,9 @@ import pytest
 
 from signals.models import (
     ADMIN_SELECTABLE_STRATEGIES,
+    ALL_SESSIONS,
     DEFAULT_SIGNAL_STRATEGY,
     SIGNAL_STRATEGIES,
-    TRADING_SESSIONS,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,8 +33,13 @@ def test_default_strategy_is_selectable():
 
 def test_session_pinned_strategies_are_not_offered_to_the_admin():
     """A session that pins its own strategy ignores the toggle, so offering
-    that strategy in the dropdown would be a control that does nothing."""
-    pinned = {s.strategy for s in TRADING_SESSIONS if s.strategy}
+    that strategy in the dropdown would be a control that does nothing. Uses
+    ALL_SESSIONS (not just the actively-scanned TRADING_SESSIONS) so a paused
+    session — e.g. super_scalp/xau_scalp's ict_fvg, moved to
+    AUXILIARY_SESSIONS in docs/ict-fvg-backtest-results.md — still counts:
+    it isn't scanned right now, but its pin is still real and would still do
+    nothing if offered."""
+    pinned = {s.strategy for s in ALL_SESSIONS if s.strategy}
     # sr_zone is both pinned (scalp) and selectable for the swing session,
     # which is legitimate — it is the others that must not leak in.
     assert "ict_fvg" in pinned

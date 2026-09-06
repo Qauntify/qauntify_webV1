@@ -40,7 +40,24 @@ def test_pick_key_rotates_by_minute():
     assert xau_scan._pick_key(keys, minute=4) == "b"  # 4 % 3 == 1
 
 
+def test_scan_once_paused_scans_nothing(monkeypatch):
+    """Pulled 2026-09-06 (docs/ict-fvg-backtest-results.md) -- ict_fvg has no
+    measured edge, so scan_once must short-circuit before ever calling
+    scan_symbol, regardless of session hours."""
+    called = []
+    monkeypatch.setattr(xau_scan, "scalp_session_active", lambda: True)
+    monkeypatch.setattr(xau_scan, "scan_symbol",
+                        lambda *a, **k: called.append(1) or ScanResult())
+
+    result = xau_scan.scan_once(_cfg(), BotSettings())
+
+    assert result.signal is None
+    assert called == []
+
+
 def test_scan_once_scans_xauusd_1m_ict_fvg_and_alerts(monkeypatch):
+    """Wiring test for when XAU_SCALPER_PAUSED is lifted -- forced off here
+    since the scalper is paused live (see test above)."""
     captured = {}
 
     def fake_scan(symbol, cfg, llm, **kwargs):
@@ -49,6 +66,7 @@ def test_scan_once_scans_xauusd_1m_ict_fvg_and_alerts(monkeypatch):
         return ScanResult(signal=_fake_signal())
 
     alerts = []
+    monkeypatch.setattr(xau_scan, "XAU_SCALPER_PAUSED", False)
     monkeypatch.setattr(xau_scan, "scalp_session_active", lambda: True)
     monkeypatch.setattr(xau_scan, "resolve_gold_live_price",
                         lambda *a, **k: (4120.0, "mt5"))
@@ -78,6 +96,7 @@ def test_scan_once_uses_a_scalper_key(monkeypatch):
         seen["key"] = llm._api_key
         return ScanResult()
 
+    monkeypatch.setattr(xau_scan, "XAU_SCALPER_PAUSED", False)
     monkeypatch.setattr(xau_scan, "scalp_session_active", lambda: True)
     monkeypatch.setattr(xau_scan, "resolve_gold_live_price",
                         lambda *a, **k: (4120.0, "mt5"))
@@ -89,6 +108,7 @@ def test_scan_once_uses_a_scalper_key(monkeypatch):
 
 
 def test_scan_once_no_signal_sends_no_alert(monkeypatch):
+    monkeypatch.setattr(xau_scan, "XAU_SCALPER_PAUSED", False)
     monkeypatch.setattr(xau_scan, "scalp_session_active", lambda: True)
     monkeypatch.setattr(xau_scan, "resolve_gold_live_price",
                         lambda *a, **k: (4120.0, "mt5"))
@@ -104,6 +124,7 @@ def test_scan_once_no_signal_sends_no_alert(monkeypatch):
 
 
 def test_scan_once_skips_outside_london_ny(monkeypatch):
+    monkeypatch.setattr(xau_scan, "XAU_SCALPER_PAUSED", False)
     monkeypatch.setattr(xau_scan, "scalp_session_active", lambda: False)
     called = []
     monkeypatch.setattr(xau_scan, "scan_symbol",

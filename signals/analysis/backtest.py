@@ -245,7 +245,7 @@ def htf_close_index(primary_candles, htf_candles, htf_minutes):
 
 def backtest_windowed(detector, symbol, candles, atr14, trends, *,
                       window=200, max_hold=2000, bps=None,
-                      htf_candles=None, htf_minutes=None):
+                      htf_candles=None, htf_minutes=None, gate=None):
     """Replay `detector` bar by bar over a ROLLING window, non-overlapping.
 
     Differs from `backtest_strategy` in two ways, both of which make it more
@@ -263,6 +263,15 @@ def backtest_windowed(detector, symbol, candles, atr14, trends, *,
     `detector` is any `(symbol, candles, atr14, htf_trend=...) -> CandidateSetup
     | None`. `trends` is aligned to `candles`; pass `[None] * len(candles)` for
     an ungated strategy. Returns per-trade gross and net R plus target counts.
+
+    `gate`, if given, is `(candle, setup) -> bool` and is checked after the
+    detector fires, before the trade is simulated — for a deterministic
+    pipeline-level filter (a session-hours check, a hard HTF-opposition
+    reject) that sits in front of the detector live but isn't part of the
+    detector's own rules. A rejected setup is scored exactly like "no setup":
+    skipped, scan resumes next bar. The probabilistic AI confirm gate is still
+    never simulated (see module docstring) — `gate` is only for rules that are
+    deterministic from the candle alone.
     """
     n = len(candles)
     htf_index = (htf_close_index(candles, htf_candles, htf_minutes)
@@ -282,7 +291,7 @@ def backtest_windowed(detector, symbol, candles, atr14, trends, *,
                 continue
             kwargs["h1_candles"] = htf_candles[max(0, j + 1 - HTF_WINDOW):j + 1]
         setup = detector(symbol, candles[lo:i + 1], atr14[lo:i + 1], **kwargs)
-        if setup is None:
+        if setup is None or (gate is not None and not gate(candles[i], setup)):
             i += 1
             continue
         tps = list(setup.resolved_take_profits())

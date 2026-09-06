@@ -29,6 +29,13 @@ XAU_TIMEFRAME = "1m"
 XAU_STRATEGY = "ict_fvg"
 # Floor on top of admin min_store_confidence — 1m needs a higher bar.
 XAU_MIN_STORE_CONFIDENCE = 65
+# Pulled 2026-09-06 -- ict_fvg is not profitable on any confirmation tier over
+# 8.96 years of history, including its best-case subset (choch_fvg retest
+# only); see docs/ict-fvg-backtest-results.md. super_scalp (5m, same
+# strategy) was pulled the same way in signals/models.py. Flip to False once
+# a replacement 1m strategy is designed, backtested, and XAU_STRATEGY above
+# is updated to it.
+XAU_SCALPER_PAUSED = True
 # Reserve keys from this index on (KEY5, KEY6, KEY7) for the scalper.
 SCALPER_KEY_START = 4
 
@@ -49,6 +56,11 @@ def _pick_key(keys, minute=None):
 def scan_once(cfg, settings, session=None) -> "object":
     """Run one XAUUSD 1m scan; store + alert on a confirmed signal."""
     session = session or requests.Session()
+
+    if XAU_SCALPER_PAUSED:
+        print("[XAUUSD] 1m scalp paused -- ict_fvg has no measured edge "
+              "(docs/ict-fvg-backtest-results.md)")
+        return ScanResult()
 
     if not scalp_session_active():
         active = sessions_at() or ("off-hours",)

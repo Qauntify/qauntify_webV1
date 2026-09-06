@@ -549,7 +549,6 @@ def test_main_passes_scan_candles_to_outcome_tracker(monkeypatch):
     engine_module.main()
 
     assert seen["prefetched"] == {
-        ("BTCUSDT", "5m"): candles,
         ("BTCUSDT", "15m"): candles,
         ("BTCUSDT", "1h"): candles,
     }
@@ -663,21 +662,29 @@ def test_main_confluence_failure_does_not_block_run(monkeypatch):
 
 
 def test_trading_sessions_define_all_three_streams():
-    from signals.models import ALL_SESSIONS, TRADING_SESSIONS
+    from signals.models import ALL_SESSIONS, AUXILIARY_SESSIONS, TRADING_SESSIONS
 
+    # super_scalp (5m ict_fvg) was pulled to AUXILIARY_SESSIONS 2026-09-06 --
+    # see docs/ict-fvg-backtest-results.md -- not profitable on any
+    # confirmation tier over 8.96 years. It's still declared there (checked
+    # below) so an already-open 5m signal settles with the right expiry; it's
+    # just not one of the two streams the engine actively scans right now.
     by_name = {s.name: s for s in TRADING_SESSIONS}
-    assert set(by_name) == {"super_scalp", "scalp", "swing"}
-    assert by_name["super_scalp"].timeframe == "5m"
-    assert by_name["super_scalp"].strategy == "ict_fvg"
-    assert by_name["super_scalp"].confluence_timeframe == "15m"
+    assert set(by_name) == {"scalp", "swing"}
     assert by_name["scalp"].timeframe == "15m"
     assert by_name["swing"].timeframe == "1h"
     assert by_name["swing"].confluence_timeframe == "4h"
     assert by_name["swing"].strategy == "msnr"
+    assert by_name["scalp"].max_open_days < by_name["swing"].max_open_days
+
+    aux_by_name = {s.name: s for s in AUXILIARY_SESSIONS}
+    assert aux_by_name["super_scalp"].timeframe == "5m"
+    assert aux_by_name["super_scalp"].strategy == "ict_fvg"
+    assert aux_by_name["super_scalp"].confluence_timeframe == "15m"
     # Faster sessions must expire faster: a 5m setup left open for two weeks
     # is meaningless.
-    assert by_name["super_scalp"].max_open_days <= by_name["scalp"].max_open_days
-    assert by_name["scalp"].max_open_days < by_name["swing"].max_open_days
+    assert aux_by_name["super_scalp"].max_open_days <= by_name["scalp"].max_open_days
+
     # One session per timeframe — outcome_tracker keys expiry off a dict built
     # from ALL_SESSIONS, so a duplicate would win at random.
     timeframes = [s.timeframe for s in ALL_SESSIONS]
@@ -818,14 +825,13 @@ def test_main_prefetches_recent_maps_once_per_session_not_per_symbol(monkeypatch
     engine_module.main()
 
     # One batched call per scanned session, each covering all 3 symbols —
-    # not one call per symbol.
+    # not one call per symbol. Two sessions, not three: super_scalp (5m) was
+    # pulled to AUXILIARY_SESSIONS -- see docs/ict-fvg-backtest-results.md.
     assert events_calls == [
-        (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "5m"),
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "15m"),
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "1h"),
     ]
     assert signals_calls == [
-        (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "5m"),
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "15m"),
         (("BTCUSDT", "ETHUSDT", "PAXGUSDT"), "1h"),
     ]
@@ -895,12 +901,11 @@ def test_main_scans_every_symbol_in_both_sessions(monkeypatch):
     engine_module.main()
 
     assert sorted(scanned) == [
-        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
-        ("ETHUSDT", "15m"), ("ETHUSDT", "1h"), ("ETHUSDT", "5m"),
+        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"),
+        ("ETHUSDT", "15m"), ("ETHUSDT", "1h"),
     ]
     outcomes = runs[0]["outcomes"]
     assert [(o["symbol"], o["timeframe"]) for o in outcomes] == [
-        ("BTCUSDT", "5m"), ("ETHUSDT", "5m"),
         ("BTCUSDT", "15m"), ("ETHUSDT", "15m"),
         ("BTCUSDT", "1h"), ("ETHUSDT", "1h"),
     ]
@@ -939,11 +944,10 @@ def test_main_skips_retired_gbpusd_even_when_in_bot_settings(monkeypatch):
     engine_module.main()
 
     assert sorted(scanned) == [
-        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"), ("BTCUSDT", "5m"),
+        ("BTCUSDT", "15m"), ("BTCUSDT", "1h"),
     ]
     assert all("GBP" not in symbol for symbol, _ in scanned)
     assert prefetched == [
-        (("BTCUSDT",), "5m"),
         (("BTCUSDT",), "15m"),
         (("BTCUSDT",), "1h"),
     ]
@@ -975,7 +979,7 @@ def test_main_passes_each_sessions_confluence_timeframe_to_scan_symbol(monkeypat
 
     engine_module.main()
 
-    assert sorted(seen) == [("15m", None), ("1h", "4h"), ("5m", "15m")]
+    assert sorted(seen) == [("15m", None), ("1h", "4h")]
 
 
 def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
@@ -1007,7 +1011,6 @@ def test_main_prefetch_is_keyed_by_symbol_and_timeframe(monkeypatch):
     engine_module.main()
 
     assert seen["prefetched"] == {
-        ("BTCUSDT", "5m"): candles,
         ("BTCUSDT", "15m"): candles,
         ("BTCUSDT", "1h"): candles,
     }
@@ -1259,8 +1262,6 @@ def test_cloud_mss_uses_admin_store_confidence_floor_only():
 
 
 def _patch_market_with_htf(monkeypatch, trend):
-    from signals.pipeline import market_data as md
-
     class Market:
         candles = _flat_candles()
         ema9 = ema21 = [101.0] * 200
@@ -1271,7 +1272,11 @@ def _patch_market_with_htf(monkeypatch, trend):
         htf_trend = trend
         h1_candles = None
 
-    monkeypatch.setattr(md, "_load_market_data",
+    # scan.py imports _load_market_data by name (`from ... import
+    # _load_market_data`), so it must be patched on scan_module -- patching
+    # signals.pipeline.market_data's copy leaves scan_symbol calling the real
+    # (unmocked) one, silently defeating this fixture.
+    monkeypatch.setattr(scan_module, "_load_market_data",
                         lambda *a, **k: (Market(), Market.candles))
 
 

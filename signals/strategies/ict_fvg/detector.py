@@ -35,6 +35,12 @@ MAX_BARS_SINCE_CHOCH = 20
 MIN_SWEEP_ATR_FRACTION = 0.10
 ATR_STOP_BUFFER = 0.25
 MAX_STOP_ATR = 4.0
+# Stop is anchored to the swept bar, which can be up to SWEEP_LOOKBACK bars
+# behind the current close used as entry -- if price has drifted back to sit
+# almost exactly on that stale stop level by the time the setup fires, risk
+# collapses toward zero and the R-multiple model (which divides cost by
+# absolute risk) blows up on an entry that is not a real, tradeable edge.
+MIN_STOP_ATR = 0.15
 MIN_CANDLES = 25
 SWEEP_LOOKBACK = 30
 MAX_BARS_SINCE_RETEST = 12
@@ -161,7 +167,8 @@ def _retest_bearish(candles, fvg_i: int, gap_bottom: float, gap_top: float,
 def _risk_ok(entry: float, stop: float, atr_value: float) -> bool:
     if atr_value <= 0:
         return False
-    return abs(entry - stop) / atr_value <= MAX_STOP_ATR
+    stop_atr = abs(entry - stop) / atr_value
+    return MIN_STOP_ATR <= stop_atr <= MAX_STOP_ATR
 
 
 def _build(symbol, direction, entry, stop, atr_value, indicators, htf_trend):

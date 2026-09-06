@@ -169,13 +169,15 @@ class TradingSession:
 
 
 # Sessions the main engine scans, in order, every run.
-# Super scalp = 5m ICT+FVG (tight R); scalp = 15m cloud rejection + CHoCH;
-# swing = 1h MSNR (Malaysian body-zone S/R, pinned).
+# scalp = 15m cloud rejection + CHoCH; swing = 1h MSNR (Malaysian body-zone
+# S/R, pinned). super_scalp (5m ict_fvg) was pulled 2026-09-06 -- see
+# docs/ict-fvg-backtest-results.md: not profitable on any confirmation tier
+# over 8.96 years (net -1.253R/trade, t=-137.94), including the best-case
+# subset (choch_fvg retest only), so there is nothing here worth tuning
+# further without a different edge. Moved to AUXILIARY_SESSIONS below so
+# already-open 5m signals still settle correctly; re-add here once a
+# replacement 5m strategy is designed and backtested.
 TRADING_SESSIONS = (
-    TradingSession(
-        name="super_scalp", timeframe="5m", max_open_days=1,
-        confluence_timeframe="15m", strategy="ict_fvg",
-    ),
     TradingSession(
         name="scalp", timeframe="15m", max_open_days=2,
         confluence_timeframe=None, strategy="cloud_mss",
@@ -194,6 +196,14 @@ TRADING_SESSIONS = (
 # an unregistered timeframe silently inherited the 1h swing's 14-day expiry.
 AUXILIARY_SESSIONS = (
     TradingSession(
+        name="super_scalp", timeframe="5m", max_open_days=1,
+        confluence_timeframe="15m", strategy="ict_fvg",
+    ),
+    TradingSession(
+        # signals/xau_scan.py's own scan_once() short-circuits before ever
+        # calling detect_setup -- see the guard there and
+        # docs/ict-fvg-backtest-results.md. Kept here (not deleted) so any
+        # already-open 1m signal still settles with the right expiry.
         name="xau_scalp", timeframe="1m", max_open_days=1, max_open_hours=4,
         strategy="ict_fvg",
     ),
