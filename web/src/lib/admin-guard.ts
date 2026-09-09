@@ -1,21 +1,16 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 
+import { getSessionEmail as sessionEmail } from "@/lib/auth-session";
 import { isAdminEmail } from "@/lib/admin-emails";
-import { createClient } from "@/lib/supabase/server";
 
 /**
  * Auth helpers for admin pages.
  *
- * `proxy.ts` already calls getUser() once per request (session refresh).
- * These helpers read the refreshed session from cookies so Server Components
- * do not pay a second Auth API round-trip on every navigation.
+ * `proxy.ts` refreshes the JWT when needed. These helpers read the session
+ * from cookies so Server Components do not pay a second Auth API round-trip.
  */
-export const getSessionEmail = cache(async (): Promise<string | null> => {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user?.email ?? null;
-});
+export const getSessionEmail = sessionEmail;
 
 // Every /admin page calls this first. Relies on proxy having refreshed the
 // session; we only check the cookie + ADMIN_EMAILS allow-list here.

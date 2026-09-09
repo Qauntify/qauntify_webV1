@@ -1,3 +1,5 @@
+import { SLOW_FETCH } from "@/lib/fetch-cache";
+
 // Pure, browser-side derivation of the public track record from closed-signal
 // rows. Every exported function below is pure (no network) so it is unit-tested
 // directly; getTrackRecord (added in a later task) does the fetch.
@@ -318,7 +320,7 @@ async function fetchClosedRows(accessToken?: string): Promise<RawRow[] | null> {
   try {
     const res = await fetch(`${base}/rest/v1/signals?${query}`, {
       headers: { apikey: anonKey, Authorization: `Bearer ${accessToken ?? anonKey}` },
-      cache: "no-store",
+      ...SLOW_FETCH,
     });
     if (!res.ok) return null;
     const rows = await res.json();

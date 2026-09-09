@@ -4,8 +4,8 @@ import { signout } from "@/app/auth/actions";
 import { DashboardNav } from "@/components/dashboard/DashboardNav";
 import { Logo } from "@/components/shared/Logo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import { getSessionEmail } from "@/lib/auth-session";
 import { isAdminEmail } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 
 export async function DashboardShell({
   children,
@@ -20,11 +20,7 @@ export async function DashboardShell({
   fullBleed?: boolean;
   actions?: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const email = user?.email ?? "";
+  const email = (await getSessionEmail()) ?? "";
 
   return (
     <div className="flex min-h-screen flex-1">

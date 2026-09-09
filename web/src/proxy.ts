@@ -3,11 +3,11 @@ import { createServerClient } from "@supabase/ssr";
 
 import { isAdminEmail } from "@/lib/admin-emails";
 
-// Refreshes the Supabase session cookie on every page request so Server
-// Components always see a valid (non-expired) access token. Also gates
-// /admin so pages do not need a second Auth API round-trip.
-// Matcher excludes /api/* — high-frequency MT5/cron routes must not pay for
-// session refresh.
+/** Refresh when the access token is missing or expires within this window. */
+const REFRESH_WITHIN_MS = 120_000;
+
+// Refreshes the Supabase session cookie when needed so Server Components
+// always see a valid access token. Gates /admin. Matcher excludes /api/*.
 export async function proxy(request: NextRequest) {
   try {
     let response = NextResponse.next({ request });
@@ -33,11 +33,28 @@ export async function proxy(request: NextRequest) {
       },
     });
 
-    // Triggers a token refresh if the access token has expired.
-    const { data: { user } } = await supabase.auth.getUser();
-
     const path = request.nextUrl.pathname;
-    if (path === "/admin" || path.startsWith("/admin/")) {
+    const isAdminPath = path === "/admin" || path.startsWith("/admin/");
+
+    // Cookie-only first — avoid Auth network hop on every soft navigation.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const expiresAtMs = (session?.expires_at ?? 0) * 1000;
+    const needsRefresh =
+      !session ||
+      expiresAtMs - Date.now() < REFRESH_WITHIN_MS ||
+      isAdminPath;
+
+    let user = session?.user ?? null;
+    if (needsRefresh) {
+      const {
+        data: { user: verified },
+      } = await supabase.auth.getUser();
+      user = verified;
+    }
+
+    if (isAdminPath) {
       if (!user?.email) {
         return NextResponse.redirect(new URL("/login", request.url));
       }

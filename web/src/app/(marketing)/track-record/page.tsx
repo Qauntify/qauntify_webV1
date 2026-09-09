@@ -1,5 +1,4 @@
 import { Footer } from "@/components/shared/Footer";
-import { Nav } from "@/components/shared/Nav";
 import { TrackRecordTabs } from "@/components/track-record/TrackRecordTabs";
 import { getDailyPnLStats } from "@/lib/signals";
 import { serviceRoleToken } from "@/lib/supabase/admin";
@@ -23,7 +22,6 @@ export default async function TrackRecordPage() {
 
   return (
     <>
-      <Nav />
       <main className="flex min-h-[calc(100svh-4rem)] flex-1 flex-col bg-paper">
         <div className="w-full flex-1 px-4 py-8 sm:px-6 lg:px-8 xl:px-10">
           <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
@@ -45,7 +43,7 @@ export default async function TrackRecordPage() {
           {empty ? (
             <div className="rounded-xl border border-dashed border-line bg-card px-6 py-14 text-center">
               <p className="text-sm font-semibold text-ink">មិនទាន់មានការជួញដូរបិទទេ</p>
-              <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate">
+              <p className="mx-auto mt-1.5 max-w-sm text-slate text-sm">
                 កំណត់ត្រាលទ្ធផលនឹងបំពេញនៅពេលការជួញដូរបិទ។ សូមត្រឡប់មកម្តងទៀតឆាប់ៗ។
               </p>
             </div>

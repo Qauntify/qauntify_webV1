@@ -1,5 +1,4 @@
 import { Footer } from "@/components/shared/Footer";
-import { Nav } from "@/components/shared/Nav";
 import { ToolsGrid } from "@/components/tools/ToolsGrid";
 import { getPublishedTools } from "@/lib/tools";
 
@@ -16,7 +15,6 @@ export default async function ToolsPage() {
 
   return (
     <>
-      <Nav />
       <main className="flex min-h-[calc(100svh-4rem)] flex-1 flex-col bg-paper">
         <div className="w-full flex-1 px-4 py-8 sm:px-6 lg:px-8 xl:px-10">
           <div className="mb-8 max-w-2xl">

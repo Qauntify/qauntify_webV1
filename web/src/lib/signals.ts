@@ -1,3 +1,5 @@
+import { PUBLIC_FETCH } from "@/lib/fetch-cache";
+
 export type SignalStatus =
   | "open"
   | "tp1_hit"
@@ -174,7 +176,7 @@ async function fetchRows(
           // the anon key alone only sees the 24-hour preview.
           Authorization: `Bearer ${accessToken ?? config.anonKey}`,
         },
-        cache: "no-store",
+        ...PUBLIC_FETCH,
       },
     );
     if (!response.ok) return null;
@@ -203,7 +205,7 @@ async function callRpc<T>(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(params),
-      cache: "no-store",
+      ...PUBLIC_FETCH,
     });
     if (!response.ok) return null;
     return (await response.json()) as T;
@@ -232,7 +234,7 @@ async function fetchRowsPaginated(
           Range: `${offset}-${rangeEnd}`,
           Prefer: "count=exact",
         },
-        cache: "no-store",
+        ...PUBLIC_FETCH,
       },
     );
     if (!response.ok) return null;
@@ -483,7 +485,7 @@ export async function getWarRoomSignalsPaginated(
           Range: `${offset}-${rangeEnd}`,
           Prefer: "count=exact",
         },
-        cache: "no-store",
+        ...PUBLIC_FETCH,
       },
     );
     if (!response.ok) return empty;

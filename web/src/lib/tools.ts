@@ -1,3 +1,5 @@
+import { SLOW_FETCH } from "@/lib/fetch-cache";
+
 /** Public tools library — MT5 EAs, indicators, TradingView links. */
 
 export const TOOL_CATEGORIES = [
@@ -111,7 +113,7 @@ export async function getPublishedTools(): Promise<Tool[]> {
       "&order=sort_order.asc,created_at.desc";
     const response = await fetch(url, {
       headers: anonHeaders(cfg.anonKey),
-      cache: "no-store",
+      ...SLOW_FETCH,
     });
     if (!response.ok) return [];
     const rows = (await response.json()) as ToolRow[];

@@ -4,7 +4,6 @@ import { Hero } from "@/components/landing/Hero";
 import { SignalsPreview } from "@/components/landing/SignalsPreview";
 import { StrategyTesting } from "@/components/landing/StrategyTesting";
 import { Footer } from "@/components/shared/Footer";
-import { Nav } from "@/components/shared/Nav";
 import { getDailyPnLStats, getSignals, getStats } from "@/lib/signals";
 import { serviceRoleToken } from "@/lib/supabase/admin";
 
@@ -22,7 +21,6 @@ export default async function Home() {
   ]);
   return (
     <>
-      <Nav />
       <main className="flex-1">
         <Hero stats={stats} />
         <Features dailyPnL={dailyPnL} />

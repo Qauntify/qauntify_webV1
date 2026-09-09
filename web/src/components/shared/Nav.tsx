@@ -3,8 +3,8 @@ import Link from "next/link";
 import { Logo } from "@/components/shared/Logo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { SHOW_LOGIN_LINK } from "@/lib/access-mode";
+import { getSessionEmail } from "@/lib/auth-session";
 import { isAdminEmail } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 
 const links = [
   { href: "/signals", label: "Signals" },
@@ -14,9 +14,7 @@ const links = [
 ];
 
 export async function Nav() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const email = user?.email ?? null;
+  const email = await getSessionEmail();
 
   return (
     <div className="sticky top-0 z-40">
@@ -45,7 +43,7 @@ export async function Nav() {
           <Logo />
           <nav className="hidden items-center gap-8 text-sm font-medium text-slate md:flex">
             {links.map((l) => (
-              <Link key={l.href} href={l.href} className="hover:text-ink">
+              <Link key={l.href} href={l.href} prefetch className="hover:text-ink">
                 {l.label}
               </Link>
             ))}

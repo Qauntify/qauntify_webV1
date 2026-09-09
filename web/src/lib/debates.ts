@@ -1,3 +1,5 @@
+import { FRESH_FETCH } from "@/lib/fetch-cache";
+
 // Reads AI War Room debate transcripts from Supabase (public read-only).
 
 export type DebateMessage = {
@@ -70,7 +72,7 @@ export async function getDebates(limit = 8): Promise<Debate[]> {
           apikey: config.anonKey,
           Authorization: `Bearer ${config.anonKey}`,
         },
-        cache: "no-store",
+        ...FRESH_FETCH,
       },
     );
     if (!response.ok) return [];
@@ -101,7 +103,7 @@ export async function getDebateForSignal(signalId: string): Promise<Debate | nul
           apikey: config.anonKey,
           Authorization: `Bearer ${config.anonKey}`,
         },
-        cache: "no-store",
+        ...FRESH_FETCH,
       },
     );
     if (!response.ok) return null;

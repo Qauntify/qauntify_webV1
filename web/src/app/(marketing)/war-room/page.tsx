@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Nav } from "@/components/shared/Nav";
 import { DebateBoard } from "@/components/war-room/DebateBoard";
 import { WarRoomStage } from "@/components/war-room/WarRoomStage";
 import { getDebates } from "@/lib/debates";
@@ -54,7 +53,6 @@ export default async function WarRoom({
 
   return (
     <>
-      <Nav />
       {isStage ? (
         <main className="relative h-[calc(100dvh-4rem)] overflow-hidden bg-[#0b1220]">
           <div className="absolute right-3 top-3 z-30 sm:right-6">

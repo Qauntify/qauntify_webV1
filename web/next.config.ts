@@ -11,8 +11,8 @@ const nextConfig: NextConfig = {
   // revisiting admin tabs feel instant instead of refetching immediately.
   experimental: {
     staleTimes: {
-      dynamic: 30,
-      static: 180,
+      dynamic: 60,
+      static: 300,
     },
   },
   images: {
