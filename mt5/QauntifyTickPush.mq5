@@ -12,7 +12,7 @@
 //| Tools → Options → Expert Advisors                                  |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.28"
+#property version   "1.29"
 
 input string AppSymbol         = "XAUUSD";
 input string ApiUrl            = "https://qauntify-web.vercel.app/api/mt5/tick";
@@ -156,34 +156,45 @@ void BackfillClosedM1()
 
 void MaybePushClosedM1()
   {
+   // Snapshot closed bars BEFORE any WebRequest. iTime shifts slide when a new
+   // M1 forms during a slow candles POST (common when the API awaits GitHub
+   // dispatch). Writing lastClosedBar from iTime(s) AFTER the HTTP used to
+   // jump past unsent minutes and permanently leave 120s holes in Storage.
    datetime closed = iTime(_Symbol, PERIOD_M1, 1);
    if(closed <= 0 || closed == lastClosedBar) return;
 
-   // OnTick only fires when a tick arrives, not on every bar boundary, so in
-   // thin-tick periods (common outside peak hours) more than one M1 bar can
-   // close between calls. Catch up on every bar since lastClosedBar, one push
-   // per bar (not batched), so shouldDispatchEngineFromM1Push in bar-close.ts
-   // -- which reads only a push's newest candle, and bails out above 5
-   // candles -- still gets a chance to see each bar that might close a
-   // 5m/15m/1h boundary, not just the latest one. Otherwise a skipped bar
-   // silently drops out of the Supabase buffer (breaks HTF resampling
-   // downstream) and can silently skip an engine dispatch too.
-   int maxCatchUp = 20; // safety cap; BackfillClosedM1 handles bigger gaps at init
-   int shift = 1;
-   while(shift < maxCatchUp)
-     {
-      datetime t = iTime(_Symbol, PERIOD_M1, shift + 1);
-      if(t <= 0 || (lastClosedBar > 0 && t <= lastClosedBar)) break;
-      shift++;
-     }
+   const int maxCatchUp = 20; // BackfillClosedM1 covers bigger gaps at init
+   datetime times[];
+   string   bodies[];
+   ArrayResize(times, 0);
+   ArrayResize(bodies, 0);
 
-   for(int s = shift; s >= 1; s--)
+   for(int s = 1; s <= maxCatchUp; s++)
      {
-      string arr = "[" + CandleJson(s) + "]";
-      if(!PushCandlesJson(arr))
-         return; // stop here; this bar (and any after it) retries next tick
-      lastClosedBar = iTime(_Symbol, PERIOD_M1, s);
+      datetime t = iTime(_Symbol, PERIOD_M1, s);
+      if(t <= 0) break;
+      if(lastClosedBar > 0 && t <= lastClosedBar) break;
+      int n = ArraySize(times);
+      ArrayResize(times, n + 1);
+      ArrayResize(bodies, n + 1);
+      times[n] = t;          // [0]=newest … [n]=oldest
+      bodies[n] = CandleJson(s);
      }
+   if(ArraySize(times) == 0) return;
+
+   // One POST, oldest→newest: Storage stays contiguous; bar-close.ts scans
+   // every candle in the push for 5m/15m/1h engine dispatch.
+   string arr = "[";
+   for(int i = ArraySize(bodies) - 1; i >= 0; i--)
+     {
+      if(i < ArraySize(bodies) - 1) arr += ",";
+      arr += bodies[i];
+     }
+   arr += "]";
+
+   if(!PushCandlesJson(arr))
+      return; // leave lastClosedBar unchanged; retry next tick
+   lastClosedBar = times[0]; // newest bar we actually snapshotted
   }
 
 ENUM_TIMEFRAMES PeriodFromMinutes(const int minutes)

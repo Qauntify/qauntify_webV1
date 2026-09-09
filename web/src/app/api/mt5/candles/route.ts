@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 import { shouldDispatchEngineFromM1Push } from "@/lib/bar-close";
 import { dispatchEngineWorkflow } from "@/lib/github-engine";
@@ -112,16 +112,19 @@ export async function POST(request: Request) {
   }
 
   // VPS runs EA only — on 5m/15m/1h close, kick GitHub Actions engine.
-  // Soft-fail: candle storage already succeeded; never 5xx for dispatch.
+  // Soft-fail + after(): never block the EA WebRequest on GitHub latency
+  // (slow POSTs made MT5 bar shifts slide and skip M1 minutes).
   const due = shouldDispatchEngineFromM1Push(candles);
-  let engine: "skipped" | "dispatched" | "failed" = "skipped";
+  let engine: "skipped" | "dispatched" | "scheduled" = "skipped";
   if (due.length > 0) {
-    try {
-      const result = await dispatchEngineWorkflow({ due });
-      engine = result.ok ? "dispatched" : "failed";
-    } catch {
-      engine = "failed";
-    }
+    engine = "scheduled";
+    after(async () => {
+      try {
+        await dispatchEngineWorkflow({ due });
+      } catch {
+        // Soft-fail: candle storage already succeeded.
+      }
+    });
   }
 
   return NextResponse.json({

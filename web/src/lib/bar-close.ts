@@ -29,15 +29,23 @@ export function htfBarsClosedByM1(openTimeSec: number): EngineHtf[] {
 
 /**
  * Whether a candle push should kick the GitHub engine.
- * Live EA pushes are 1 bar; init backfills are hundreds — never trigger those.
+ * Live EA catch-up is ≤20 bars; init backfills are hundreds — never trigger those.
+ * Scan every candle in the push so a batched catch-up still wakes 5m/15m/1h.
  */
 export function shouldDispatchEngineFromM1Push(
   candles: Array<{ open_time: number }>,
-  maxLiveBars = 5,
+  maxLiveBars = 20,
 ): EngineHtf[] {
   if (!candles.length || candles.length > maxLiveBars) return [];
-  const newest = candles.reduce((a, b) =>
-    Number(a.open_time) >= Number(b.open_time) ? a : b,
-  );
-  return htfBarsClosedByM1(Number(newest.open_time));
+  const due: EngineHtf[] = [];
+  const seen = new Set<EngineHtf>();
+  for (const c of candles) {
+    for (const tf of htfBarsClosedByM1(Number(c.open_time))) {
+      if (!seen.has(tf)) {
+        seen.add(tf);
+        due.push(tf);
+      }
+    }
+  }
+  return due;
 }

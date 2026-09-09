@@ -38,4 +38,29 @@ describe("shouldDispatchEngineFromM1Push", () => {
       ["15m", "5m"].sort(),
     );
   });
+
+  it("scans every candle in a batched catch-up push", () => {
+    // Mid-bucket bars plus a 15m close — dispatch must see the close even
+    // when it is not the newest candle in the array.
+    const mid = Date.UTC(2026, 7, 6, 12, 12, 0) / 1000;
+    const close15 = Date.UTC(2026, 7, 6, 12, 14, 0) / 1000;
+    const newest = Date.UTC(2026, 7, 6, 12, 15, 0) / 1000;
+    expect(
+      shouldDispatchEngineFromM1Push([
+        { open_time: mid },
+        { open_time: close15 },
+        { open_time: newest },
+      ]).sort(),
+    ).toEqual(["15m", "5m"].sort());
+  });
+
+  it("allows catch-up batches up to 20 bars", () => {
+    const open = Date.UTC(2026, 7, 6, 12, 59, 0) / 1000;
+    const candles = Array.from({ length: 20 }, (_, i) => ({
+      open_time: open - i * 60,
+    }));
+    expect(shouldDispatchEngineFromM1Push(candles).sort()).toEqual(
+      ["15m", "1h", "5m"].sort(),
+    );
+  });
 });
